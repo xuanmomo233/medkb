@@ -51,7 +51,7 @@ jobs:
           KS_B64: ${{ secrets.MEDKB_KEYSTORE_B64 }}
         run: |
           if [ -n "$KS_B64" ]; then
-            echo "$KS_B64" | base64 -d > android/app/medkb.jks
+            echo "$KS_B64" | tr -d '[:space:]' | base64 -d > android/app/medkb.jks
           else
             echo "::warning::no MEDKB_KEYSTORE_B64 secret; release apk will use debug signing"
           fi
