@@ -929,6 +929,7 @@ class _QuizListState extends State<QuizListPage> {
         if (mounted) toast(context, '操作失败，请检查网络');
         return;   // 失败不改状态，避免「以为已加入错题本」的假象
       }
+      if (!mounted) return;
       setState(() => q['state'] = newState);
       if (mounted) toast(context, msg);
     }
