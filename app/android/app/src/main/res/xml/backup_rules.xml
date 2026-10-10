@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 以前的 full-backup 规则：
+     排除 FlutterSharedPreferences（含登录 token / 服务器地址 / 管理标记），
+     防止凭据随系统云备份外流或被恢复到他人设备。 -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="FlutterSharedPreferences.xml"/>
+</full-backup-content>

@@ -1,0 +1,66 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+// 签名凭据来源（优先级从高到低）：
+// 1. app/key.properties（本地开发，gitignored）
+// 2. 环境变量 MEDKB_STORE_FILE/STORE_PASSWORD/KEY_ALIAS/KEY_PASSWORD（CI secrets 注入）
+// 仓库内禁止提交 .jks 与明文密码。
+def keystoreProps = new Properties()
+def keystoreFile = rootProject.file('app/key.properties')
+if (keystoreFile.exists()) {
+    keystoreFile.withInputStream { keystoreProps.load(it) }
+}
+def ksFile = keystoreProps['storeFile'] ?: System.getenv('MEDKB_STORE_FILE')
+def ksStorePass = keystoreProps['storePassword'] ?: System.getenv('MEDKB_STORE_PASSWORD')
+def ksAlias = keystoreProps['keyAlias'] ?: System.getenv('MEDKB_KEY_ALIAS')
+def ksKeyPass = keystoreProps['keyPassword'] ?: System.getenv('MEDKB_KEY_PASSWORD')
+def hasReleaseKey = ksFile && ksStorePass && ksAlias && ksKeyPass
+
+android {
+    namespace = "com.medkb.app"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = "17"
+    }
+
+    defaultConfig {
+        applicationId = "com.medkb.app"
+        minSdk = flutter.minSdkVersion
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    signingConfigs {
+        if (hasReleaseKey) {
+            release {
+                storeFile = file(ksFile)
+                storePassword = ksStorePass
+                keyAlias = ksAlias
+                keyPassword = ksKeyPass
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // 无签名凭据时回退 debug 签名，保证构建不中断（该包不可用于发布升级）
+            signingConfig = hasReleaseKey ? signingConfigs.release
+                                          : signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}

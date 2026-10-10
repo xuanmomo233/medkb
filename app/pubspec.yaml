@@ -1,0 +1,25 @@
+﻿name: medkb
+description: 医学知识库学习工具
+publish_to: 'none'
+version: 1.6.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  http: ^1.2.0
+  shared_preferences: ^2.2.0
+  flutter_widget_from_html_core: ^0.15.2
+  url_launcher: ^6.2.0
+  image_picker: ^1.1.2
+  file_picker: ^8.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
