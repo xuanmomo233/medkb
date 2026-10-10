@@ -47,8 +47,14 @@ jobs:
 
       # 签名密钥从 secrets 解码（仓库不存放 jks/明文密码）；缺省时回退 debug 签名
       - name: decode keystore
-        if: ${{ secrets.MEDKB_KEYSTORE_B64 != '' }}
-        run: echo "${{ secrets.MEDKB_KEYSTORE_B64 }}" | base64 -d > android/app/medkb.jks
+        env:
+          KS_B64: ${{ secrets.MEDKB_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KS_B64" ]; then
+            echo "$KS_B64" | base64 -d > android/app/medkb.jks
+          else
+            echo "::warning::no MEDKB_KEYSTORE_B64 secret; release apk will use debug signing"
+          fi
 
       # versionName 取 pubspec 语义版本；versionCode 用 run_number 单调递增（安卓按它判定升级）
       - name: build apk
