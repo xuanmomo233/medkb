@@ -14,10 +14,17 @@ class _Item {
   const _Item(this.key, this.label, this.extra, this.onTap);
 }
 
+class _SubGroup {
+  final String name;
+  final List<_Item> items;
+  const _SubGroup(this.name, this.items);
+}
+
 class _Group {
   final String name;
   final List<_Item> items;
-  const _Group(this.name, this.items);
+  final List<_SubGroup> subs;
+  const _Group(this.name, this.items, [this.subs = const <_SubGroup>[]]);
 }
 
 class BrowsePage extends StatefulWidget {
@@ -38,26 +45,37 @@ class _BrowsePageState extends State<BrowsePage> {
     }
 
     if (_tab == _Tab.questions) {
-      for (final QuestionChapterBrief c in tree.questionChapters) {
-        push(
-          c.subjectDir,
-          _Item(
-            '${c.subjectDir}/${c.system}/${c.chapter}',
-            c.chapter,
-            c.system,
-            () => openQuizRun(
-              context,
-              QuizRunArgs(
-                filter: QuizFilter(
-                  chapter: c.chapter,
-                  subjectDir: c.subjectDir,
-                  system: c.system,
-                ),
-              ),
+      final List<_Group> out = <_Group>[];
+      for (final QuestionSubjectBrief subj in tree.questionTree) {
+        final List<_SubGroup> subs = <_SubGroup>[
+          for (final QuestionSystemBrief sys in subj.systems)
+            _SubGroup(
+              sys.name,
+              <_Item>[
+                for (final QuestionChapterBrief c in sys.chapters)
+                  _Item(
+                    '${subj.subjectDir}/${sys.name}/${c.name}',
+                    c.name.startsWith('${sys.name} · ')
+                        ? c.name.substring(sys.name.length + 3)
+                        : c.name,
+                    '${c.count} 题',
+                    () => openQuizRun(
+                      context,
+                      QuizRunArgs(
+                        filter: QuizFilter(
+                          chapter: c.name,
+                          subjectDir: subj.subjectDir,
+                          system: sys.name,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
-          ),
-        );
+        ];
+        out.add(_Group(subj.subjectDir, <_Item>[], subs));
       }
+      return _filter(out);
     } else {
       final List<ChapterBrief> src =
           _tab == _Tab.mindmaps ? tree.mindmaps : tree.notes;
@@ -68,18 +86,30 @@ class _BrowsePageState extends State<BrowsePage> {
     }
     final List<_Group> out = <_Group>[];
     map.forEach((String k, List<_Item> v) => out.add(_Group(k, v)));
+    return _filter(out);
+  }
+
+  List<_Group> _filter(List<_Group> out) {
     final String kw = _kw.trim().toLowerCase();
     if (kw.isEmpty) return out;
+    bool hit(_Item i) => '${i.label}${i.extra}'.toLowerCase().contains(kw);
     final List<_Group> res = <_Group>[];
     for (final _Group g in out) {
       if (g.name.toLowerCase().contains(kw)) {
         res.add(g);
         continue;
       }
-      final List<_Item> items = g.items
-          .where((_Item i) => '${i.label}${i.extra}'.toLowerCase().contains(kw))
-          .toList();
-      if (items.isNotEmpty) res.add(_Group(g.name, items));
+      if (g.subs.isNotEmpty) {
+        final List<_SubGroup> subs = g.subs
+            .map((_SubGroup s) => _SubGroup(s.name, s.items.where(hit).toList()))
+            .where((_SubGroup s) =>
+                s.name.toLowerCase().contains(kw) || s.items.isNotEmpty)
+            .toList();
+        if (subs.isNotEmpty) res.add(_Group(g.name, g.items, subs));
+      } else {
+        final List<_Item> items = g.items.where(hit).toList();
+        if (items.isNotEmpty) res.add(_Group(g.name, items));
+      }
     }
     return res;
   }
@@ -102,18 +132,47 @@ class _BrowsePageState extends State<BrowsePage> {
                       style: const TextStyle(fontWeight: FontWeight.w700)),
                 ),
                 const SizedBox(width: 8),
-                AppBadge('${g.items.length} 章'),
+                AppBadge(g.subs.isNotEmpty
+                    ? '${g.subs.length} 篇'
+                    : '${g.items.length} 章'),
               ],
             ),
-            children: g.items
-                .map((_Item i) => ListTile(
-                      title: Text(i.label),
-                      subtitle: i.extra.isEmpty ? null : Text(i.extra),
-                      trailing:
-                          Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
-                      onTap: i.onTap,
-                    ))
-                .toList(),
+            children: g.subs.isNotEmpty
+                ? g.subs
+                    .expand((_SubGroup sub) => <Widget>[
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+                            child: Text(sub.name,
+                                style: TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                    color: cs.primary)),
+                          ),
+                          ...sub.items.map((_Item i) => ListTile(
+                                dense: true,
+                                title: Text(i.label,
+                                    style: const TextStyle(fontSize: 14)),
+                                subtitle: i.extra.isEmpty
+                                    ? null
+                                    : Text(i.extra,
+                                        style: const TextStyle(fontSize: 12)),
+                                trailing: Icon(Icons.chevron_right,
+                                    color: cs.onSurfaceVariant, size: 20),
+                                onTap: i.onTap,
+                              )),
+                          const SizedBox(height: 6),
+                        ])
+                    .toList()
+                : g.items
+                    .map((_Item i) => ListTile(
+                          title: Text(i.label),
+                          subtitle:
+                              i.extra.isEmpty ? null : Text(i.extra),
+                          trailing: Icon(Icons.chevron_right,
+                              color: cs.onSurfaceVariant),
+                          onTap: i.onTap,
+                        ))
+                    .toList(),
           ),
         ),
       ),

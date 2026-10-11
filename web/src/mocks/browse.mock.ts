@@ -40,12 +40,17 @@ const SUBJECT_SYSTEM: Record<string, string[]> = {
 
 const mindmaps = ROWS.map(([subject, title], i) => ({ id: i + 1, subject, title }))
 const notes = ROWS.map(([subject, title], i) => ({ id: i + 101, subject, title }))
-const questionChapters = ROWS.map(([subject, chapter], i) => {
-  const systems = SUBJECT_SYSTEM[subject]
-  return { chapter, subject_dir: subject, system: systems[i % systems.length] }
-})
+const questionTree = ROWS.reduce<{ subject_dir: string; systems: { name: string; chapters: { name: string; count: number }[] }[] }[]>((acc, [subject, chapter], i) => {
+  let subj = acc.find((s) => s.subject_dir === subject)
+  if (!subj) { subj = { subject_dir: subject, systems: [] }; acc.push(subj) }
+  const sysName = SUBJECT_SYSTEM[subject][i % SUBJECT_SYSTEM[subject].length]
+  let sys = subj.systems.find((s) => s.name === sysName)
+  if (!sys) { sys = { name: sysName, chapters: [] }; subj.systems.push(sys) }
+  sys.chapters.push({ name: `${sysName} · ${chapter}`, count: 12 + i * 3 })
+  return acc
+}, [])
 
-const tree = (): ContentTree => ({ mindmaps, notes, question_chapters: questionChapters })
+const tree = (): ContentTree => ({ mindmaps, notes, question_tree: questionTree })
 
 function chapterOf(id: number): ChapterDetail | null {
   const isNote = id > 100

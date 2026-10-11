@@ -131,32 +131,51 @@ class ChapterBrief {
 }
 
 class QuestionChapterBrief {
-  final String chapter;
-  final String subjectDir;
-  final String system;
-  const QuestionChapterBrief(
-      {required this.chapter, required this.subjectDir, required this.system});
+  final String name;
+  final int count;
+  const QuestionChapterBrief({required this.name, required this.count});
   factory QuestionChapterBrief.fromJson(Map<String, dynamic> j) =>
-      QuestionChapterBrief(
-        chapter: _s(j['chapter']),
+      QuestionChapterBrief(name: _s(j['name']), count: _i(j['count']));
+}
+
+class QuestionSystemBrief {
+  final String name;
+  final List<QuestionChapterBrief> chapters;
+  const QuestionSystemBrief({required this.name, required this.chapters});
+  factory QuestionSystemBrief.fromJson(Map<String, dynamic> j) =>
+      QuestionSystemBrief(
+        name: _s(j['name']),
+        chapters: asMapList(j['chapters'])
+            .map(QuestionChapterBrief.fromJson)
+            .toList(),
+      );
+}
+
+class QuestionSubjectBrief {
+  final String subjectDir;
+  final List<QuestionSystemBrief> systems;
+  const QuestionSubjectBrief({required this.subjectDir, required this.systems});
+  factory QuestionSubjectBrief.fromJson(Map<String, dynamic> j) =>
+      QuestionSubjectBrief(
         subjectDir: _s(j['subject_dir']),
-        system: _s(j['system']),
+        systems:
+            asMapList(j['systems']).map(QuestionSystemBrief.fromJson).toList(),
       );
 }
 
 class ContentTree {
   final List<ChapterBrief> mindmaps;
   final List<ChapterBrief> notes;
-  final List<QuestionChapterBrief> questionChapters;
+  final List<QuestionSubjectBrief> questionTree;
   const ContentTree(
       {required this.mindmaps,
       required this.notes,
-      required this.questionChapters});
+      required this.questionTree});
   factory ContentTree.fromJson(Map<String, dynamic> j) => ContentTree(
         mindmaps: asMapList(j['mindmaps']).map(ChapterBrief.fromJson).toList(),
         notes: asMapList(j['notes']).map(ChapterBrief.fromJson).toList(),
-        questionChapters: asMapList(j['question_chapters'])
-            .map(QuestionChapterBrief.fromJson)
+        questionTree: asMapList(j['question_tree'])
+            .map(QuestionSubjectBrief.fromJson)
             .toList(),
       );
 }

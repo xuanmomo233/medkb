@@ -7,8 +7,8 @@ import { useLoad } from './useLoad'
 import s from './browse.module.css'
 
 type Tab = 'mindmaps' | 'notes' | 'questions'
-interface Item { key: string; label: string; to: string; extra?: string }
-interface Group { name: string; items: Item[] }
+interface Item { key: string; label: string; to: string; count?: number }
+interface Group { name: string; items: Item[]; sub?: { name: string; items: Item[] }[] }
 
 const TABS: { value: Tab; label: string }[] = [
   { value: 'mindmaps', label: '思维导图' },
@@ -23,16 +23,23 @@ function readOpen(): Record<string, boolean> {
 }
 
 function group(tree: ContentTree, tab: Tab): Group[] {
+  if (tab === 'questions') {
+    return tree.question_tree.map((s) => ({
+      name: s.subject_dir,
+      items: [],
+      sub: s.systems.map((sys) => ({
+        name: sys.name,
+        items: sys.chapters.map((c) => {
+          const label = c.name.startsWith(`${sys.name} · `) ? c.name.slice(sys.name.length + 3) : c.name
+          const q = new URLSearchParams({ chapter: c.name, subject_dir: s.subject_dir, system: sys.name })
+          return { key: `${s.subject_dir}/${sys.name}/${c.name}`, label, count: c.count, to: `/quiz/run?${q.toString()}` }
+        }),
+      })),
+    }))
+  }
   const map = new Map<string, Item[]>()
   const push = (g: string, it: Item) => { const a = map.get(g); if (a) a.push(it); else map.set(g, [it]) }
-  if (tab === 'questions') {
-    for (const c of tree.question_chapters) {
-      const q = new URLSearchParams({ chapter: c.chapter, subject_dir: c.subject_dir, system: c.system })
-      push(c.subject_dir, { key: `${c.subject_dir}/${c.system}/${c.chapter}`, label: c.chapter, extra: c.system, to: `/quiz/run?${q.toString()}` })
-    }
-  } else {
-    for (const c of tree[tab]) push(c.subject, { key: String(c.id), label: c.title, to: `/browse/chapter/${c.id}` })
-  }
+  for (const c of tree[tab]) push(c.subject, { key: String(c.id), label: c.title, to: `/browse/chapter/${c.id}` })
   return [...map].map(([name, items]) => ({ name, items }))
 }
 
@@ -57,8 +64,17 @@ export default function BrowsePage() {
     const all = group(tree, tab)
     if (!k) return all
     return all
-      .map((g) => g.name.toLowerCase().includes(k) ? g : { ...g, items: g.items.filter((i) => `${i.label}${i.extra ?? ''}`.toLowerCase().includes(k)) })
-      .filter((g) => g.items.length > 0)
+      .map((g) => {
+        if (g.name.toLowerCase().includes(k)) return g
+        if (g.sub) {
+          const sub = g.sub
+            .map((sub) => ({ ...sub, items: sub.items.filter((i) => i.label.toLowerCase().includes(k)) }))
+            .filter((sub) => sub.items.length > 0 || sub.name.toLowerCase().includes(k))
+          return { ...g, sub }
+        }
+        return { ...g, items: g.items.filter((i) => i.label.toLowerCase().includes(k)) }
+      })
+      .filter((g) => (g.sub ? g.sub.length > 0 : g.items.length > 0))
   }, [tree, tab, kw])
 
   return (
@@ -81,15 +97,35 @@ export default function BrowsePage() {
                   <button type="button" className={s.groupHead} aria-expanded={isOpen} onClick={() => toggle(id, isOpen)}>
                     <span className={`${s.chev} ${isOpen ? s.chevOpen : ''}`} aria-hidden>›</span>
                     <span className={s.groupName}>{g.name}</span>
-                    <Badge>{g.items.length} 章</Badge>
+                    <Badge>{g.sub ? `${g.sub.length} 篇` : `${g.items.length} 章`}</Badge>
                   </button>
-                  {isOpen && (
+                  {isOpen && g.sub && (
+                    <div>
+                      {g.sub.map((sub) => (
+                        <div key={sub.name} className={s.subGroup}>
+                          <div className={s.subHead}>{sub.name}</div>
+                          <ul className={s.list}>
+                            {sub.items.map((i) => (
+                              <li key={i.key}>
+                                <Link to={i.to} className={s.item}>
+                                  <span className={s.itemLabel}>{i.label}</span>
+                                  {i.count != null && <span className={s.itemExtra}>{i.count} 题</span>}
+                                  <span className={s.go} aria-hidden>›</span>
+                                </Link>
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {isOpen && !g.sub && (
                     <ul className={s.list}>
                       {g.items.map((i) => (
                         <li key={i.key}>
                           <Link to={i.to} className={s.item}>
                             <span className={s.itemLabel}>{i.label}</span>
-                            {i.extra && <span className={s.itemExtra}>{i.extra}</span>}
+                            {i.count != null && <span className={s.itemExtra}>{i.count} 题</span>}
                             <span className={s.go} aria-hidden>›</span>
                           </Link>
                         </li>

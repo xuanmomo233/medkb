@@ -6,11 +6,13 @@ export interface AuthResult { token: string; user: User }
 
 // ---------- 内容 ----------
 export interface ChapterBrief { id: number; subject: string; title: string }
-export interface QuestionChapterBrief { chapter: string; subject_dir: string; system: string }
+export interface QuestionChapter { name: string; count: number }
+export interface QuestionSystem { name: string; chapters: QuestionChapter[] }
+export interface QuestionSubject { subject_dir: string; systems: QuestionSystem[] }
 export interface ContentTree {
   mindmaps: ChapterBrief[]
   notes: ChapterBrief[]
-  question_chapters: QuestionChapterBrief[]
+  question_tree: QuestionSubject[]
 }
 export interface ChapterDetail {
   id: number

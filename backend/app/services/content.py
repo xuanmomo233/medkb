@@ -1,6 +1,6 @@
 ﻿import re
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import md
@@ -44,22 +44,57 @@ def snippet(text: str | None, q: str, width: int = 60) -> str:
     return ("…" if s else "") + t[s:e] + ("…" if e < len(t) else "")
 
 
+_SHORT = re.compile(r"^\d+-")
+
+
+def _short(x: str) -> str:
+    return _SHORT.sub("", (x or "").strip())
+
+
 async def tree(session: AsyncSession) -> dict:
     chs = (
         await session.execute(select(Chapter.id, Chapter.kind, Chapter.subject, Chapter.title).order_by(Chapter.subject, Chapter.title))
     ).all()
-    qc = (
+    qrows = (
         await session.execute(
-            select(Question.chapter, Question.subject_dir, Question.system)
-            .distinct()
-            .order_by(Question.subject_dir, Question.system, Question.chapter)
+            select(Question.subject_dir, Question.system, Question.chapter, func.count())
+            .group_by(Question.subject_dir, Question.system, Question.chapter)
         )
     ).all()
+
+    # 导图标题（去编号）→ 顺序，用于给题库 system/chapter 排教材序
+    morder: dict[str, dict[str, int]] = {}
+    for i, r in enumerate([c for c in chs if c.kind == "mindmap"]):
+        morder.setdefault(r.subject, {})[_short(r.title)] = i
+
+    def rank(subject_dir: str, chapter: str) -> int:
+        suf = chapter.split(" · ", 1)[1] if " · " in chapter else chapter
+        return morder.get(_short(subject_dir), {}).get(suf, 1 << 20)
+
+    groups: dict[str, dict[str, list[tuple[str, int]]]] = {}
+    for subjdir, system, chapter, cnt in qrows:
+        groups.setdefault(subjdir or "未分类", {}).setdefault(system or "未细分", []).append((chapter, cnt))
+
+    question_tree = []
+    for subjdir in sorted(groups):
+        systems = []
+        for name, chapters in groups[subjdir].items():
+            chapters.sort(key=lambda c: (rank(subjdir, c[0]), c[0]))
+            systems.append({
+                "name": name,
+                "rank": min(rank(subjdir, c) for c, _ in chapters),
+                "chapters": [{"name": c, "count": n} for c, n in chapters],
+            })
+        systems.sort(key=lambda s: (s["rank"], s["name"]))
+        for s in systems:
+            del s["rank"]
+        question_tree.append({"subject_dir": subjdir, "systems": systems})
+
     brief = lambda r: {"id": r.id, "subject": r.subject, "title": r.title}  # noqa: E731
     return {
         "mindmaps": [brief(r) for r in chs if r.kind == "mindmap"],
         "notes": [brief(r) for r in chs if r.kind == "note"],
-        "question_chapters": [{"chapter": r.chapter, "subject_dir": r.subject_dir, "system": r.system} for r in qc],
+        "question_tree": question_tree,
     }
 
 
