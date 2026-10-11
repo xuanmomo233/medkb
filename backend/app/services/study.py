@@ -230,13 +230,17 @@ async def _item_content(session: AsyncSession, items: list[UserPlanItem]) -> dic
     crows = (await session.execute(select(Card.subject, Card.part, Card.id).where(pair))).all()
     dirs = {SUBJECT_DIR[s] for s, _ in keys if s in SUBJECT_DIR}
     qrows = (
-        await session.execute(
-            select(Card.subject, Card.part, Question.id)
-            .join(CardQuestion, CardQuestion.card_id == Card.id)
-            .join(Question, Question.id == CardQuestion.question_id)
-            .where(pair, Question.subject_dir.in_(dirs))
-            .distinct()
-        ).all() if dirs else []
+        (
+            await session.execute(
+                select(Card.subject, Card.part, Question.id)
+                .join(CardQuestion, CardQuestion.card_id == Card.id)
+                .join(Question, Question.id == CardQuestion.question_id)
+                .where(pair, Question.subject_dir.in_(dirs))
+                .distinct()
+            )
+        ).all()
+        if dirs
+        else []
     )
     out: dict[str, tuple[list[int], list[int]]] = {_item_key(s, p): ([], []) for s, p in keys}
     for s, p, cid in crows:
