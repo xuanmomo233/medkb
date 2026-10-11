@@ -57,3 +57,12 @@ class InviteCode(Base, CreatedMixin):
     created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class SiteConfig(Base):
+    """管理员统一维护的站点级配置（k-v）。目前只有 exam_date。"""
+
+    __tablename__ = "site_config"
+
+    key: Mapped[str] = mapped_column(String(32), primary_key=True)
+    value: Mapped[str] = mapped_column(String(255), default="")

@@ -28,3 +28,11 @@ class InviteOut(BaseModel):
 
 class InviteCreate(BaseModel):
     count: int = 1
+
+
+class SiteConfigOut(BaseModel):
+    exam_date: str
+
+
+class SiteConfigPatch(BaseModel):
+    exam_date: str | None = None

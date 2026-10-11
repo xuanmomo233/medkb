@@ -110,32 +110,6 @@ class _SettingsPageState extends State<SettingsPage> {
       toast(context, errText(e));
     }
   }
-  Future<void> _pickDate() async {
-    final DateTime now = DateTime.now();
-    DateTime init = now.add(const Duration(days: 90));
-    final String? cur = _examDate;
-    if (cur != null) {
-      final DateTime? d = DateTime.tryParse(cur);
-      if (d != null) init = d;
-    }
-    final DateTime first = DateTime(now.year - 1, 1, 1);
-    final DateTime last = DateTime(now.year + 5, 12, 31);
-    if (init.isBefore(first)) init = first;
-    if (init.isAfter(last)) init = last;
-    final DateTime? r = await showDatePicker(
-      context: context,
-      initialDate: init,
-      firstDate: first,
-      lastDate: last,
-      helpText: '选择考研日期',
-    );
-    if (r == null || !mounted) return;
-    setState(() {
-      _examDate = fmtYmd(r);
-      _saved = false;
-    });
-  }
-
   Future<void> _clearCache() async {
     await Api.cacheClear();
     if (!mounted) return;
@@ -211,25 +185,9 @@ class _SettingsPageState extends State<SettingsPage> {
             const SizedBox(height: 8),
             ListTile(
               contentPadding: EdgeInsets.zero,
-              title: const Text('考研日期'),
-              subtitle: Text(_examDate ?? '未设置',
+              title: const Text('考研倒计时'),
+              subtitle: Text('${_examDate ?? '未设置'}（由管理员统一设置）',
                   style: TextStyle(color: cs.onSurfaceVariant)),
-              trailing: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: <Widget>[
-                  if (_examDate != null)
-                    IconButton(
-                      tooltip: '清除',
-                      icon: const Icon(Icons.close),
-                      onPressed: () => setState(() {
-                        _examDate = null;
-                        _saved = false;
-                      }),
-                    ),
-                  const Icon(Icons.calendar_today_outlined, size: 20),
-                ],
-              ),
-              onTap: _pickDate,
             ),
           ],
         ),
@@ -421,6 +379,7 @@ class _InvitesSection extends StatefulWidget {
 class _InvitesSectionState extends State<_InvitesSection> {
   List<Invite>? _items;
   bool _busy = false;
+  String _examDate = '';
 
   @override
   void initState() {
@@ -431,11 +390,39 @@ class _InvitesSectionState extends State<_InvitesSection> {
   Future<void> _load() async {
     try {
       final List<Invite> list = await Endpoints.adminInvites();
+      final String d = await Endpoints.adminSite();
       if (!mounted) return;
-      setState(() => _items = list);
+      setState(() {
+        _items = list;
+        _examDate = d;
+      });
     } catch (e) {
       if (!mounted) return;
       toast(context, errText(e));
+    }
+  }
+
+  Future<void> _pickExamDate() async {
+    final DateTime now = DateTime.now();
+    final DateTime? r = await showDatePicker(
+      context: context,
+      initialDate: DateTime.tryParse(_examDate) ?? now.add(const Duration(days: 90)),
+      firstDate: DateTime(now.year - 1, 1, 1),
+      lastDate: DateTime(now.year + 5, 12, 31),
+      helpText: '考研日期（全体用户共用）',
+    );
+    if (r == null || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      final String d = await Endpoints.adminSaveSite(fmtYmd(r));
+      if (!mounted) return;
+      setState(() => _examDate = d);
+      toast(context, '考研日期已更新为 $d');
+    } catch (e) {
+      if (!mounted) return;
+      toast(context, errText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
     }
   }
 
@@ -472,8 +459,21 @@ class _InvitesSectionState extends State<_InvitesSection> {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final List<Invite> items = _items ?? <Invite>[];
     return SettingsSection(
-      title: '邀请码管理',
+      title: '站点管理',
       children: <Widget>[
+        ListTile(
+          dense: true,
+          contentPadding: EdgeInsets.zero,
+          title: const Text('考研日期'),
+          subtitle: Text('${_examDate.isEmpty ? '加载中…' : _examDate}（全体用户共用，今日页显示倒计时）',
+              style: TextStyle(color: cs.onSurfaceVariant, fontSize: 12)),
+          trailing: IconButton(
+            tooltip: '修改',
+            icon: const Icon(Icons.edit_calendar, size: 20),
+            onPressed: _busy ? null : _pickExamDate,
+          ),
+        ),
+        const Divider(height: 16),
         Text('邀请码一次性使用，注册即作废。生成后复制发给新用户。',
             style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, height: 1.5)),
         const SizedBox(height: 8),

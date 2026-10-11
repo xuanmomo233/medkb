@@ -26,13 +26,14 @@ async def calendar(user: CurrentUser, session: Session, month: Annotated[str, Qu
 
 @router.get("/prefs", response_model=s.PrefsOut)
 async def get_prefs(user: CurrentUser, session: Session):
-    return await svc.get_prefs(session, user.id)
+    return await svc.prefs_out(session, user.id)
 
 
 @router.put("/prefs", response_model=s.PrefsOut)
 async def put_prefs(body: s.PrefsUpdate, user: CurrentUser, session: Session):
     data = {k: getattr(body, k) for k in body.model_fields_set}
-    return await svc.update_prefs(session, user.id, data)
+    await svc.update_prefs(session, user.id, data)
+    return await svc.prefs_out(session, user.id)
 
 
 @router.get("/plan", response_model=s.PlanToday)

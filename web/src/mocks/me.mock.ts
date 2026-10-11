@@ -25,3 +25,11 @@ registerMock('PUT', '/auth/password', ({ body }) => {
   if ((b.new_password ?? '').length < 6) throw Object.assign(new Error('新密码至少 6 位'), { status: 400 })
   return undefined
 })
+
+let siteExamDate = '2026-12-19'
+registerMock('GET', '/admin/site', () => ({ exam_date: siteExamDate }))
+registerMock('PUT', '/admin/site', ({ body }) => {
+  const b = body as { exam_date?: string | null }
+  siteExamDate = b?.exam_date || '2026-12-19'
+  return { exam_date: siteExamDate }
+})

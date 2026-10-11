@@ -19,9 +19,39 @@ from app.models import (
     Question,
     QuestionProgress,
     ScheduleItem,
+    SiteConfig,
     User,
     UserPrefs,
 )
+
+DEFAULT_EXAM_DATE = date(2026, 12, 19)
+
+
+async def get_exam_date(session: AsyncSession) -> date | None:
+    """考研日期：站点级统一设置，未设置时用默认 2026-12-19。"""
+    row = (await session.execute(select(SiteConfig.value).where(SiteConfig.key == "exam_date"))).first()
+    if row and row[0]:
+        try:
+            return date.fromisoformat(row[0])
+        except ValueError:
+            pass
+    return DEFAULT_EXAM_DATE
+
+
+async def set_exam_date(session: AsyncSession, value: str | None) -> date:
+    row = await session.get(SiteConfig, "exam_date")
+    if value:
+        d = date.fromisoformat(value)
+        if row is None:
+            session.add(SiteConfig(key="exam_date", value=d.isoformat()))
+        else:
+            row.value = d.isoformat()
+        await session.commit()
+        return d
+    if row is not None:
+        await session.delete(row)
+        await session.commit()
+    return DEFAULT_EXAM_DATE
 
 try:
     from zoneinfo import ZoneInfo
@@ -76,10 +106,22 @@ async def get_prefs(session: AsyncSession, user_id: int) -> UserPrefs:
 async def update_prefs(session: AsyncSession, user_id: int, data: dict) -> UserPrefs:
     prefs = await get_prefs(session, user_id)
     for k, v in data.items():
-        if k == "exam_date" or v is not None:
+        if k == "exam_date":
+            continue  # exam_date 改为站点级，管理员在后台统一设置
+        if v is not None:
             setattr(prefs, k, v)
     await session.commit()
     return prefs
+
+
+async def prefs_out(session: AsyncSession, user_id: int) -> dict:
+    prefs = await get_prefs(session, user_id)
+    return {
+        "daily_goal": prefs.daily_goal,
+        "exam_date": await get_exam_date(session),
+        "weak_min_samples": prefs.weak_min_samples,
+        "weak_max_rate": prefs.weak_max_rate,
+    }
 
 
 # ---------------- checkin ----------------
@@ -153,14 +195,15 @@ async def today_summary(session: AsyncSession, user: User) -> dict:
     done = await _count_seen_since(session, QuestionProgress, user.id, since) + await _count_seen_since(
         session, CardProgress, user.id, since
     )
-    left = (prefs.exam_date - today).days if prefs.exam_date else None
+    exam = await get_exam_date(session)
+    left = (exam - today).days if exam else None
     return {
         "streak": _streak(days, today),
         "checked_in": today in days,
         "daily_goal": prefs.daily_goal,
         "done_today": done,
         "exam_days_left": max(left, 0) if left is not None else None,
-        "exam_date": prefs.exam_date,
+        "exam_date": exam,
         "counts": {"due": q[0] + c[0], "wrong": q[1] + c[1], "starred": q[2] + c[2], "mastered": q[3] + c[3]},
     }
 

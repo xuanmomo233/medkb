@@ -216,4 +216,13 @@ class Endpoints {
   static Future<void> changePassword(String oldPw, String newPw) async {
     await Api.put('/auth/password', {'old_password': oldPw, 'new_password': newPw});
   }
+  static Future<String> adminSite() async {
+    final Map<String, dynamic> j = asMap(await Api.get('/admin/site', cache: false));
+    return j['exam_date']?.toString() ?? '2026-12-19';
+  }
+  static Future<String> adminSaveSite(String? examDate) async {
+    final Map<String, dynamic> j =
+        asMap(await Api.put('/admin/site', {'exam_date': examDate}));
+    return j['exam_date']?.toString() ?? '2026-12-19';
+  }
 }

@@ -5,8 +5,9 @@ from sqlalchemy import select
 
 from app.api.deps import AdminUser, Session
 from app.models import InviteCode
-from app.schemas.admin import AdminQuestion, AdminQuestionPatch, ChangedOut, InviteCreate, InviteOut
+from app.schemas.admin import AdminQuestion, AdminQuestionPatch, ChangedOut, InviteCreate, InviteOut, SiteConfigOut, SiteConfigPatch
 from app.services import quiz as admin_questions
+from app.services import study
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -57,3 +58,17 @@ async def revoke_invite(code: str, session: Session, admin: AdminUser):
         raise HTTPException(409, "已被使用，不可撤销")
     await session.delete(row)
     await session.commit()
+
+
+@router.get("/site", response_model=SiteConfigOut)
+async def get_site(session: Session, admin: AdminUser):
+    return SiteConfigOut(exam_date=(await study.get_exam_date(session)).isoformat())
+
+
+@router.put("/site", response_model=SiteConfigOut)
+async def put_site(body: SiteConfigPatch, session: Session, admin: AdminUser):
+    try:
+        d = await study.set_exam_date(session, body.exam_date)
+    except ValueError:
+        raise HTTPException(400, "日期格式应为 YYYY-MM-DD")
+    return SiteConfigOut(exam_date=d.isoformat())

@@ -69,4 +69,6 @@ export const api = {
   adminInvites: () => get<T.Invite[]>('/admin/invites'),
   adminNewInvite: (count = 1) => post<T.Invite[]>('/admin/invites', { count }),
   adminRevokeInvite: (code: string) => del(`/admin/invites/${code}`),
+  adminSite: () => get<T.SiteConfig>('/admin/site'),
+  adminSaveSite: (b: { exam_date: string | null }) => put<T.SiteConfig>('/admin/site', b),
 }

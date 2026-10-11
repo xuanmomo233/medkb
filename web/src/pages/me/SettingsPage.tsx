@@ -7,7 +7,7 @@ import { getReadingSize, setReadingSize, useTheme } from '@/app/theme'
 import { Button, Card, ErrorState, Field, Input, PageHeader, Segmented, Spinner, useToast } from '@/ui'
 import s from './me.module.css'
 
-type Form = Pick<UserPrefs, 'daily_goal' | 'exam_date' | 'weak_min_samples' | 'weak_max_rate'>
+type Form = Pick<UserPrefs, 'daily_goal' | 'weak_min_samples' | 'weak_max_rate'>
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(v) || lo))
 
 function PrefsCards({ prefs }: { prefs: UserPrefs }) {
@@ -16,7 +16,7 @@ function PrefsCards({ prefs }: { prefs: UserPrefs }) {
   const [base, setBase] = useState<Form>(prefs)
   const [f, setF] = useState<Form>(prefs)
   const [justSaved, setJustSaved] = useState(false)
-  const dirty = f.daily_goal !== base.daily_goal || f.exam_date !== base.exam_date
+  const dirty = f.daily_goal !== base.daily_goal
     || f.weak_min_samples !== base.weak_min_samples || f.weak_max_rate !== base.weak_max_rate
   const set = <K extends keyof Form>(k: K, v: Form[K]) => { setF((o) => ({ ...o, [k]: v })); setJustSaved(false) }
   const save = useMutation({
@@ -37,8 +37,8 @@ function PrefsCards({ prefs }: { prefs: UserPrefs }) {
               <Button onClick={() => set('daily_goal', clamp(f.daily_goal + 5, 5, 500))} aria-label="增加">＋</Button>
             </div>
           </Field>
-          <Field label="考研日期">
-            <Input type="date" value={f.exam_date ?? ''} onChange={(e) => set('exam_date', e.target.value || null)} />
+          <Field label="考研倒计时">
+            <div className={s.desc}>{prefs.exam_date ?? '未设置'}（由管理员统一设置）</div>
           </Field>
         </div>
       </Card>
@@ -145,6 +145,34 @@ function Version() {
   )
 }
 
+function SiteCard() {
+  const qc = useQueryClient()
+  const toast = useToast()
+  const q = useQuery({ queryKey: ['site'], queryFn: api.adminSite })
+  const [d, setD] = useState('')
+  useEffect(() => { if (q.data) setD(q.data.exam_date) }, [q.data])
+  const save = useMutation({
+    mutationFn: () => api.adminSaveSite({ exam_date: d || null }),
+    onSuccess: (r) => { qc.invalidateQueries({ queryKey: ['site'] }); qc.invalidateQueries({ queryKey: ['today'] }); toast(`考研日期已更新为 ${r.exam_date}`) },
+    onError: (e: Error) => toast(e.message, true),
+  })
+  return (
+    <Card title="站点设置">
+      <div className={s.group}>
+        <p className={s.sectionHint}>考研日期全体用户共用，清空恢复默认 2026-12-19</p>
+        <Field label="考研日期">
+          <Input type="date" value={d} onChange={(e) => setD(e.target.value)} />
+        </Field>
+        <div className={s.saveBar}>
+          <Button variant="primary" disabled={save.isPending || q.isLoading} onClick={() => save.mutate()}>
+            {save.isPending ? '保存中…' : '保存'}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 function InvitesCard() {
   const qc = useQueryClient()
   const toast = useToast()
@@ -204,7 +232,10 @@ export default function SettingsPage() {
       {q.isLoading ? <Spinner /> : q.isError || !q.data ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : <PrefsCards prefs={q.data} />}
       <Appearance />
       <PasswordCard />
-      {user?.is_admin && <InvitesCard />}
+      {user?.is_admin && (<>
+        <SiteCard />
+        <InvitesCard />
+      </>)}
       <Version />
     </div>
   )
