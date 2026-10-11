@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
+import '../../api.dart' show errText;
 import '../../endpoints.dart';
 import '../../models.dart' show AdminUser, Invite;
 import '../../widgets/widgets.dart';
