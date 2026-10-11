@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../api.dart';
 import '../../endpoints.dart';
 import '../../models.dart' hide Card;
+import '../../theme.dart';
 import '../../widgets/widgets.dart';
 import '../quiz/option_tile.dart';
 
@@ -132,8 +133,9 @@ class _SourceBody extends StatelessWidget {
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final AppColors c = AppColors.of(context);
+    final Question? qq = q;
     final String analysis =
-        (q != null && q.analysisHtml.isNotEmpty) ? q.analysisHtml : src.analysisHtml;
+        (qq != null && qq.analysisHtml.isNotEmpty) ? qq.analysisHtml : src.analysisHtml;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: <Widget>[
@@ -142,31 +144,31 @@ class _SourceBody extends StatelessWidget {
           runSpacing: 6,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: <Widget>[
-            if (q != null && q.qtype.isNotEmpty)
-              AppBadge(q.qtype, tone: BadgeTone.primary),
+            if (qq != null && qq.qtype.isNotEmpty)
+              AppBadge(qq.qtype, tone: BadgeTone.primary),
             AppBadge(src.system),
-            if (q != null && q.chapter.isNotEmpty) AppBadge(q.chapter),
+            if (qq != null && qq.chapter.isNotEmpty) AppBadge(qq.chapter),
             Text(src.qid,
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
           ],
         ),
         const SizedBox(height: 10),
-        if (q != null && q.parentHtml.isNotEmpty) ...<Widget>[
+        if (qq != null && qq.parentHtml.isNotEmpty) ...<Widget>[
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
               color: cs.surfaceContainerHighest.withOpacity(0.5),
               border: Border(left: BorderSide(color: cs.primary, width: 3)),
             ),
-            child: HtmlView(q.parentHtml),
+            child: HtmlView(qq.parentHtml),
           ),
           const SizedBox(height: 10),
         ],
-        HtmlView(q != null && q.stemHtml.isNotEmpty ? q.stemHtml : src.stemHtml),
-        if (q != null && q.optionsHtml.isNotEmpty) ...<Widget>[
+        HtmlView(qq != null && qq.stemHtml.isNotEmpty ? qq.stemHtml : src.stemHtml),
+        if (qq != null && qq.optionsHtml.isNotEmpty) ...<Widget>[
           const SizedBox(height: 10),
           OptionList(
-            q: q,
+            q: qq,
             picked: '',
             judged: true,
             reveal: true,
@@ -184,7 +186,7 @@ class _SourceBody extends StatelessWidget {
           child: Text.rich(TextSpan(children: <InlineSpan>[
             const TextSpan(text: '正确答案 '),
             TextSpan(
-              text: q != null && q.answer.isNotEmpty ? q.answer : src.answer,
+              text: qq != null && qq.answer.isNotEmpty ? qq.answer : src.answer,
               style: TextStyle(
                   fontWeight: FontWeight.w800, fontSize: 16, color: c.good),
             ),
