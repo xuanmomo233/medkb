@@ -1,3 +1,4 @@
+import 'dart:ui' show PathMetric;
 import 'package:flutter/material.dart';
 import '../../models.dart' hide Card;
 import '../../theme.dart';
