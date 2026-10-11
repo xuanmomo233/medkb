@@ -3,22 +3,22 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 阿斯克勒庇俄斯之杖：杖 -->
+    <!-- 阿斯克勒庇俄斯之杖：杖（顶部圆球 + 杖身），控制在 66dp 安全区内 -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M52,21 h4 a1.5,1.5 0 0 1 1.5,1.5 v63 a1.5,1.5 0 0 1 -1.5,1.5 h-4 a1.5,1.5 0 0 1 -1.5,-1.5 v-63 a1.5,1.5 0 0 1 1.5,-1.5 z"/>
+        android:pathData="M54,23 m-4.2,0 a4.2,4.2 0 1,1 8.4,0 a4.2,4.2 0 1,1 -8.4,0"/>
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M54,15 m-4.5,0 a4.5,4.5 0 1,1 9,0 a4.5,4.5 0 1,1 -9,0"/>
+        android:pathData="M52.2,29 h3.6 a1.8,1.8 0 0 1 1.8,1.8 v47 a1.8,1.8 0 0 1 -1.8,1.8 h-3.6 a1.8,1.8 0 0 1 -1.8,-1.8 v-47 a1.8,1.8 0 0 1 1.8,-1.8 z"/>
     <!-- 蛇身：三段绕杖 -->
     <path
         android:strokeColor="#FFFFFF"
-        android:strokeWidth="4.6"
+        android:strokeWidth="4"
         android:strokeLineCap="round"
         android:fillColor="#00000000"
-        android:pathData="M66,29 C58,32 44,33 41,38 C38,43 70,46 70,51 C70,56 38,59 38,64 C38,69 70,71 67,77 C65,81 57,83 52,84"/>
+        android:pathData="M65,36 C54,38 41,40 41,45 C41,50 67,51 67,56 C67,61 41,62 41,67 C41,72 62,73 61,77 C60.5,80 56,81 53,81.5"/>
     <!-- 蛇头 -->
     <path
         android:fillColor="#FFFFFF"
-        android:pathData="M68,26 m-3.8,0 a3.8,3.8 0 1,1 7.6,0 a3.8,3.8 0 1,1 -7.6,0"/>
+        android:pathData="M65.5,33 m-3.2,0 a3.2,3.2 0 1,1 6.4,0 a3.2,3.2 0 1,1 -6.4,0"/>
 </vector>
