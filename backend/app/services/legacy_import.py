@@ -10,11 +10,24 @@ _QREF = re.compile(r"Q(\d+)")
 _PAGE = re.compile(r"page_(\d+)")
 _TAG_SPLIT = re.compile(r"[,，、;；]")
 
+# 字段宽度直接取模型列定义，避免与模型脱节
+from app.models import Card as _Card, Chapter as _Chapter, Question as _Question
+
+
+def _limits(model: type, cols: list[str]) -> dict[str, int]:
+    out: dict[str, int] = {}
+    for name in cols:
+        col = getattr(model.__table__.c, name, None)
+        if col is not None and getattr(col.type, "length", None):
+            out[name] = col.type.length
+    return out
+
+
 LIMITS = {
-    "questions": {"qid": 32, "bank_group": 64, "bank": 64, "subject_dir": 32, "system": 64,
-                  "chapter": 200, "qtype": 16, "answer": 32, "source_file": 255},
-    "cards": {"subject": 32, "part": 64, "section": 128, "term": 200, "source_file": 255},
-    "chapters": {"kind": 16, "subject": 32, "title": 200, "source_file": 255},
+    "questions": _limits(_Question, ["qid", "bank_group", "bank", "subject_dir", "system",
+                                     "chapter", "qtype", "answer", "source_file"]),
+    "cards": _limits(_Card, ["subject", "part", "section", "term", "source_file"]),
+    "chapters": _limits(_Chapter, ["kind", "subject", "title", "source_file"]),
 }
 
 QUESTION_COLS = ["id", "qid", "chapter", "subjdir", "system", "bank", "bankgrp", "qtype", "stem",

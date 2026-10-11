@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom'
 import { Button } from '@/ui'
 import s from './chapter.module.css'
 
-const src = (n: number) => `/img/page_${n}.webp`
+const src = (n: number) => `/img/page_${String(n).padStart(3, '0')}.webp`
 
 export default function PageGallery({ pages }: { pages: number[] }) {
   const [cur, setCur] = useState<number | null>(null)

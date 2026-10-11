@@ -11,6 +11,7 @@ services:
     volumes:
       - /opt/medkb/kb:/data/kb:ro
       - /opt/medkb/img:/data/img:ro
+      - /opt/medkb/app-release.apk:/data/app-release.apk:ro
       - /opt/medkb/uimg:/data/uimg
       - /opt/medkb/imgcache:/data/imgcache
     networks:

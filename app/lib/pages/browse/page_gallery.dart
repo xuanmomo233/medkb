@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api.dart';
 
-String _src(int n) => '${Api.base}/img/page_$n.webp';
+String _src(int n) => '${Api.base}/img/page_${n.toString().padLeft(3, '0')}.webp';
 
 class _NetImage extends StatelessWidget {
   final String url;

@@ -34,7 +34,7 @@ class Question(Base):
     qtype: Mapped[str] = mapped_column(String(16), default="单选", index=True)
     stem: Mapped[str] = mapped_column(Text)
     options: Mapped[list] = mapped_column(JsonType, default=list)
-    answer: Mapped[str] = mapped_column(String(32), default="")
+    answer: Mapped[str] = mapped_column(String(255), default="")
     analysis: Mapped[str] = mapped_column(Text, default="")
     parent_stem: Mapped[str] = mapped_column(Text, default="")
     meta: Mapped[str] = mapped_column(Text, default="")

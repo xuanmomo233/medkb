@@ -100,6 +100,15 @@ async def img_proxy(u: str = Query("", max_length=2000)):
     return FileResponse(fp, headers=_CACHE_HEADERS)
 
 
+@router.get("/app.apk")
+async def app_apk():
+    fp = Path(get_settings().img_dir).parent / "app-release.apk"
+    if not fp.is_file():
+        raise HTTPException(404, "暂无更新包")
+    return FileResponse(fp, media_type="application/vnd.android.package-archive",
+                        filename="medkb.apk", headers={"Cache-Control": "no-cache"})
+
+
 def _mime(ext: str) -> str:
     return {
         ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp",
