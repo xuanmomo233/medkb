@@ -340,15 +340,15 @@ class _InvitesSectionState extends State<_InvitesSection> {
                     style: TextStyle(
                       fontFamily: 'monospace',
                       fontSize: 13,
-                      color: c.usedBy != null ? cs.onSurfaceVariant : cs.primary,
-                      decoration: c.usedBy != null ? TextDecoration.lineThrough : null,
+                      color: c.usedBy != null || c.usedAt != null ? cs.onSurfaceVariant : cs.primary,
+                      decoration: c.usedBy != null || c.usedAt != null ? TextDecoration.lineThrough : null,
                     )),
                 subtitle: Text(
                     c.usedBy != null
                         ? '已被 ${c.usedByUsername ?? '#${c.usedBy}'} 使用'
-                        : '未使用',
+                        : c.usedAt != null ? '已使用（账号已删除）' : '未使用',
                     style: const TextStyle(fontSize: 12)),
-                trailing: c.usedBy == null
+                trailing: c.usedBy == null && c.usedAt == null
                     ? Row(
                         mainAxisSize: MainAxisSize.min,
                         children: <Widget>[

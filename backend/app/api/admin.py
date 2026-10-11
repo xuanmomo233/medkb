@@ -1,4 +1,5 @@
 import secrets
+import time
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import delete, select
@@ -12,6 +13,25 @@ from app.services import quiz as admin_questions
 from app.services import study
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+_DEL_FAIL_WINDOW = 300
+_DEL_FAIL_LIMIT = 5
+_del_fails: dict[int, list[float]] = {}
+
+
+def _check_del_rate(admin_id: int) -> None:
+    now = time.monotonic()
+    lst = [t for t in _del_fails.get(admin_id, []) if now - t < _DEL_FAIL_WINDOW]
+    if lst:
+        _del_fails[admin_id] = lst
+    else:
+        _del_fails.pop(admin_id, None)
+    if len(lst) >= _DEL_FAIL_LIMIT:
+        raise HTTPException(429, "密码验证失败次数过多，请 5 分钟后再试")
+
+
+def _record_del_fail(admin_id: int) -> None:
+    _del_fails.setdefault(admin_id, []).append(time.monotonic())
 
 
 @router.get("/questions/{qid}", response_model=AdminQuestion)
@@ -28,7 +48,7 @@ async def put_question(qid: int, body: AdminQuestionPatch, session: Session, adm
 async def list_users(session: Session, admin: AdminUser, q: str = "", invite: str = ""):
     stmt = select(User).order_by(User.id)
     if q.strip():
-        stmt = stmt.where(User.username.contains(q.strip()))
+        stmt = stmt.where(User.username.contains(q.strip(), autoescape=True))
     if invite.strip():
         stmt = (stmt.join(InviteCode, InviteCode.used_by == User.id)
                     .where(InviteCode.code == invite.strip()))
@@ -55,8 +75,11 @@ async def delete_user(uid: int, body: AdminUserDelete, session: Session, admin: 
         raise HTTPException(404, "用户不存在")
     if target.is_admin:
         raise HTTPException(409, "不能删除管理员账号")
+    _check_del_rate(admin.id)
     if not verify_password(body.password, admin.password_hash):
+        _record_del_fail(admin.id)
         raise HTTPException(403, "管理员密码错误")
+    _del_fails.pop(admin.id, None)
     # question_edits 外键无级联，先人工清
     await session.execute(delete(QuestionEdit).where(QuestionEdit.user_id == uid))
     await session.delete(target)

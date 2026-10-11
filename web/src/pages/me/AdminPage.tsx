@@ -163,11 +163,11 @@ function InvitesCard() {
           <div className={s.inviteList}>
             {(q.data ?? []).map((c) => (
               <div key={c.code} className={s.inviteRow}>
-                <code className={c.used_by ? s.inviteUsed : s.inviteCode}>{c.code}</code>
+                <code className={c.used_by || c.used_at ? s.inviteUsed : s.inviteCode}>{c.code}</code>
                 <span className={s.inviteMeta}>
-                  {c.used_by ? `已被 ${c.used_by_username ?? `#${c.used_by}`} 使用` : '未使用'}
+                  {c.used_by ? `已被 ${c.used_by_username ?? `#${c.used_by}`} 使用` : c.used_at ? '已使用（账号已删除）' : '未使用'}
                 </span>
-                {c.used_by == null && (
+                {c.used_by == null && !c.used_at && (
                   <>
                     <Button onClick={() => { navigator.clipboard?.writeText(c.code).catch(() => {}); toast('已复制') }}>复制</Button>
                     <Button variant="ghost" onClick={() => revoke.mutate(c.code)} disabled={revoke.isPending}>撤销</Button>

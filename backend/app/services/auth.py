@@ -69,7 +69,7 @@ async def _check_invite(session: AsyncSession, code: str, user_id: int | None = 
         row = (await session.execute(
             select(InviteCode).where(InviteCode.code == (code or "").strip())
         )).scalar_one_or_none()
-        if row is None or row.used_by is not None:
+        if row is None or row.used_at is not None:
             raise HTTPException(403, "邀请码错误或已被使用")
         return row
     invite = get_settings().invite_code.get_secret_value()
