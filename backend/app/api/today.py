@@ -41,9 +41,26 @@ async def plan(user: CurrentUser, session: Session):
     return await svc.plan_today(session, user.id)
 
 
+@router.get("/plan/options", response_model=list[s.PlanOption])
+async def plan_options(user: CurrentUser, session: Session):
+    return await svc.plan_options(session)
+
+
+@router.put("/plan/config", status_code=204)
+async def put_plan(body: s.PlanConfigBody, user: CurrentUser, session: Session):
+    await svc.set_plan(session, user.id, [(i.subject, i.part) for i in body.items], body.total_days)
+    return Response(status_code=204)
+
+
+@router.delete("/plan/config", status_code=204)
+async def del_plan(user: CurrentUser, session: Session):
+    await svc.clear_plan(session, user.id)
+    return Response(status_code=204)
+
+
 @router.get("/plan/days/{n}", response_model=s.PlanDayDetail)
 async def plan_day(n: int, user: CurrentUser, session: Session):
-    return await svc.plan_day_detail(session, n)
+    return await svc.plan_day_detail(session, user.id, n)
 
 
 @router.post("/plan/restart", status_code=204)

@@ -887,54 +887,98 @@ class CalendarMonth {
       CalendarMonth(days: _li(j['days']), streak: _i(j['streak']));
 }
 
-class PlanOverviewDay {
-  final int no;
-  final String title;
-  final int cardCount;
-  const PlanOverviewDay(
-      {required this.no, required this.title, required this.cardCount});
-  factory PlanOverviewDay.fromJson(Map<String, dynamic> j) => PlanOverviewDay(
-        no: _i(j['no']),
-        title: _s(j['title']),
-        cardCount: _i(j['card_count']),
+class PlanItem {
+  final String key;
+  final String subject;
+  final String part;
+  final String label;
+  final int cards;
+  final int cardDone;
+  final int questions;
+  final int questionDone;
+  final bool done;
+  final int? day;
+  const PlanItem({
+    required this.key,
+    required this.subject,
+    required this.part,
+    required this.label,
+    required this.cards,
+    required this.cardDone,
+    required this.questions,
+    required this.questionDone,
+    required this.done,
+    required this.day,
+  });
+  factory PlanItem.fromJson(Map<String, dynamic> j) => PlanItem(
+        key: _s(j['key']),
+        subject: _s(j['subject']),
+        part: _s(j['part']),
+        label: _s(j['label']),
+        cards: _i(j['cards']),
+        cardDone: _i(j['card_done']),
+        questions: _i(j['questions']),
+        questionDone: _i(j['question_done']),
+        done: _b(j['done']),
+        day: j['day'] == null ? null : _i(j['day']),
       );
 }
 
 class PlanToday {
+  final bool configured;
   final String start;
   final int totalDays;
-  final int todayNo;
+  final int dayNo;
+  final int daysLeft;
+  final int remaining;
   final bool finished;
-  final String title;
-  final List<int> cardIds;
-  final List<int> questionIds;
-  final int cardDone;
-  final int questionDone;
-  final List<PlanOverviewDay> overview;
+  final List<PlanItem> todayItems;
+  final List<PlanItem> items;
   const PlanToday({
+    required this.configured,
     required this.start,
     required this.totalDays,
-    required this.todayNo,
+    required this.dayNo,
+    required this.daysLeft,
+    required this.remaining,
     required this.finished,
-    required this.title,
-    required this.cardIds,
-    required this.questionIds,
-    required this.cardDone,
-    required this.questionDone,
-    required this.overview,
+    required this.todayItems,
+    required this.items,
   });
   factory PlanToday.fromJson(Map<String, dynamic> j) => PlanToday(
+        configured: _b(j['configured']),
         start: _s(j['start']),
         totalDays: _i(j['total_days']),
-        todayNo: _i(j['today_no']),
+        dayNo: _i(j['day_no']),
+        daysLeft: _i(j['days_left']),
+        remaining: _i(j['remaining']),
         finished: _b(j['finished']),
-        title: _s(j['title']),
-        cardIds: _li(j['card_ids']),
-        questionIds: _li(j['question_ids']),
-        cardDone: _i(j['card_done']),
-        questionDone: _i(j['question_done']),
-        overview:
-            asMapList(j['overview']).map(PlanOverviewDay.fromJson).toList(),
+        todayItems:
+            asMapList(j['today_items']).map(PlanItem.fromJson).toList(),
+        items: asMapList(j['items']).map(PlanItem.fromJson).toList(),
+      );
+}
+
+class PlanOptionPart {
+  final String part;
+  final int cards;
+  final int questions;
+  const PlanOptionPart(
+      {required this.part, required this.cards, required this.questions});
+  factory PlanOptionPart.fromJson(Map<String, dynamic> j) => PlanOptionPart(
+        part: _s(j['part']),
+        cards: _i(j['cards']),
+        questions: _i(j['questions']),
+      );
+}
+
+class PlanOption {
+  final String subject;
+  final List<PlanOptionPart> parts;
+  const PlanOption({required this.subject, required this.parts});
+  factory PlanOption.fromJson(Map<String, dynamic> j) => PlanOption(
+        subject: _s(j['subject']),
+        parts: asMapList(j['parts']).map(PlanOptionPart.fromJson).toList(),
       );
 }
 

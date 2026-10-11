@@ -8,8 +8,9 @@ from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import card_md, md
-from app.models import Attempt, Card, CardQuestion, PlanDayPart, Question, QuestionProgress as QP
+from app.models import Attempt, Card, CardQuestion, Question, QuestionProgress as QP
 from app.schemas import quiz as S
+from app.services import study
 from app.services.glm import glm_call
 from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, level_conditions, pool_flt_condition
 
@@ -101,20 +102,20 @@ async def facets(session: AsyncSession, uid: int, p: QuizParams) -> dict:
 
 
 # ---------------- questions ----------------
-async def plan_day_qids(session: AsyncSession, day_no: int) -> list[int]:
-    parts = (await session.execute(select(PlanDayPart).where(PlanDayPart.day_no == day_no))).scalars().all()
+async def plan_day_qids(session: AsyncSession, user_id: int, day_no: int) -> list[int]:
+    parts = await study.plan_day_parts(session, user_id, day_no)
     if not parts:
         return []
     ids: set[int] = set()
-    for pt in parts:
-        sd = SUBJECT_DIR.get(pt.subject)
+    for subject, part in parts:
+        sd = SUBJECT_DIR.get(subject)
         if not sd:
             continue
         stmt = (
             select(CardQuestion.question_id)
             .join(Card, Card.id == CardQuestion.card_id)
             .join(Question, Question.id == CardQuestion.question_id)
-            .where(Card.subject == pt.subject, Card.part == pt.part, Question.subject_dir == sd)
+            .where(Card.subject == subject, Card.part == part, Question.subject_dir == sd)
         )
         ids.update((await session.execute(stmt)).scalars().all())
     return sorted(ids)
@@ -135,7 +136,7 @@ async def _latest_attempts(session: AsyncSession, uid: int, qids: list[int]) -> 
 async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: bool) -> list[S.QuestionOut]:
     plan_ids = None
     if p.plan_day is not None:
-        plan_ids = await plan_day_qids(session, p.plan_day)
+        plan_ids = await plan_day_qids(session, uid, p.plan_day)
         if not plan_ids:
             return []
     stmt = (
@@ -356,7 +357,7 @@ def snippet(s: str | None) -> str:
 async def pool(session: AsyncSession, uid: int, p: QuizParams, flt: str | None, offset: int, size: int) -> S.PoolPage:
     plan_ids = None
     if p.plan_day is not None:
-        plan_ids = await plan_day_qids(session, p.plan_day)
+        plan_ids = await plan_day_qids(session, uid, p.plan_day)
     conds = all_conditions(p, plan_ids if plan_ids else None)
     if p.plan_day is not None and not plan_ids:
         conds.append(Question.id.in_([]))

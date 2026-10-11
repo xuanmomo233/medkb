@@ -24,7 +24,7 @@ class _CardsPageState extends State<CardsPage> {
     int n = 0;
     try {
       final PlanToday p = await Endpoints.plan();
-      n = p.todayNo;
+      n = p.configured && p.todayItems.isNotEmpty ? 1 : 0;
     } catch (_) {
       n = 0;
     }
@@ -92,7 +92,7 @@ class _CardsPageState extends State<CardsPage> {
           () => openCardRun(context, const CardRunArgs(starred: true))),
       if (_planDay > 0) ...<Widget>[
         const SizedBox(height: 12),
-        _quick(Icons.event_note_outlined, '今日计划', '第 $_planDay 天的背卡任务',
+        _quick(Icons.event_note_outlined, '今日计划', '今日计划的背卡任务',
             () => openCardRun(context, CardRunArgs(planDay: _planDay))),
       ],
       const SizedBox(height: 20),

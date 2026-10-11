@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String
+from sqlalchemy import Boolean, Date, DateTime, Float, ForeignKey, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, CreatedMixin
@@ -66,3 +66,29 @@ class SiteConfig(Base):
 
     key: Mapped[str] = mapped_column(String(32), primary_key=True)
     value: Mapped[str] = mapped_column(String(255), default="")
+
+
+class UserPlan(Base, CreatedMixin):
+    """用户自定义学习计划：自选的章（subject+part）在 total_days 内刷完。"""
+
+    __tablename__ = "user_plans"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    start_day: Mapped[date] = mapped_column(Date)
+    total_days: Mapped[int] = mapped_column(Integer, default=10)
+
+
+class UserPlanItem(Base, CreatedMixin):
+    """计划里的一章：卡片的 (subject, part)，题目经 card 关联挂入。"""
+
+    __tablename__ = "user_plan_items"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    subject: Mapped[str] = mapped_column(String(64))
+    part: Mapped[str] = mapped_column(String(64))
+    ord: Mapped[int] = mapped_column(Integer, default=0)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "subject", "part", name="uq_plan_item"),
+    )

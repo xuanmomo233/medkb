@@ -136,6 +136,21 @@ class Endpoints {
     await Api.post('/plan/restart');
   }
 
+  static Future<List<PlanOption>> planOptions() async =>
+      asMapList(await Api.get('/plan/options'))
+          .map(PlanOption.fromJson)
+          .toList();
+
+  static Future<void> planSaveConfig(
+      int totalDays, List<Map<String, String>> items) async {
+    await Api.put('/plan/config',
+        <String, dynamic>{'total_days': totalDays, 'items': items});
+  }
+
+  static Future<void> planClear() async {
+    await Api.del('/plan/config');
+  }
+
   static Future<StatsOverview> statsOverview() async =>
       StatsOverview.fromJson(asMap(await Api.get('/stats/overview')));
   static Future<List<WeakSpot>> weakSpots() async =>

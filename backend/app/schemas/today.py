@@ -44,23 +44,50 @@ class CalendarMonth(BaseModel):
     streak: int
 
 
-class PlanOverviewDay(BaseModel):
-    no: int
-    title: str
-    card_count: int
+class PlanItemOut(BaseModel):
+    key: str
+    subject: str
+    part: str
+    label: str
+    cards: int
+    card_done: int
+    questions: int
+    question_done: int
+    done: bool
+    day: int | None
 
 
 class PlanToday(BaseModel):
-    start: date
-    total_days: int
-    today_no: int
-    finished: bool
-    title: str
-    card_ids: list[int]
-    question_ids: list[int]
-    card_done: int
-    question_done: int
-    overview: list[PlanOverviewDay]
+    configured: bool
+    start: date | None = None
+    total_days: int = 0
+    day_no: int = 0
+    days_left: int = 0
+    remaining: int = 0
+    finished: bool = False
+    today_items: list[PlanItemOut] = []
+    items: list[PlanItemOut] = []
+
+
+class PlanOptionPart(BaseModel):
+    part: str
+    cards: int
+    questions: int
+
+
+class PlanOption(BaseModel):
+    subject: str
+    parts: list[PlanOptionPart]
+
+
+class PlanConfigItem(BaseModel):
+    subject: str
+    part: str
+
+
+class PlanConfigBody(BaseModel):
+    total_days: int = Field(ge=1, le=120)
+    items: list[PlanConfigItem] = Field(min_length=1, max_length=200)
 
 
 class PlanCardBrief(BaseModel):

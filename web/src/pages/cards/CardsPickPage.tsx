@@ -12,7 +12,7 @@ export default function CardsPickPage() {
   const { data: index, error, reload } = useLoad(fetchIndex)
   const [planDay, setPlanDay] = useState<number | null>(null)
   useEffect(() => {
-    api.plan().then((p) => setPlanDay(p.today_no > 0 ? p.today_no : null), () => setPlanDay(null))
+    api.plan().then((p) => setPlanDay(p.configured && p.today_items.length > 0 ? 1 : null), () => setPlanDay(null))
   }, [])
 
   const groups = useMemo(() => {

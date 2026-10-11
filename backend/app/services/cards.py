@@ -4,7 +4,8 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import card_md, md
-from app.models import Card, CardProgress, CardQuestion, PlanDayPart, Question
+from app.models import Card, CardProgress, CardQuestion, Question
+from app.services import study
 from app.services.progress import derive_state
 
 LIMIT = 500
@@ -38,9 +39,7 @@ async def list_cards(
         stmt = stmt.where(Card.id.in_(ids[:LIMIT]))
     if plan_day is not None:
         limit = PLAN_LIMIT
-        parts = (
-            await session.execute(select(PlanDayPart.subject, PlanDayPart.part).where(PlanDayPart.day_no == plan_day))
-        ).all()
+        parts = await study.plan_day_parts(session, user_id, plan_day)
         if not parts:
             return []
         stmt = stmt.where(or_(*[and_(Card.subject == s, Card.part == p) for s, p in parts]))

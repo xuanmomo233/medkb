@@ -40,50 +40,68 @@ registerMock('GET', '/calendar', ({ query }) => {
 registerMock('GET', '/prefs', () => prefs)
 registerMock('PUT', '/prefs', ({ body }) => Object.assign(prefs, body))
 
-const PLAN_TITLES = [
-  '内科 · 呼吸 + 中毒', '内科 · 循环', '内科 · 消化 + 其他', '内科 · 泌尿 + 血液',
-  '内科 · 内分泌/风湿 + 外科 · 颈部/乳房', '外科 · 休克/水电酸碱/麻醉/总论', '外科 · 围术期/感染/输血',
-  '外科 · 创伤烧伤/肿瘤/胸外/疝/腹损/血管/泌外', '外科 · 消化普外（胃/阑尾/肠/肝胆胰）', '外科 · 骨科全部 + 收尾',
-]
-const CHAPTERS: string[][] = [
-  ['呼吸系统疾病', '中毒与理化因素'], ['循环系统疾病'], ['消化系统疾病', '其他与综合'], ['泌尿系统疾病', '血液系统疾病'],
-  ['内分泌与代谢疾病', '风湿免疫疾病', '颈部疾病'], ['休克与复苏', '麻醉'], ['围术期处理', '外科感染', '输血'],
-  ['创伤与烧伤', '肿瘤与移植', '胸部疾病', '腹外疝'], ['胃十二指肠疾病', '阑尾炎', '肝疾病与门静脉高压', '胆道疾病'],
-  ['骨折概论', '上肢骨折脱位', '下肢骨折与骨盆', '脊柱脊髓'],
-]
 const TERMS = ['肺炎链球菌肺炎', '慢性阻塞性肺疾病', '支气管哮喘', '心力衰竭', '房颤', '急性心肌梗死', '消化性溃疡', '肝硬化', '肾病综合征', '缺铁性贫血']
-let planStart = 3
-const planNo = () => Math.min(PLAN_TITLES.length + 1, planStart <= 0 ? 1 : planStart)
+const OPT_PARTS: [string, number, number][] = [
+  ['01-呼吸系统疾病', 238, 620], ['02-循环系统疾病', 396, 860], ['03-消化系统疾病', 286, 540],
+  ['04-泌尿系统疾病', 216, 380], ['05-血液系统疾病', 257, 450], ['06-内分泌与代谢疾病', 215, 320],
+]
+let planItems: { subject: string; part: string; cards: number; questions: number; done: boolean }[] | null = [
+  { subject: '内科学', part: '01-呼吸系统疾病', cards: 238, questions: 620, done: false },
+  { subject: '内科学', part: '02-循环系统疾病', cards: 396, questions: 860, done: false },
+  { subject: '外科学', part: '01-休克与复苏', cards: 165, questions: 210, done: true },
+]
+let planDays = 7
 
-function dayIds(n: number) {
-  const cards = Array.from({ length: 12 }, (_, i) => n * 100 + i + 1)
-  const qs = Array.from({ length: 24 }, (_, i) => n * 1000 + i + 1)
-  return { cards, qs }
-}
+registerMock('GET', '/plan/options', () => [
+  { subject: '内科学', parts: OPT_PARTS.map(([part, cards, questions]) => ({ part, cards, questions })) },
+  { subject: '外科学', parts: [
+    { part: '01-休克与复苏', cards: 165, questions: 210 }, { part: '02-水、电解质与酸碱平衡', cards: 142, questions: 180 },
+    { part: '03-麻醉', cards: 62, questions: 90 },
+  ] },
+  { subject: '生理学', parts: [
+    { part: '01-绪论', cards: 50, questions: 120 }, { part: '05-呼吸', cards: 118, questions: 300 },
+  ] },
+])
+registerMock('PUT', '/plan/config', ({ body }) => {
+  const b = body as { total_days: number; items: { subject: string; part: string }[] }
+  planDays = b.total_days
+  planItems = b.items.map((i) => ({
+    ...i, done: false,
+    cards: OPT_PARTS.find(([p]) => p === i.part)?.[1] ?? 40,
+    questions: OPT_PARTS.find(([p]) => p === i.part)?.[2] ?? 90,
+  }))
+})
+registerMock('DELETE', '/plan/config', () => { planItems = null })
+
+const planItemOut = (i: NonNullable<typeof planItems>[number], day: number | null, cd: number, qd: number) => ({
+  key: `${i.subject}|${i.part}`, subject: i.subject, part: i.part, label: `${i.subject} · ${i.part}`,
+  cards: i.cards, card_done: i.done ? i.cards : cd, questions: i.questions, question_done: i.done ? i.questions : qd,
+  done: i.done, day,
+})
 registerMock('GET', '/plan', (): PlanToday => {
-  const no = planNo()
-  const finished = no > PLAN_TITLES.length
-  const { cards, qs } = dayIds(Math.min(no, PLAN_TITLES.length))
+  if (!planItems?.length) return { configured: false } as PlanToday
+  const remaining = planItems.filter((i) => !i.done)
+  const daysLeft = Math.max(1, planDays - 2)
+  const batch = Math.max(1, Math.ceil(remaining.length / daysLeft))
+  let di = 0
+  const items = planItems.map((i) => planItemOut(i, i.done ? null : (di++ / batch | 0) + 1, 120, 300))
   return {
-    start: fmt(daysAgo(no - 1)), total_days: PLAN_TITLES.length, today_no: no, finished,
-    title: finished ? '计划已完成' : PLAN_TITLES[no - 1],
-    card_ids: finished ? [] : cards, question_ids: finished ? [] : qs,
-    card_done: finished ? 0 : 7, question_done: finished ? 0 : 9,
-    overview: PLAN_TITLES.map((title, i) => ({ no: i + 1, title, card_count: 12 + (i % 4) * 3 })),
+    configured: true, start: fmt(daysAgo(2)), total_days: planDays, day_no: 3, days_left: daysLeft,
+    remaining: remaining.length, finished: remaining.length === 0,
+    today_items: items.filter((i) => i.day === 1), items,
   }
 })
 registerMock('GET', '/plan/days/{n}', ({ params }): PlanDayDetail => {
   const n = Number(params.n)
-  const { cards, qs } = dayIds(n)
-  const chs = CHAPTERS[n - 1] ?? []
-  const per = Math.ceil(qs.length / Math.max(chs.length, 1))
+  const cards = Array.from({ length: 8 }, (_, i) => n * 100 + i + 1)
+  const chs = ['呼吸系统疾病', '循环系统疾病']
   return {
-    no: n, title: PLAN_TITLES[n - 1] ?? '',
-    cards: cards.slice(0, 8).map((id, i) => ({ id, term: TERMS[(i + n) % TERMS.length], part: chs[i % Math.max(chs.length, 1)] ?? '' })),
-    question_groups: chs.map((chapter, i) => ({ chapter, ids: qs.slice(i * per, (i + 1) * per) })),
+    no: n, title: '01-呼吸系统疾病',
+    cards: cards.map((id, i) => ({ id, term: TERMS[(i + n) % TERMS.length], part: chs[i % 2] })),
+    question_groups: chs.map((chapter, gi) => ({ chapter, ids: Array.from({ length: 12 }, (_, i) => n * 1000 + gi * 20 + i) })),
   }
 })
-registerMock('POST', '/plan/restart', () => { planStart = 1 })
+registerMock('POST', '/plan/restart', () => undefined)
 
 const items: ScheduleItem[] = [
   { id: 1, item_type: 'question', item_id: 3011, reason: 'due', title: '慢性阻塞性肺疾病的肺功能特征性改变是', done: true },

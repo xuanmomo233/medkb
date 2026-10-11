@@ -148,13 +148,19 @@ export interface TodaySummary {
   counts: { due: number; wrong: number; starred: number; mastered: number }
 }
 export interface CalendarMonth { days: number[]; streak: number }
-export interface PlanOverviewDay { no: number; title: string; card_count: number }
-export interface PlanToday {
-  start: string; total_days: number; today_no: number; finished: boolean; title: string
-  card_ids: number[]; question_ids: number[]
-  card_done: number; question_done: number
-  overview: PlanOverviewDay[]
+export interface PlanItem {
+  key: string; subject: string; part: string; label: string
+  cards: number; card_done: number; questions: number; question_done: number
+  done: boolean; day: number | null
 }
+export interface PlanToday {
+  configured: boolean
+  start: string | null; total_days: number; day_no: number; days_left: number
+  remaining: number; finished: boolean
+  today_items: PlanItem[]; items: PlanItem[]
+}
+export interface PlanOptionPart { part: string; cards: number; questions: number }
+export interface PlanOption { subject: string; parts: PlanOptionPart[] }
 export interface PlanDayDetail {
   no: number; title: string
   cards: { id: number; term: string; part: string }[]

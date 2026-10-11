@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import Integer, case, delete, func, select, update
+from sqlalchemy import Integer, case, delete, func, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -14,13 +14,13 @@ from app.models import (
     CardQuestion,
     Chapter,
     Checkin,
-    PlanDay,
-    PlanDayPart,
     Question,
     QuestionProgress,
     ScheduleItem,
     SiteConfig,
     User,
+    UserPlan,
+    UserPlanItem,
     UserPrefs,
 )
 
@@ -209,129 +209,239 @@ async def today_summary(session: AsyncSession, user: User) -> dict:
 
 
 # ---------------- plan ----------------
-async def _day_card_rows(session: AsyncSession, day_no: int) -> list[tuple[int, str, str]]:
+async def _plan_items(session: AsyncSession, user_id: int) -> list[UserPlanItem]:
+    return (
+        await session.execute(
+            select(UserPlanItem).where(UserPlanItem.user_id == user_id).order_by(UserPlanItem.ord, UserPlanItem.id)
+        )
+    ).scalars().all()
+
+
+def _item_key(subject: str, part: str) -> str:
+    return f"{subject}|{part}"
+
+
+async def _item_content(session: AsyncSession, items: list[UserPlanItem]) -> dict[str, tuple[list[int], list[int]]]:
+    """每个 (subject,part) 项的卡片 id 与经卡片关联的题目 id。"""
+    if not items:
+        return {}
+    keys = {(i.subject, i.part) for i in items}
+    pair = tuple_(Card.subject, Card.part).in_(keys)
+    crows = (await session.execute(select(Card.subject, Card.part, Card.id).where(pair))).all()
+    dirs = {SUBJECT_DIR[s] for s, _ in keys if s in SUBJECT_DIR}
+    qrows = (
+        await session.execute(
+            select(Card.subject, Card.part, Question.id)
+            .join(CardQuestion, CardQuestion.card_id == Card.id)
+            .join(Question, Question.id == CardQuestion.question_id)
+            .where(pair, Question.subject_dir.in_(dirs))
+            .distinct()
+        ).all() if dirs else []
+    )
+    out: dict[str, tuple[list[int], list[int]]] = {_item_key(s, p): ([], []) for s, p in keys}
+    for s, p, cid in crows:
+        out[_item_key(s, p)][0].append(cid)
+    for s, p, qid in qrows:
+        out[_item_key(s, p)][1].append(qid)
+    return out
+
+
+async def _item_done_counts(
+    session: AsyncSession, user_id: int, card_ids: list[int], q_ids: list[int], since: datetime
+) -> tuple[int, int]:
+    cdone = qdone = 0
+    if card_ids:
+        cdone = int(
+            (
+                await session.execute(
+                    select(func.count()).select_from(CardProgress).where(
+                        CardProgress.user_id == user_id,
+                        CardProgress.card_id.in_(card_ids),
+                        CardProgress.last_seen_at >= since,
+                    )
+                )
+            ).scalar_one()
+        )
+    if q_ids:
+        qdone = int(
+            (
+                await session.execute(
+                    select(func.count()).select_from(QuestionProgress).where(
+                        QuestionProgress.user_id == user_id,
+                        QuestionProgress.question_id.in_(q_ids),
+                        QuestionProgress.last_seen_at >= since,
+                    )
+                )
+            ).scalar_one()
+        )
+    return cdone, qdone
+
+
+async def _plan_state(session: AsyncSession, user_id: int) -> dict | None:
+    plan = await session.get(UserPlan, user_id)
+    items = await _plan_items(session, user_id)
+    if plan is None or not items:
+        return None
+    today = local_today()
+    elapsed = (today - plan.start_day).days
+    days_left = max(1, plan.total_days - elapsed)
+    since = day_start_utc(plan.start_day)
+    content = await _item_content(session, items)
+    out_items = []
+    for it in items:
+        key = _item_key(it.subject, it.part)
+        cids, qids = content.get(key, ([], []))
+        cdone, qdone = await _item_done_counts(session, user_id, cids, qids, since)
+        done = cdone >= len(cids) and qdone >= len(qids)
+        out_items.append({
+            "key": key,
+            "subject": it.subject,
+            "part": it.part,
+            "label": f"{it.subject} · {it.part}",
+            "cards": len(cids),
+            "card_done": cdone,
+            "questions": len(qids),
+            "question_done": qdone,
+            "done": done,
+            "day": None,
+        })
+    remaining = [i for i in out_items if not i["done"]]
+    batch = -(-len(remaining) // days_left) if remaining else 0
+    for idx, i in enumerate(remaining):
+        i["day"] = idx // batch + 1
+    return {
+        "plan": plan,
+        "elapsed": elapsed,
+        "days_left": days_left,
+        "items": out_items,
+        "today_items": [i for i in remaining if i["day"] == 1],
+        "remaining": len(remaining),
+        "finished": not remaining or elapsed >= plan.total_days,
+    }
+
+
+async def plan_today(session: AsyncSession, user_id: int) -> dict:
+    st = await _plan_state(session, user_id)
+    if st is None:
+        return {"configured": False}
+    plan = st["plan"]
+    return {
+        "configured": True,
+        "start": plan.start_day,
+        "total_days": plan.total_days,
+        "day_no": st["elapsed"] + 1,
+        "days_left": st["days_left"],
+        "remaining": st["remaining"],
+        "finished": st["finished"],
+        "today_items": st["today_items"],
+        "items": st["items"],
+    }
+
+
+async def plan_options(session: AsyncSession) -> list[dict]:
+    crows = (
+        await session.execute(
+            select(Card.subject, Card.part, func.count(Card.id)).group_by(Card.subject, Card.part)
+        )
+    ).all()
+    qcounts = {
+        (s, p): int(n)
+        for s, p, n in (
+            await session.execute(
+                select(Card.subject, Card.part, func.count(func.distinct(CardQuestion.question_id)))
+                .join(CardQuestion, CardQuestion.card_id == Card.id)
+                .group_by(Card.subject, Card.part)
+            )
+        ).all()
+    }
+    by_subj: dict[str, list[dict]] = defaultdict(list)
+    for s, p, n in crows:
+        by_subj[s].append({"part": p, "cards": int(n), "questions": qcounts.get((s, p), 0)})
+    for parts in by_subj.values():
+        parts.sort(key=lambda x: x["part"])
+    return [{"subject": s, "parts": by_subj[s]} for s in sorted(by_subj)]
+
+
+async def set_plan(session: AsyncSession, user_id: int, items: list[tuple[str, str]], total_days: int) -> None:
+    await session.execute(delete(UserPlanItem).where(UserPlanItem.user_id == user_id))
+    for i, (subject, part) in enumerate(items):
+        session.add(UserPlanItem(user_id=user_id, subject=subject, part=part, ord=i))
+    plan = await session.get(UserPlan, user_id)
+    if plan is None:
+        session.add(UserPlan(user_id=user_id, start_day=local_today(), total_days=total_days))
+    else:
+        plan.start_day = local_today()
+        plan.total_days = total_days
+    await session.commit()
+
+
+async def clear_plan(session: AsyncSession, user_id: int) -> None:
+    await session.execute(delete(UserPlanItem).where(UserPlanItem.user_id == user_id))
+    await session.execute(delete(UserPlan).where(UserPlan.user_id == user_id))
+    await session.commit()
+
+
+async def plan_day_parts(session: AsyncSession, user_id: int, day_no: int) -> list[tuple[str, str]]:
+    """相对第 day_no 天（1=今天批次）应学的 (subject,part)。"""
+    st = await _plan_state(session, user_id)
+    if st is None:
+        return []
+    return [
+        (i["subject"], i["part"])
+        for i in st["items"]
+        if i["day"] == day_no
+    ]
+
+
+async def _parts_card_rows(session: AsyncSession, parts: list[tuple[str, str]]) -> list[tuple[int, str, str]]:
+    if not parts:
+        return []
     rows = await session.execute(
         select(Card.id, Card.term, Card.part)
-        .join(PlanDayPart, (PlanDayPart.subject == Card.subject) & (PlanDayPart.part == Card.part))
-        .where(PlanDayPart.day_no == day_no)
+        .where(tuple_(Card.subject, Card.part).in_(parts))
         .order_by(Card.id)
     )
     return [tuple(r) for r in rows]
 
 
-async def _day_question_rows(session: AsyncSession, day_no: int) -> list[tuple[int, str]]:
-    parts = (
-        await session.execute(select(PlanDayPart.subject).where(PlanDayPart.day_no == day_no).distinct())
-    ).scalars().all()
-    dirs = {SUBJECT_DIR[s] for s in parts if s in SUBJECT_DIR}
+async def _parts_question_rows(session: AsyncSession, parts: list[tuple[str, str]]) -> list[tuple[int, str]]:
+    if not parts:
+        return []
+    dirs = {SUBJECT_DIR[s] for s, _ in parts if s in SUBJECT_DIR}
     if not dirs:
         return []
     rows = await session.execute(
         select(Question.id, Question.chapter)
         .join(CardQuestion, CardQuestion.question_id == Question.id)
         .join(Card, Card.id == CardQuestion.card_id)
-        .join(PlanDayPart, (PlanDayPart.subject == Card.subject) & (PlanDayPart.part == Card.part))
-        .where(PlanDayPart.day_no == day_no, Question.subject_dir.in_(dirs))
+        .where(tuple_(Card.subject, Card.part).in_(parts), Question.subject_dir.in_(dirs))
         .distinct()
         .order_by(Question.id)
     )
-    seen: set[int] = set()
-    out = []
-    for qid, ch in rows:
-        if qid not in seen:
-            seen.add(qid)
-            out.append((qid, ch))
-    return out
+    return [tuple(r) for r in rows]
 
 
-async def plan_today(session: AsyncSession, user_id: int) -> dict:
-    prefs = await get_prefs(session, user_id)
-    today = local_today()
-    if prefs.plan_start is None:
-        prefs.plan_start = today
-        await session.commit()
-    start = prefs.plan_start
-    days = (await session.execute(select(PlanDay).order_by(PlanDay.day_no))).scalars().all()
-    counts = dict(
-        (
-            await session.execute(
-                select(PlanDayPart.day_no, func.count(Card.id))
-                .join(Card, (Card.subject == PlanDayPart.subject) & (Card.part == PlanDayPart.part))
-                .group_by(PlanDayPart.day_no)
-            )
-        ).all()
-    )
-    overview = [{"no": d.day_no, "title": d.title, "card_count": int(counts.get(d.day_no, 0))} for d in days]
-    total = len(days)
-    today_no = (today - start).days + 1
-    finished = today_no > total
-    title = ""
-    card_ids: list[int] = []
-    question_ids: list[int] = []
-    card_done = question_done = 0
-    cur = next((d for d in days if d.day_no == today_no), None)
-    if cur is not None and today_no >= 1:
-        title = cur.title
-        card_ids = [r[0] for r in await _day_card_rows(session, today_no)]
-        question_ids = [r[0] for r in await _day_question_rows(session, today_no)]
-        since = day_start_utc(today)
-        if card_ids:
-            card_done = int(
-                (
-                    await session.execute(
-                        select(func.count()).select_from(CardProgress).where(
-                            CardProgress.user_id == user_id,
-                            CardProgress.card_id.in_(card_ids),
-                            CardProgress.last_seen_at >= since,
-                        )
-                    )
-                ).scalar_one()
-            )
-        if question_ids:
-            question_done = int(
-                (
-                    await session.execute(
-                        select(func.count()).select_from(QuestionProgress).where(
-                            QuestionProgress.user_id == user_id,
-                            QuestionProgress.question_id.in_(question_ids),
-                            QuestionProgress.last_seen_at >= since,
-                        )
-                    )
-                ).scalar_one()
-            )
-    return {
-        "start": start,
-        "total_days": total,
-        "today_no": today_no,
-        "finished": finished,
-        "title": title,
-        "card_ids": card_ids,
-        "question_ids": question_ids,
-        "card_done": card_done,
-        "question_done": question_done,
-        "overview": overview,
-    }
-
-
-async def plan_day_detail(session: AsyncSession, n: int) -> dict:
-    day = await session.get(PlanDay, n)
-    if day is None:
-        raise HTTPException(404, "没有这一天的计划")
-    cards = [{"id": i, "term": t, "part": p} for i, t, p in await _day_card_rows(session, n)]
+async def plan_day_detail(session: AsyncSession, user_id: int, n: int) -> dict:
+    parts = await plan_day_parts(session, user_id, n)
+    if not parts:
+        raise HTTPException(404, "这一天没有计划内容")
+    cards = [{"id": i, "term": t, "part": p} for i, t, p in await _parts_card_rows(session, parts)]
     groups: dict[str, list[int]] = defaultdict(list)
-    for qid, ch in await _day_question_rows(session, n):
+    for qid, ch in await _parts_question_rows(session, parts):
         groups[ch].append(qid)
     return {
         "no": n,
-        "title": day.title,
+        "title": "、".join(p for _, p in parts),
         "cards": cards,
         "question_groups": [{"chapter": ch, "ids": ids} for ch, ids in groups.items()],
     }
 
 
 async def plan_restart(session: AsyncSession, user_id: int) -> None:
-    prefs = await get_prefs(session, user_id)
-    prefs.plan_start = local_today()
+    plan = await session.get(UserPlan, user_id)
+    if plan is None:
+        return
+    plan.start_day = local_today()
     await session.commit()
 
 
