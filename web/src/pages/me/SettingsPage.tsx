@@ -1,10 +1,10 @@
 ﻿import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
-import type { UserPrefs } from '@/api/types'
+import type { AdminUser, UserPrefs } from '@/api/types'
 import { useAuth } from '@/app/auth'
 import { getReadingSize, setReadingSize, useTheme } from '@/app/theme'
-import { Button, Card, ErrorState, Field, Icon, Input, PageHeader, Segmented, Spinner, useToast } from '@/ui'
+import { Button, Card, ErrorState, Field, Icon, Input, Modal, PageHeader, Segmented, Spinner, useToast } from '@/ui'
 import s from './me.module.css'
 
 type Form = Pick<UserPrefs, 'daily_goal' | 'weak_min_samples' | 'weak_max_rate'>
@@ -223,6 +223,105 @@ function InvitesCard() {
   )
 }
 
+const fmt = (iso: string | null) => iso ? iso.slice(0, 10) : '—'
+
+function UsersCard() {
+  const qc = useQueryClient()
+  const toast = useToast()
+  const { user } = useAuth()
+  const [nameQ, setNameQ] = useState('')
+  const [inviteQ, setInviteQ] = useState('')
+  const [flt, setFlt] = useState<{ q?: string; invite?: string }>({})
+  const [target, setTarget] = useState<AdminUser | null>(null)   // 待删账号
+  const [step, setStep] = useState<'confirm' | 'password'>('confirm')  // 二次确认 → 输密码
+  const [pw, setPw] = useState('')
+  const q = useQuery({ queryKey: ['adminUsers', flt], queryFn: () => api.adminUsers(flt) })
+  const del = useMutation({
+    mutationFn: ({ id, password }: { id: number; password: string }) => api.adminDeleteUser(id, password),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['adminUsers'] }); qc.invalidateQueries({ queryKey: ['invites'] })
+      setTarget(null); setPw(''); toast('账号已删除')
+    },
+    onSettled: () => setStep('confirm'),
+    onError: (e: Error) => toast(e.message, true),
+  })
+  const search = (f: { q?: string; invite?: string }) => setFlt({ q: f.q || undefined, invite: f.invite || undefined })
+  return (
+    <Card title="账户管理">
+      <div className={s.group}>
+        <p className={s.sectionHint}>查看全部注册账户；可按用户名搜索，或输入邀请码反查绑定它的账号。</p>
+        <div className={s.userSearch}>
+          <Input placeholder="按用户名搜索" value={nameQ}
+            onChange={(e) => setNameQ(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && search({ q: nameQ })} />
+          <Button onClick={() => search({ q: nameQ })}>搜用户</Button>
+        </div>
+        <div className={s.userSearch}>
+          <Input placeholder="按邀请码反查账号" value={inviteQ}
+            onChange={(e) => setInviteQ(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && search({ invite: inviteQ })} />
+          <Button onClick={() => search({ invite: inviteQ })}>搜邀请码</Button>
+          {(flt.q || flt.invite) && <Button variant="ghost" onClick={() => { setNameQ(''); setInviteQ(''); setFlt({}) }}>清除筛选</Button>}
+        </div>
+        {q.isLoading ? <Spinner /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : (
+          <div className={s.userList}>
+            {(q.data ?? []).map((u) => (
+              <div key={u.id} className={s.userRow}>
+                <span className={s.userMain}>
+                  #{u.id} {u.username}
+                  {u.is_admin && <span className={s.userCode}>管理员</span>}
+                </span>
+                <span className={s.userMeta}>
+                  {u.invite_code ? <>邀请码 <code className={s.userCode}>{u.invite_code}</code></> : '无邀请码'}
+                  {' · '}注册 {fmt(u.created_at)}{' · '}最近登录 {fmt(u.last_login_at)}
+                </span>
+                {!u.is_admin && u.id !== user?.id && (
+                  <Button variant="danger" size="sm" onClick={() => { setTarget(u); setStep('confirm'); setPw('') }}>删除</Button>
+                )}
+              </div>
+            ))}
+            {q.data && q.data.length === 0 && <div className={s.desc}>没有匹配的账户。</div>}
+          </div>
+        )}
+      </div>
+      {target && step === 'confirm' && (
+        <Modal title="删除账号" onClose={() => setTarget(null)}>
+          <div className={s.group}>
+            <div className={s.delWarn}>
+              将永久删除账号 <strong>{target.username}</strong>（#{target.id}）及其全部学习数据，此操作不可恢复。确定要继续吗？
+            </div>
+            <div className={s.saveBar}>
+              <Button variant="ghost" onClick={() => setTarget(null)}>取消</Button>
+              <Button variant="danger" onClick={() => setStep('password')}>继续删除</Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+      {target && step === 'password' && (
+        <Modal title="管理员验证" onClose={() => setTarget(null)}>
+          <div className={s.group}>
+            <div className={s.delWarn}>
+              即将删除 <strong>{target.username}</strong>（#{target.id}）。请输入当前管理员账号的密码确认。
+            </div>
+            <Field label="管理员密码">
+              <Input type="password" autoComplete="current-password" autoFocus value={pw}
+                onChange={(e) => setPw(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && pw && del.mutate({ id: target.id, password: pw })} />
+            </Field>
+            <div className={s.saveBar}>
+              <Button variant="ghost" onClick={() => setStep('confirm')}>上一步</Button>
+              <Button variant="danger" disabled={!pw || del.isPending}
+                onClick={() => del.mutate({ id: target.id, password: pw })}>
+                {del.isPending ? '删除中…' : '确认删除'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </Card>
+  )
+}
+
 export default function SettingsPage() {
   const { user } = useAuth()
   const q = useQuery({ queryKey: ['prefs'], queryFn: api.prefs, staleTime: 0, gcTime: 0 })
@@ -234,6 +333,7 @@ export default function SettingsPage() {
       <PasswordCard />
       {user?.is_admin && (<>
         <SiteCard />
+        <UsersCard />
         <InvitesCard />
       </>)}
       <Version />

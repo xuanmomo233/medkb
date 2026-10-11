@@ -1,11 +1,13 @@
 import secrets
 
 from fastapi import APIRouter, HTTPException
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from app.api.deps import AdminUser, Session
-from app.models import InviteCode
-from app.schemas.admin import AdminQuestion, AdminQuestionPatch, ChangedOut, InviteCreate, InviteOut, SiteConfigOut, SiteConfigPatch
+from app.core.security import verify_password
+from app.models import InviteCode, QuestionEdit, User
+from app.schemas.admin import (AdminQuestion, AdminQuestionPatch, AdminUserDelete, AdminUserOut,
+                               ChangedOut, InviteCreate, InviteOut, SiteConfigOut, SiteConfigPatch)
 from app.services import quiz as admin_questions
 from app.services import study
 
@@ -22,9 +24,49 @@ async def put_question(qid: int, body: AdminQuestionPatch, session: Session, adm
     return ChangedOut(changed=await admin_questions.update_question(session, admin.id, qid, body))
 
 
-def _out(c: InviteCode) -> InviteOut:
+@router.get("/users", response_model=list[AdminUserOut])
+async def list_users(session: Session, admin: AdminUser, q: str = "", invite: str = ""):
+    stmt = select(User).order_by(User.id)
+    if q.strip():
+        stmt = stmt.where(User.username.contains(q.strip()))
+    if invite.strip():
+        stmt = (stmt.join(InviteCode, InviteCode.used_by == User.id)
+                    .where(InviteCode.code == invite.strip()))
+    users = (await session.execute(stmt)).scalars().all()
+    codes = {c.used_by: c.code for c in (await session.execute(
+        select(InviteCode).where(InviteCode.used_by.is_not(None)))).scalars()}
+    return [
+        AdminUserOut(
+            id=u.id, username=u.username, is_admin=u.is_admin,
+            created_at=u.created_at.isoformat() if u.created_at else None,
+            last_login_at=u.last_login_at.isoformat() if u.last_login_at else None,
+            invite_code=codes.get(u.id),
+        )
+        for u in users
+    ]
+
+
+@router.delete("/users/{uid}", status_code=204)
+async def delete_user(uid: int, body: AdminUserDelete, session: Session, admin: AdminUser):
+    if uid == admin.id:
+        raise HTTPException(400, "不能删除当前登录的管理员账号")
+    target = await session.get(User, uid)
+    if target is None:
+        raise HTTPException(404, "用户不存在")
+    if target.is_admin:
+        raise HTTPException(409, "不能删除管理员账号")
+    if not verify_password(body.password, admin.password_hash):
+        raise HTTPException(403, "管理员密码错误")
+    # question_edits 外键无级联，先人工清
+    await session.execute(delete(QuestionEdit).where(QuestionEdit.user_id == uid))
+    await session.delete(target)
+    await session.commit()
+
+
+def _out(c: InviteCode, names: dict[int, str]) -> InviteOut:
     return InviteOut(
         code=c.code, created_by=c.created_by, used_by=c.used_by,
+        used_by_username=names.get(c.used_by) if c.used_by is not None else None,
         used_at=c.used_at.isoformat() if c.used_at else None,
         created_at=c.created_at.isoformat() if c.created_at else None,
     )
@@ -33,7 +75,12 @@ def _out(c: InviteCode) -> InviteOut:
 @router.get("/invites", response_model=list[InviteOut])
 async def list_invites(session: Session, admin: AdminUser):
     rows = (await session.execute(select(InviteCode).order_by(InviteCode.created_at.desc()))).scalars()
-    return [_out(c) for c in rows]
+    uids = {c.used_by for c in rows if c.used_by is not None}
+    names = {}
+    if uids:
+        names = {u.id: u.username for u in (await session.execute(
+            select(User).where(User.id.in_(uids)))).scalars()}
+    return [_out(c, names) for c in rows]
 
 
 @router.post("/invites", response_model=list[InviteOut], status_code=201)

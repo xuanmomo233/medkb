@@ -22,12 +22,26 @@ class InviteOut(BaseModel):
     code: str
     created_by: int
     used_by: int | None
+    used_by_username: str | None
     used_at: str | None
     created_at: str | None
 
 
 class InviteCreate(BaseModel):
     count: int = 1
+
+
+class AdminUserOut(BaseModel):
+    id: int
+    username: str
+    is_admin: bool
+    created_at: str | None
+    last_login_at: str | None
+    invite_code: str | None
+
+
+class AdminUserDelete(BaseModel):
+    password: str
 
 
 class SiteConfigOut(BaseModel):

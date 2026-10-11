@@ -74,4 +74,6 @@ export const api = {
   adminRevokeInvite: (code: string) => del(`/admin/invites/${code}`),
   adminSite: () => get<T.SiteConfig>('/admin/site'),
   adminSaveSite: (b: { exam_date: string | null }) => put<T.SiteConfig>('/admin/site', b),
+  adminUsers: (q?: { q?: string; invite?: string }) => get<T.AdminUser[]>('/admin/users', q ?? {}),
+  adminDeleteUser: (id: number, password: string) => del<void>(`/admin/users/${id}`, undefined, { password }),
 }

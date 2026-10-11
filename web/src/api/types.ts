@@ -227,7 +227,8 @@ export interface ChatSendBody {
 }
 
 // ---------- 管理员 ----------
-export interface Invite { code: string; created_by: number; used_by: number | null; used_at: string | null; created_at: string | null }
+export interface Invite { code: string; created_by: number; used_by: number | null; used_by_username: string | null; used_at: string | null; created_at: string | null }
+export interface AdminUser { id: number; username: string; is_admin: boolean; created_at: string | null; last_login_at: string | null; invite_code: string | null }
 export interface SiteConfig { exam_date: string }
 
 export interface AdminQuestion { id: number; system: string; analysis: string; tags: string[] }

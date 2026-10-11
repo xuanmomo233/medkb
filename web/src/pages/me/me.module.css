@@ -34,3 +34,12 @@
 .inviteUsed { font-family: ui-monospace, monospace; font-size: 13px; color: var(--text-3); text-decoration: line-through; }
 .inviteMeta { flex: 1; font-size: 12px; color: var(--text-3); }
 .inviteRow button { padding: 4px 10px; font-size: 12px; }
+
+.userSearch { display: flex; gap: 8px; flex-wrap: wrap; }
+.userSearch input { flex: 1; min-width: 140px; }
+.userList { display: flex; flex-direction: column; gap: 8px; }
+.userRow { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--surface-2); border-radius: var(--radius-sm); font-size: 13px; flex-wrap: wrap; }
+.userMain { font-weight: 600; display: flex; align-items: center; gap: 8px; min-width: 120px; }
+.userMeta { flex: 1; font-size: 12px; color: var(--text-3); min-width: 160px; }
+.userCode { font-family: ui-monospace, monospace; font-size: 12px; color: var(--brand); }
+.delWarn { padding: 10px 12px; background: var(--bad-soft, #fef2f2); border: 1px solid var(--bad, #dc2626); border-radius: var(--radius-sm); font-size: 13px; color: var(--bad, #dc2626); }

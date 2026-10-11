@@ -67,4 +67,4 @@ export async function request<T>(method: string, path: string, opts: { query?: Q
 export const get = <T>(path: string, query?: Query) => request<T>('GET', path, { query })
 export const post = <T>(path: string, body?: unknown) => request<T>('POST', path, { body })
 export const put = <T>(path: string, body?: unknown) => request<T>('PUT', path, { body })
-export const del = <T>(path: string, query?: Query) => request<T>('DELETE', path, { query })
+export const del = <T>(path: string, query?: Query, body?: unknown) => request<T>('DELETE', path, { query, body })
