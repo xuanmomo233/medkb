@@ -74,7 +74,7 @@ def _out(c: InviteCode, names: dict[int, str] | None = None) -> InviteOut:
 
 @router.get("/invites", response_model=list[InviteOut])
 async def list_invites(session: Session, admin: AdminUser):
-    rows = (await session.execute(select(InviteCode).order_by(InviteCode.created_at.desc()))).scalars()
+    rows = (await session.execute(select(InviteCode).order_by(InviteCode.created_at.desc()))).scalars().all()
     uids = {c.used_by for c in rows if c.used_by is not None}
     names = {}
     if uids:
