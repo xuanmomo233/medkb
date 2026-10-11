@@ -33,11 +33,14 @@ class SelfUpdate {
         ],
       ),
     );
-    if (ok == true && context.mounted) await downloadFlow(context);
+    if (ok == true && context.mounted) await downloadFlow(context, v.build);
   }
 
   /// 带进度条的下载；完成后拉起安装器。
-  static Future<void> downloadFlow(BuildContext context) async {
+  static Future<void> downloadFlow(BuildContext context, [int? build]) async {
+    // ?v= 按版本号做缓存穿透，防 CDN 发旧包
+    final Uri apk =
+        Uri.parse('${Api.base}/app.apk?v=${build ?? Api.appBuild}');
     final ValueNotifier<double> prog = ValueNotifier<double>(0);
     final ValueNotifier<String> stat = ValueNotifier<String>('连接中…');
     bool cancel = false;
@@ -84,7 +87,7 @@ class SelfUpdate {
     File? f;
     try {
       final http.Request req =
-          http.Request('GET', Uri.parse('${Api.base}/app.apk'));
+          http.Request('GET', apk);
       final http.StreamedResponse res = await req.send();
       if (res.statusCode != 200) throw 'HTTP ${res.statusCode}';
       final int total = res.contentLength ?? 0;
@@ -111,8 +114,7 @@ class SelfUpdate {
           type: 'application/vnd.android.package-archive');
       if (r.type != ResultType.done && context.mounted) {
         // 安装器拉起失败：退回浏览器下载
-        await launchUrl(Uri.parse('${Api.base}/app.apk'),
-            mode: LaunchMode.externalApplication);
+        await launchUrl(apk, mode: LaunchMode.externalApplication);
         if (context.mounted) toast(context, '已退回浏览器下载，请在下载目录手动安装');
       }
     } catch (e) {
