@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import get_settings
 from app.core.security import hash_password, hash_token, new_token, verify_password
-from app.models import AuthToken, User
+from app.models import AuthToken, InviteCode, User
 
 _USERNAME_RE = re.compile(r"^[A-Za-z0-9_\-\u4e00-\u9fa5]{2,24}$")
 _FAIL_WINDOW = 300
@@ -62,10 +62,24 @@ async def _issue_token(session: AsyncSession, user: User, user_agent: str) -> st
     return token
 
 
-async def register(session: AsyncSession, username: str, password: str, invite_code: str, user_agent: str):
+async def _check_invite(session: AsyncSession, code: str, user_id: int | None = None) -> InviteCode | None:
+    """返回可消耗的邀请码行；环境变量邀请码仅在尚无用户时作引导用。"""
+    has_users = (await session.execute(select(User.id).limit(1))).first() is not None
+    if has_users:
+        row = (await session.execute(
+            select(InviteCode).where(InviteCode.code == (code or "").strip())
+        )).scalar_one_or_none()
+        if row is None or row.used_by is not None:
+            raise HTTPException(403, "邀请码错误或已被使用")
+        return row
     invite = get_settings().invite_code.get_secret_value()
-    if invite and not hmac.compare_digest(invite.encode(), (invite_code or "").encode()):
+    if invite and not hmac.compare_digest(invite.encode(), (code or "").encode()):
         raise HTTPException(403, "邀请码错误")
+    return None
+
+
+async def register(session: AsyncSession, username: str, password: str, invite_code: str, user_agent: str):
+    code_row = await _check_invite(session, invite_code)
     username = username.strip()
     if not _USERNAME_RE.match(username):
         raise HTTPException(400, "用户名需为 2-24 位中英文、数字、下划线或短横线")
@@ -81,6 +95,9 @@ async def register(session: AsyncSession, username: str, password: str, invite_c
     except IntegrityError:
         await session.rollback()
         raise HTTPException(409, "用户名已被注册")
+    if code_row is not None:
+        code_row.used_by = user.id
+        code_row.used_at = datetime.now(timezone.utc)
     token = await _issue_token(session, user, user_agent)
     await session.commit()
     return token, user

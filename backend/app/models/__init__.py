@@ -8,10 +8,10 @@ from app.models.learning import (
     ScheduleItem,
 )
 from app.models.social import ChatMessage, Note, NoteLike, QuestionEdit
-from app.models.user import AuthToken, Checkin, User, UserPrefs
+from app.models.user import AuthToken, Checkin, InviteCode, User, UserPrefs
 
 __all__ = [
-    "Base", "User", "AuthToken", "UserPrefs", "Checkin",
+    "Base", "User", "AuthToken", "UserPrefs", "Checkin", "InviteCode",
     "Chapter", "Question", "Card", "CardQuestion", "PlanDay", "PlanDayPart",
     "QuestionProgress", "CardProgress", "Exam", "Attempt", "ScheduleItem",
     "Note", "NoteLike", "ChatMessage", "QuestionEdit",

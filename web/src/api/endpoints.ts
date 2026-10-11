@@ -65,4 +65,7 @@ export const api = {
   // 管理员
   adminQuestion: (id: number) => get<T.AdminQuestion>(`/admin/questions/${id}`),
   adminSaveQuestion: (id: number, p: T.AdminQuestionPatch) => put<{ changed: number }>(`/admin/questions/${id}`, p),
+  adminInvites: () => get<T.Invite[]>('/admin/invites'),
+  adminNewInvite: (count = 1) => post<T.Invite[]>('/admin/invites', { count }),
+  adminRevokeInvite: (code: string) => del(`/admin/invites/${code}`),
 }

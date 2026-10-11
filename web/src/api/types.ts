@@ -219,6 +219,8 @@ export interface ChatSendBody {
 }
 
 // ---------- 管理员 ----------
+export interface Invite { code: string; created_by: number; used_by: number | null; used_at: string | null; created_at: string | null }
+
 export interface AdminQuestion { id: number; system: string; analysis: string; tags: string[] }
 export interface AdminQuestionPatch { system?: string; analysis?: string; tags?: string[] }
 export interface VersionInfo { build: number; note: string }

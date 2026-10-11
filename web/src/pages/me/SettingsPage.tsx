@@ -2,6 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
 import type { UserPrefs } from '@/api/types'
+import { useAuth } from '@/app/auth'
 import { getReadingSize, setReadingSize, useTheme } from '@/app/theme'
 import { Button, Card, ErrorState, Field, Input, PageHeader, Segmented, Spinner, useToast } from '@/ui'
 import s from './me.module.css'
@@ -107,13 +108,65 @@ function Version() {
   )
 }
 
+function InvitesCard() {
+  const qc = useQueryClient()
+  const toast = useToast()
+  const q = useQuery({ queryKey: ['invites'], queryFn: api.adminInvites })
+  const create = useMutation({
+    mutationFn: (n: number) => api.adminNewInvite(n),
+    onSuccess: (rows) => {
+      qc.invalidateQueries({ queryKey: ['invites'] })
+      navigator.clipboard?.writeText(rows[0].code).catch(() => {})
+      toast(rows.length > 1 ? `已生成 ${rows.length} 个邀请码` : `已生成并复制：${rows[0].code}`)
+    },
+    onError: (e: Error) => toast(e.message, true),
+  })
+  const revoke = useMutation({
+    mutationFn: (code: string) => api.adminRevokeInvite(code),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['invites'] }); toast('已撤销') },
+    onError: (e: Error) => toast(e.message, true),
+  })
+  return (
+    <Card title="邀请码管理">
+      <div className={s.group}>
+        <p className={s.sectionHint}>邀请码一次性使用，注册即作废。生成后请复制发给新用户。</p>
+        <div className={s.saveBar}>
+          <Button variant="primary" onClick={() => create.mutate(1)} disabled={create.isPending}>生成 1 个</Button>
+          <Button onClick={() => create.mutate(5)} disabled={create.isPending}>生成 5 个</Button>
+        </div>
+        {q.isLoading ? <Spinner /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : (
+          <div className={s.inviteList}>
+            {(q.data ?? []).map((c) => (
+              <div key={c.code} className={s.inviteRow}>
+                <code className={c.used_by ? s.inviteUsed : s.inviteCode}>{c.code}</code>
+                <span className={s.inviteMeta}>
+                  {c.used_by ? `已被 #${c.used_by} 使用` : '未使用'}
+                </span>
+                {c.used_by == null && (
+                  <>
+                    <Button onClick={() => { navigator.clipboard?.writeText(c.code).catch(() => {}); toast('已复制') }}>复制</Button>
+                    <Button variant="ghost" onClick={() => revoke.mutate(c.code)} disabled={revoke.isPending}>撤销</Button>
+                  </>
+                )}
+              </div>
+            ))}
+            {q.data && q.data.length === 0 && <div className={s.desc}>还没有邀请码，点上方按钮生成。</div>}
+          </div>
+        )}
+      </div>
+    </Card>
+  )
+}
+
 export default function SettingsPage() {
+  const { user } = useAuth()
   const q = useQuery({ queryKey: ['prefs'], queryFn: api.prefs, staleTime: 0, gcTime: 0 })
   return (
     <div className={s.wrap}>
       <PageHeader title="学习设置" />
       {q.isLoading ? <Spinner /> : q.isError || !q.data ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : <PrefsCards prefs={q.data} />}
       <Appearance />
+      {user?.is_admin && <InvitesCard />}
       <Version />
     </div>
   )

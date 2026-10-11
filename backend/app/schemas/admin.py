@@ -16,3 +16,15 @@ class AdminQuestionPatch(BaseModel):
 
 class ChangedOut(BaseModel):
     changed: int
+
+
+class InviteOut(BaseModel):
+    code: str
+    created_by: int
+    used_by: int | None
+    used_at: str | None
+    created_at: str | None
+
+
+class InviteCreate(BaseModel):
+    count: int = 1

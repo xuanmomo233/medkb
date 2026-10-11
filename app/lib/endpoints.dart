@@ -202,4 +202,15 @@ class Endpoints {
     final Object? c = j['changed'];
     return c is num ? c.toInt() : 0;
   }
+  static Future<List<Invite>> adminInvites() async =>
+      asMapList(await Api.get('/admin/invites', cache: false))
+          .map(Invite.fromJson)
+          .toList();
+  static Future<List<Invite>> adminNewInvites(int count) async =>
+      asMapList(await Api.post('/admin/invites', {'count': count}))
+          .map(Invite.fromJson)
+          .toList();
+  static Future<void> adminRevokeInvite(String code) async {
+    await Api.del('/admin/invites/$code');
+  }
 }

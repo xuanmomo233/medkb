@@ -46,3 +46,14 @@ class Checkin(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     day: Mapped[date] = mapped_column(Date, primary_key=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+
+
+class InviteCode(Base, CreatedMixin):
+    """一次性邀请码，由管理员在后台生成；用后作废。"""
+
+    __tablename__ = "invite_codes"
+
+    code: Mapped[str] = mapped_column(String(32), primary_key=True)
+    created_by: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
+    used_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
+    used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))

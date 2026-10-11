@@ -1305,3 +1305,19 @@ class AdminQuestionPatch {
     return m;
   }
 }
+
+class Invite {
+  final String code;
+  final int createdBy;
+  final int? usedBy;
+  final String? usedAt;
+  final String? createdAt;
+  const Invite({required this.code, required this.createdBy, this.usedBy, this.usedAt, this.createdAt});
+  factory Invite.fromJson(Map<String, dynamic> j) => Invite(
+        code: _s(j['code']),
+        createdBy: _i(j['created_by']),
+        usedBy: j['used_by'] is num ? _i(j['used_by']) : null,
+        usedAt: j['used_at']?.toString(),
+        createdAt: j['created_at']?.toString(),
+      );
+}

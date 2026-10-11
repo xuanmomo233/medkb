@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../../api.dart';
 import '../../endpoints.dart';
-import '../../models.dart' show UserPrefs, VersionInfo;
+import '../../models.dart' show Invite, UserPrefs, VersionInfo;
 import '../../theme.dart';
 import '../../widgets/widgets.dart';
 import 'settings_parts.dart';
@@ -319,6 +320,139 @@ class _SettingsPageState extends State<SettingsPage> {
             VersionRow(future: _version),
           ],
         ),
+        if (Api.admin) ...<Widget>[
+          const SizedBox(height: 12),
+          const _InvitesSection(),
+        ],
+      ],
+    );
+  }
+}
+
+class _InvitesSection extends StatefulWidget {
+  const _InvitesSection();
+
+  @override
+  State<_InvitesSection> createState() => _InvitesSectionState();
+}
+
+class _InvitesSectionState extends State<_InvitesSection> {
+  List<Invite>? _items;
+  bool _busy = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    try {
+      final List<Invite> list = await Endpoints.adminInvites();
+      if (!mounted) return;
+      setState(() => _items = list);
+    } catch (e) {
+      if (!mounted) return;
+      toast(context, errText(e));
+    }
+  }
+
+  Future<void> _gen(int n) async {
+    setState(() => _busy = true);
+    try {
+      final List<Invite> rows = await Endpoints.adminNewInvites(n);
+      if (!mounted) return;
+      await Clipboard.setData(ClipboardData(text: rows.first.code));
+      toast(context, rows.length > 1 ? '已生成 $n 个邀请码' : '已生成并复制：${rows.first.code}');
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      toast(context, errText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  Future<void> _revoke(Invite c) async {
+    try {
+      await Endpoints.adminRevokeInvite(c.code);
+      if (!mounted) return;
+      toast(context, '已撤销');
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      toast(context, errText(e));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final List<Invite> items = _items ?? <Invite>[];
+    return SettingsSection(
+      title: '邀请码管理',
+      children: <Widget>[
+        Text('邀请码一次性使用，注册即作废。生成后复制发给新用户。',
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, height: 1.5)),
+        const SizedBox(height: 8),
+        Row(
+          children: <Widget>[
+            Expanded(
+              child: FilledButton.tonal(
+                onPressed: _busy ? null : () => _gen(1),
+                child: const Text('生成 1 个'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton(
+                onPressed: _busy ? null : () => _gen(5),
+                child: const Text('生成 5 个'),
+              ),
+            ),
+          ],
+        ),
+        if (_items == null)
+          const Padding(padding: EdgeInsets.all(12), child: LoadingView())
+        else if (items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('还没有邀请码'),
+          )
+        else
+          ...items.map((Invite c) => ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text(c.code,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontSize: 13,
+                      color: c.usedBy != null ? cs.onSurfaceVariant : cs.primary,
+                      decoration: c.usedBy != null ? TextDecoration.lineThrough : null,
+                    )),
+                subtitle: Text(c.usedBy != null ? '已被 #${c.usedBy} 使用' : '未使用',
+                    style: const TextStyle(fontSize: 12)),
+                trailing: c.usedBy == null
+                    ? Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: <Widget>[
+                          IconButton(
+                            tooltip: '复制',
+                            icon: const Icon(Icons.copy, size: 18),
+                            onPressed: () {
+                              Clipboard.setData(ClipboardData(text: c.code));
+                              toast(context, '已复制');
+                            },
+                          ),
+                          IconButton(
+                            tooltip: '撤销',
+                            icon: const Icon(Icons.delete_outline, size: 18),
+                            onPressed: () => _revoke(c),
+                          ),
+                        ],
+                      )
+                    : null,
+              )),
       ],
     );
   }
