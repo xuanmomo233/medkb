@@ -320,10 +320,92 @@ class _SettingsPageState extends State<SettingsPage> {
             VersionRow(future: _version),
           ],
         ),
+        const SizedBox(height: 12),
+        const _PasswordSection(),
         if (Api.admin) ...<Widget>[
           const SizedBox(height: 12),
           const _InvitesSection(),
         ],
+      ],
+    );
+  }
+}
+
+class _PasswordSection extends StatefulWidget {
+  const _PasswordSection();
+
+  @override
+  State<_PasswordSection> createState() => _PasswordSectionState();
+}
+
+class _PasswordSectionState extends State<_PasswordSection> {
+  final TextEditingController _old = TextEditingController();
+  final TextEditingController _new1 = TextEditingController();
+  final TextEditingController _new2 = TextEditingController();
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _old.dispose();
+    _new1.dispose();
+    _new2.dispose();
+    super.dispose();
+  }
+
+  bool get _ok =>
+      _old.text.isNotEmpty &&
+      _new1.text.length >= 6 &&
+      _new1.text == _new2.text;
+
+  Future<void> _save() async {
+    setState(() => _busy = true);
+    try {
+      await Endpoints.changePassword(_old.text, _new1.text);
+      if (!mounted) return;
+      _old.clear();
+      _new1.clear();
+      _new2.clear();
+      toast(context, '密码已修改，其他设备的登录已失效');
+      setState(() {});
+    } catch (e) {
+      if (!mounted) return;
+      toast(context, errText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    Widget field(TextEditingController c, String label) => TextField(
+          controller: c,
+          obscureText: true,
+          decoration: InputDecoration(labelText: label, isDense: true),
+          onChanged: (_) => setState(() {}),
+        );
+    return SettingsSection(
+      title: '修改密码',
+      children: <Widget>[
+        field(_old, '原密码'),
+        const SizedBox(height: 8),
+        field(_new1, '新密码（至少 6 位）'),
+        const SizedBox(height: 8),
+        field(_new2, '确认新密码'),
+        if (_new2.text.isNotEmpty && _new1.text != _new2.text)
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: Text('两次输入的新密码不一致',
+                style: TextStyle(fontSize: 12, color: cs.error)),
+          ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 44,
+          child: FilledButton(
+            onPressed: (!_ok || _busy) ? null : _save,
+            child: Text(_busy ? '提交中…' : '修改密码'),
+          ),
+        ),
       ],
     );
   }

@@ -213,4 +213,7 @@ class Endpoints {
   static Future<void> adminRevokeInvite(String code) async {
     await Api.del('/admin/invites/$code');
   }
+  static Future<void> changePassword(String oldPw, String newPw) async {
+    await Api.put('/auth/password', {'old_password': oldPw, 'new_password': newPw});
+  }
 }

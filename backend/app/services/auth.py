@@ -117,6 +117,23 @@ async def login(session: AsyncSession, username: str, password: str, ip: str, us
     return token, user
 
 
+async def change_password(session: AsyncSession, user: User, old_password: str,
+                          new_password: str, keep_token: str) -> None:
+    """改密后吊销该用户除当前会话外的全部令牌。"""
+    if not verify_password(old_password, user.password_hash):
+        raise HTTPException(403, "原密码错误")
+    if len(new_password) < 6:
+        raise HTTPException(400, "新密码至少 6 位")
+    if new_password == old_password:
+        raise HTTPException(400, "新密码不能与原密码相同")
+    user.password_hash = hash_password(new_password)
+    await session.execute(
+        delete(AuthToken).where(AuthToken.user_id == user.id,
+                                AuthToken.token_hash != hash_token(keep_token))
+    )
+    await session.commit()
+
+
 async def logout(session: AsyncSession, token: str) -> None:
     await session.execute(delete(AuthToken).where(AuthToken.token_hash == hash_token(token)))
     await session.commit()

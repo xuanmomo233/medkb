@@ -3,7 +3,7 @@ from typing import Annotated
 from fastapi import APIRouter, Header, HTTPException, Request, Response
 
 from app.api.deps import CurrentUser, Session
-from app.schemas.auth import AuthResult, LoginBody, RegisterBody, UserOut, VersionInfo
+from app.schemas.auth import AuthResult, LoginBody, PasswordChange, RegisterBody, UserOut, VersionInfo
 from app.services import auth as svc
 
 router = APIRouter()
@@ -49,6 +49,19 @@ async def logout(
 @router.get("/auth/me", response_model=UserOut)
 async def me(user: CurrentUser):
     return user
+
+
+@router.put("/auth/password", status_code=204)
+async def change_password(
+    body: PasswordChange,
+    user: CurrentUser,
+    session: Session,
+    x_token: Annotated[str | None, Header()] = None,
+    authorization: Annotated[str | None, Header()] = None,
+):
+    token = x_token or (authorization[7:] if authorization and authorization.lower().startswith("bearer ") else "")
+    await svc.change_password(session, user, body.old_password, body.new_password, token)
+    return Response(status_code=204)
 
 
 @router.get("/version", response_model=VersionInfo)

@@ -4,6 +4,7 @@ import type * as T from './types'
 export const api = {
   // 账号
   register: (b: { username: string; password: string; invite_code: string }) => post<T.AuthResult>('/auth/register', b),
+  changePassword: (b: { old_password: string; new_password: string }) => put<void>('/auth/password', b),
   login: (b: { username: string; password: string }) => post<T.AuthResult>('/auth/login', b),
   logout: () => post<void>('/auth/logout'),
   me: () => get<T.User>('/auth/me'),

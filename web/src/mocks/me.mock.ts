@@ -18,3 +18,10 @@ registerMock('DELETE', '/admin/invites/{code}', ({ params }) => {
   const i = invites.findIndex((c) => c.code === params.code)
   if (i >= 0) invites.splice(i, 1)
 })
+
+registerMock('PUT', '/auth/password', ({ body }) => {
+  const b = body as { old_password?: string; new_password?: string }
+  if (!b?.old_password) throw Object.assign(new Error('原密码错误'), { status: 403 })
+  if ((b.new_password ?? '').length < 6) throw Object.assign(new Error('新密码至少 6 位'), { status: 400 })
+  return undefined
+})

@@ -25,6 +25,11 @@ class AuthResult(BaseModel):
     user: UserOut
 
 
+class PasswordChange(BaseModel):
+    old_password: str
+    new_password: str
+
+
 class VersionInfo(BaseModel):
     build: int
     note: str

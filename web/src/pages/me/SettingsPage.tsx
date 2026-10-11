@@ -97,6 +97,43 @@ function Appearance() {
   )
 }
 
+function PasswordCard() {
+  const toast = useToast()
+  const [oldPw, setOldPw] = useState('')
+  const [newPw, setNewPw] = useState('')
+  const [newPw2, setNewPw2] = useState('')
+  const save = useMutation({
+    mutationFn: () => api.changePassword({ old_password: oldPw, new_password: newPw }),
+    onSuccess: () => {
+      setOldPw(''); setNewPw(''); setNewPw2('')
+      toast('密码已修改，其他设备的登录已失效')
+    },
+    onError: (e: Error) => toast(e.message, true),
+  })
+  const ok = oldPw.length > 0 && newPw.length >= 6 && newPw === newPw2
+  return (
+    <Card title="修改密码">
+      <div className={s.group}>
+        <Field label="原密码">
+          <Input type="password" autoComplete="current-password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
+        </Field>
+        <Field label="新密码" hint="至少 6 位">
+          <Input type="password" autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)} />
+        </Field>
+        <Field label="确认新密码">
+          <Input type="password" autoComplete="new-password" value={newPw2} onChange={(e) => setNewPw2(e.target.value)} />
+        </Field>
+        {newPw2 && newPw !== newPw2 && <div className={s.desc}>两次输入的新密码不一致</div>}
+        <div className={s.saveBar}>
+          <Button variant="primary" disabled={!ok || save.isPending} onClick={() => save.mutate()}>
+            {save.isPending ? '提交中…' : '修改密码'}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  )
+}
+
 function Version() {
   const q = useQuery({ queryKey: ['version'], queryFn: api.version })
   return (
@@ -166,6 +203,7 @@ export default function SettingsPage() {
       <PageHeader title="学习设置" />
       {q.isLoading ? <Spinner /> : q.isError || !q.data ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> : <PrefsCards prefs={q.data} />}
       <Appearance />
+      <PasswordCard />
       {user?.is_admin && <InvitesCard />}
       <Version />
     </div>
