@@ -8,6 +8,7 @@ import 'package:path_provider/path_provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'api.dart';
+import 'models.dart' show VersionInfo;
 import 'widgets/widgets.dart';
 
 /// APP 内自更新：下载 /app.apk 并拉起系统安装器。
