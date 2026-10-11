@@ -7,6 +7,7 @@ import '../../nav.dart';
 import '../../theme.dart';
 import '../../widgets/widgets.dart';
 import '../notes/note_time.dart';
+import 'admin_page.dart';
 import 'my_notes_page.dart';
 import 'settings_page.dart';
 
@@ -126,6 +127,11 @@ class _MePageState extends State<MePage> {
                   _divider(),
                   _tile(Icons.tune_outlined, '学习设置',
                       () => _push(const SettingsPage())),
+                  if (admin) ...<Widget>[
+                    _divider(),
+                    _tile(Icons.admin_panel_settings_outlined, '管理中心',
+                        () => _push(const AdminPage())),
+                  ],
                 ],
               ),
             ),

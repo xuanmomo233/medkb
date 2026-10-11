@@ -37,6 +37,13 @@ export default function MePage() {
             <span className={s.tileSub}>{t.sub}</span>
           </Link>
         ))}
+        {user?.is_admin && (
+          <Link to="/me/admin" className={s.tile}>
+            <span className={s.tileIcon}><Icon name="shield" size={22} /></span>
+            <span className={s.tileTitle}>管理中心</span>
+            <span className={s.tileSub}>账户、邀请码与站点设置</span>
+          </Link>
+        )}
         <a href={`/app.apk?v=${build}`} className={s.tile} download="medkb.apk">
           <span className={s.tileIcon}><Icon name="phone" size={22} /></span>
           <span className={s.tileTitle}>下载手机 APP</span>

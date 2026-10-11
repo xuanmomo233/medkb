@@ -63,10 +63,10 @@ async def delete_user(uid: int, body: AdminUserDelete, session: Session, admin: 
     await session.commit()
 
 
-def _out(c: InviteCode, names: dict[int, str]) -> InviteOut:
+def _out(c: InviteCode, names: dict[int, str] | None = None) -> InviteOut:
     return InviteOut(
         code=c.code, created_by=c.created_by, used_by=c.used_by,
-        used_by_username=names.get(c.used_by) if c.used_by is not None else None,
+        used_by_username=(names or {}).get(c.used_by) if c.used_by is not None else None,
         used_at=c.used_at.isoformat() if c.used_at else None,
         created_at=c.created_at.isoformat() if c.created_at else None,
     )
