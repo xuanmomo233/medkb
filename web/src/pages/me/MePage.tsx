@@ -19,8 +19,6 @@ export default function MePage() {
   const nav = useNavigate()
   const [confirm, setConfirm] = useState(false)
   const v = useQuery({ queryKey: ['version'], queryFn: api.version, staleTime: 300000 })
-
-export default function MePage() {
   const build = v.data?.build ?? 0
   return (
     <div className={s.wrap}>
