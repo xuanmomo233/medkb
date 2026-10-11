@@ -1,0 +1,10 @@
+app/
+server/
+kb/
+.devin-apk*/
+.github/
+web/node_modules/
+web/dist/
+backend/.pytest_cache/
+**/__pycache__/
+**/.env

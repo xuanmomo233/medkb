@@ -1,0 +1,15 @@
+.headBtns { display: flex; gap: 8px; }
+.list { display: flex; flex-direction: column; gap: 10px; }
+.item, .exam { display: flex; align-items: center; gap: 14px; width: 100%; padding: 14px 18px; text-align: left; color: var(--text); background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+.item { transition: border-color .15s; }
+.item:hover { border-color: var(--brand); }
+.itemMain { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.itemTitle { font-weight: 600; }
+.itemSub { font-size: 13px; color: var(--text-3); }
+.count { font-size: 22px; font-weight: 700; color: var(--bad); }
+.count small, .rate small { font-size: 12px; font-weight: 400; margin-left: 2px; }
+.arrow { font-size: 22px; color: var(--text-3); }
+.rate { min-width: 64px; text-align: right; font-size: 26px; font-weight: 700; }
+.rate-good { color: var(--good); }
+.rate-warn { color: var(--warn); }
+.rate-bad { color: var(--bad); }

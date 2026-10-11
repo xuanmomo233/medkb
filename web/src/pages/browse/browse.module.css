@@ -1,0 +1,22 @@
+.toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }
+.filter { flex: 1; min-width: 200px; max-width: 360px; }
+.groups { display: flex; flex-direction: column; gap: 10px; }
+.group { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
+.groupHead { display: flex; align-items: center; gap: 10px; width: 100%; padding: 14px 16px; border: 0; background: transparent; text-align: left; font-weight: 600; font-size: 15px; transition: background .15s; }
+.groupHead:hover { background: var(--surface-2); }
+.groupName { flex: 1; }
+.chev { display: inline-block; width: 16px; color: var(--text-3); font-size: 18px; transition: transform .15s; }
+.chevOpen { transform: rotate(90deg); }
+.list { list-style: none; margin: 0; padding: 4px 8px 8px; border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2px 8px; }
+.item { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-radius: var(--radius-sm); color: var(--text); transition: background .15s; }
+.item:hover { background: var(--brand-soft); color: var(--brand); text-decoration: none; }
+.itemLabel { flex: 1; min-width: 0; }
+.itemExtra { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.go { color: var(--text-3); }
+@media (max-width: 860px) {
+  .list { grid-template-columns: 1fr; }
+  .filter { max-width: none; flex-basis: 100%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .chev { transition: none; }
+}

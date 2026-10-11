@@ -17,5 +17,9 @@ build/
 *.log
 
 __pycache__/
+.env
+deploy/.env
+.venv/
+backend/.pytest_cache/
 
 .devin-apk*/

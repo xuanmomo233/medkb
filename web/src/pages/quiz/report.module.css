@@ -1,0 +1,17 @@
+.page { display: flex; flex-direction: column; gap: 16px; max-width: 780px; margin: 0 auto; }
+.scores { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; text-align: center; }
+.score { display: flex; flex-direction: column; gap: 4px; }
+.big { font-size: 40px; font-weight: 700; line-height: 1.2; color: var(--brand); }
+.big small { font-size: 18px; font-weight: 400; color: var(--text-3); }
+.label { font-size: 13px; color: var(--text-3); }
+.note { margin-top: 12px; text-align: center; font-size: 13px; color: var(--warn); }
+.chapters { display: flex; flex-direction: column; gap: 14px; }
+.chapter { display: flex; flex-direction: column; gap: 6px; }
+.chapterHead { display: flex; justify-content: space-between; gap: 10px; font-size: 14px; }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+.redo { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; }
+
+@media (max-width: 860px) {
+  .big { font-size: 30px; }
+}

@@ -1,0 +1,42 @@
+﻿.page {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: linear-gradient(160deg, var(--brand-soft) 0%, var(--bg) 55%);
+}
+.card {
+  width: 100%;
+  max-width: 400px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 28px 24px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-lg);
+}
+.logo {
+  align-self: center;
+  width: 56px;
+  height: 56px;
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border-radius: 16px;
+}
+.title { text-align: center; }
+.slogan { margin: -8px 0 4px; text-align: center; font-size: 13px; color: var(--text-2); }
+.fields { display: flex; flex-direction: column; gap: 14px; }
+.error { font-size: 12px; color: var(--bad); }
+.formError {
+  padding: 8px 12px;
+  font-size: 13px;
+  color: var(--bad);
+  background: var(--bad-soft);
+  border-radius: var(--radius-sm);
+}

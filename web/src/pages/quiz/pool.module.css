@@ -1,0 +1,28 @@
+.chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
+.chip { display: inline-flex; align-items: baseline; gap: 6px; padding: 6px 14px; background: var(--surface); border: 1.5px solid var(--line); border-radius: 20px; font-size: 13px; color: var(--text-2); transition: border-color .15s, background .15s; }
+.chip:hover { border-color: var(--brand); }
+.chipOn { border-color: var(--brand); background: var(--brand-soft); color: var(--brand); font-weight: 600; }
+.chipNum { font-size: 16px; font-weight: 700; color: var(--text); }
+.chipOn .chipNum { color: var(--brand); }
+.bar { position: sticky; top: 58px; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; margin-bottom: 8px; background: var(--bg); }
+.checkAll { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
+.list { display: flex; flex-direction: column; gap: 6px; }
+.row { display: grid; grid-template-columns: 20px 92px minmax(0, 1fr) auto auto 70px; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; font-size: 14px; transition: border-color .15s, background .15s; }
+.row:hover { border-color: var(--brand); }
+.rowOn { background: var(--brand-soft); border-color: var(--brand); }
+.qid { font-size: 12px; color: var(--text-3); white-space: nowrap; }
+.stem { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ans { font-size: 12px; color: var(--text-2); white-space: nowrap; }
+.badges { display: flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+.wrongCount { font-size: 12px; color: var(--bad); text-align: right; white-space: nowrap; }
+.more { display: flex; justify-content: center; padding: 16px 0; }
+
+@media (max-width: 860px) {
+  .bar { top: 0; }
+  .row { grid-template-columns: 20px minmax(0, 1fr) auto; row-gap: 6px; }
+  .qid { grid-column: 2; }
+  .stem { grid-column: 2 / 4; grid-row: 2; }
+  .ans { grid-column: 3; grid-row: 1; }
+  .badges { grid-column: 2; justify-content: flex-start; }
+  .wrongCount { grid-column: 3; }
+}
