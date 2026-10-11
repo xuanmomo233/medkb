@@ -7,16 +7,25 @@ class ChapterBrief(BaseModel):
     title: str
 
 
-class QuestionChapterBrief(BaseModel):
-    chapter: str
+class QuestionChapter(BaseModel):
+    name: str
+    count: int
+
+
+class QuestionSystem(BaseModel):
+    name: str
+    chapters: list[QuestionChapter]
+
+
+class QuestionSubject(BaseModel):
     subject_dir: str
-    system: str
+    systems: list[QuestionSystem]
 
 
 class ContentTree(BaseModel):
     mindmaps: list[ChapterBrief]
     notes: list[ChapterBrief]
-    question_chapters: list[QuestionChapterBrief]
+    question_tree: list[QuestionSubject]
 
 
 class ChapterDetail(BaseModel):
