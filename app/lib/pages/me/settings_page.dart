@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import '../../api.dart';
 import '../../endpoints.dart';
-import '../../models.dart' show Invite, UserPrefs, VersionInfo;
+import '../../models.dart' show AdminUser, Invite, UserPrefs, VersionInfo;
 import '../../theme.dart';
 import '../../widgets/widgets.dart';
 import 'settings_parts.dart';
@@ -282,8 +282,185 @@ class _SettingsPageState extends State<SettingsPage> {
         const _PasswordSection(),
         if (Api.admin) ...<Widget>[
           const SizedBox(height: 12),
+          const _UsersSection(),
+          const SizedBox(height: 12),
           const _InvitesSection(),
         ],
+      ],
+    );
+  }
+}
+
+class _UsersSection extends StatefulWidget {
+  const _UsersSection();
+
+  @override
+  State<_UsersSection> createState() => _UsersSectionState();
+}
+
+class _UsersSectionState extends State<_UsersSection> {
+  final TextEditingController _nameQ = TextEditingController();
+  final TextEditingController _inviteQ = TextEditingController();
+  List<AdminUser>? _items;
+  bool _busy = false;
+  String? _fltName;
+  String? _fltInvite;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  @override
+  void dispose() {
+    _nameQ.dispose();
+    _inviteQ.dispose();
+    super.dispose();
+  }
+
+  Future<void> _load() async {
+    try {
+      final List<AdminUser> list =
+          await Endpoints.adminUsers(q: _fltName, invite: _fltInvite);
+      if (!mounted) return;
+      setState(() => _items = list);
+    } catch (e) {
+      if (!mounted) return;
+      toast(context, errText(e));
+    }
+  }
+
+  String _fmt(String? iso) =>
+      (iso == null || iso.isEmpty) ? '—' : iso.substring(0, iso.length < 10 ? iso.length : 10);
+
+  Future<void> _askDelete(AdminUser u) async {
+    final bool? go = await showDialog<bool>(
+      context: context,
+      builder: (BuildContext c) => AlertDialog(
+        title: const Text('删除账号'),
+        content: Text('将永久删除账号「${u.username}」（#${u.id}）及其全部学习数据，此操作不可恢复。'),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.pop(c, false), child: const Text('取消')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(c).colorScheme.error),
+            onPressed: () => Navigator.pop(c, true),
+            child: const Text('继续删除'),
+          ),
+        ],
+      ),
+    );
+    if (go != true || !mounted) return;
+    final TextEditingController pw = TextEditingController();
+    final String? pass = await showDialog<String>(
+      context: context,
+      builder: (BuildContext c) => AlertDialog(
+        title: const Text('管理员验证'),
+        content: TextField(
+          controller: pw,
+          obscureText: true,
+          autofocus: true,
+          decoration: const InputDecoration(labelText: '输入管理员账号的密码', isDense: true),
+        ),
+        actions: <Widget>[
+          TextButton(onPressed: () => Navigator.pop(c), child: const Text('取消')),
+          FilledButton(
+            style: FilledButton.styleFrom(
+                backgroundColor: Theme.of(c).colorScheme.error),
+            onPressed: () => Navigator.pop(c, pw.text),
+            child: const Text('确认删除'),
+          ),
+        ],
+      ),
+    );
+    if (pass == null || pass.isEmpty || !mounted) return;
+    setState(() => _busy = true);
+    try {
+      await Endpoints.adminDeleteUser(u.id, pass);
+      if (!mounted) return;
+      toast(context, '账号已删除');
+      await _load();
+    } catch (e) {
+      if (!mounted) return;
+      toast(context, errText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    final List<AdminUser> items = _items ?? <AdminUser>[];
+    return SettingsSection(
+      title: '账户管理',
+      children: <Widget>[
+        Text('查看全部注册账户；可按用户名搜索，或输入邀请码反查绑定的账号。',
+            style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant, height: 1.5)),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _nameQ,
+          decoration: const InputDecoration(
+              labelText: '按用户名搜索', isDense: true, prefixIcon: Icon(Icons.search)),
+          onSubmitted: (_) {
+            _fltName = _nameQ.text.trim();
+            _fltInvite = null;
+            _load();
+          },
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _inviteQ,
+          decoration: const InputDecoration(
+              labelText: '按邀请码反查账号', isDense: true, prefixIcon: Icon(Icons.vpn_key)),
+          onSubmitted: (_) {
+            _fltInvite = _inviteQ.text.trim();
+            _fltName = null;
+            _load();
+          },
+        ),
+        if (_fltName != null || _fltInvite != null)
+          Align(
+            alignment: Alignment.centerRight,
+            child: TextButton(
+              onPressed: () {
+                _nameQ.clear();
+                _inviteQ.clear();
+                _fltName = null;
+                _fltInvite = null;
+                _load();
+              },
+              child: const Text('清除筛选'),
+            ),
+          ),
+        const SizedBox(height: 4),
+        if (_items == null)
+          const Padding(padding: EdgeInsets.all(12), child: LoadingView())
+        else if (items.isEmpty)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Text('没有匹配的账户'),
+          )
+        else
+          ...items.map((AdminUser u) => ListTile(
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+                title: Text('#${u.id} ${u.username}',
+                    style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                subtitle: Text(
+                    '${u.isAdmin ? '管理员 · ' : ''}'
+                    '${u.inviteCode != null ? '邀请码 ${u.inviteCode} · ' : ''}'
+                    '注册 ${_fmt(u.createdAt)} · 登录 ${_fmt(u.lastLoginAt)}',
+                    style: const TextStyle(fontSize: 11)),
+                trailing: u.isAdmin
+                    ? null
+                    : IconButton(
+                        tooltip: '删除',
+                        icon: Icon(Icons.delete_outline, size: 20, color: cs.error),
+                        onPressed: _busy ? null : () => _askDelete(u),
+                      ),
+              )),
       ],
     );
   }
@@ -512,7 +689,10 @@ class _InvitesSectionState extends State<_InvitesSection> {
                       color: c.usedBy != null ? cs.onSurfaceVariant : cs.primary,
                       decoration: c.usedBy != null ? TextDecoration.lineThrough : null,
                     )),
-                subtitle: Text(c.usedBy != null ? '已被 #${c.usedBy} 使用' : '未使用',
+                subtitle: Text(
+                    c.usedBy != null
+                        ? '已被 ${c.usedByUsername ?? '#${c.usedBy}'} 使用'
+                        : '未使用',
                     style: const TextStyle(fontSize: 12)),
                 trailing: c.usedBy == null
                     ? Row(

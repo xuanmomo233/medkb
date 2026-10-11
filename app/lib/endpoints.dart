@@ -240,4 +240,13 @@ class Endpoints {
         asMap(await Api.put('/admin/site', {'exam_date': examDate}));
     return j['exam_date']?.toString() ?? '2026-12-19';
   }
+  static Future<List<AdminUser>> adminUsers({String? q, String? invite}) async =>
+      _list(await Api.get('/admin/users',
+          query: <String, Object?>{
+            if (q != null && q.isNotEmpty) 'q': q,
+            if (invite != null && invite.isNotEmpty) 'invite': invite,
+          }, cache: false), AdminUser.fromJson);
+  static Future<void> adminDeleteUser(int id, String password) async {
+    await Api.del('/admin/users/$id', body: {'password': password});
+  }
 }

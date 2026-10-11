@@ -321,8 +321,8 @@ class Api {
     return _decode(await _send('PUT', path, body: body));
   }
 
-  static Future<dynamic> del(String path, {Map<String, Object?>? query}) async {
-    return _decode(await _send('DELETE', path, query: query));
+  static Future<dynamic> del(String path, {Map<String, Object?>? query, Object? body}) async {
+    return _decode(await _send('DELETE', path, query: query, body: body));
   }
 
   /// 管理员上传图片，成功返回服务端给出的相对路径（如 /uimg/xxx.webp），失败返回 null

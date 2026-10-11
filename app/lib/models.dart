@@ -1373,14 +1373,35 @@ class Invite {
   final String code;
   final int createdBy;
   final int? usedBy;
+  final String? usedByUsername;
   final String? usedAt;
   final String? createdAt;
-  const Invite({required this.code, required this.createdBy, this.usedBy, this.usedAt, this.createdAt});
+  const Invite({required this.code, required this.createdBy, this.usedBy, this.usedByUsername, this.usedAt, this.createdAt});
   factory Invite.fromJson(Map<String, dynamic> j) => Invite(
         code: _s(j['code']),
         createdBy: _i(j['created_by']),
         usedBy: j['used_by'] is num ? _i(j['used_by']) : null,
+        usedByUsername: j['used_by_username']?.toString(),
         usedAt: j['used_at']?.toString(),
         createdAt: j['created_at']?.toString(),
+      );
+}
+
+class AdminUser {
+  final int id;
+  final String username;
+  final bool isAdmin;
+  final String? createdAt;
+  final String? lastLoginAt;
+  final String? inviteCode;
+  const AdminUser({required this.id, required this.username, required this.isAdmin,
+      this.createdAt, this.lastLoginAt, this.inviteCode});
+  factory AdminUser.fromJson(Map<String, dynamic> j) => AdminUser(
+        id: _i(j['id']),
+        username: _s(j['username']),
+        isAdmin: j['is_admin'] == true,
+        createdAt: j['created_at']?.toString(),
+        lastLoginAt: j['last_login_at']?.toString(),
+        inviteCode: j['invite_code']?.toString(),
       );
 }
