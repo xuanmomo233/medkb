@@ -3,6 +3,7 @@ import '../../api.dart';
 import '../../endpoints.dart';
 import '../../models.dart' hide Card;
 import '../../widgets/widgets.dart';
+import 'source_questions_page.dart';
 
 class CardSources extends StatefulWidget {
   final int cardId;
@@ -65,12 +66,12 @@ class _CardSourcesState extends State<CardSources> {
     }
     return Column(
       children: <Widget>[
-        for (int i = 0; i < list.length; i++) _item(i, list[i], cs),
+        for (int i = 0; i < list.length; i++) _item(i, list[i], cs, list),
       ],
     );
   }
 
-  Widget _item(int i, SourceQuestion q, ColorScheme cs) {
+  Widget _item(int i, SourceQuestion q, ColorScheme cs, List<SourceQuestion> list) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
       decoration: BoxDecoration(
@@ -78,32 +79,22 @@ class _CardSourcesState extends State<CardSources> {
         border: Border.all(color: cs.outlineVariant),
       ),
       clipBehavior: Clip.antiAlias,
-      child: Theme(
-        data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          tilePadding: const EdgeInsets.symmetric(horizontal: 12),
-          childrenPadding: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-          expandedCrossAxisAlignment: CrossAxisAlignment.start,
-          title: Text('${i + 1}. ${plainHtml(q.stemHtml, 60)}',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(fontSize: 14)),
-          subtitle: Padding(
-            padding: const EdgeInsets.only(top: 4),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: AppBadge(q.qid, tone: BadgeTone.info),
-            ),
+      child: ListTile(
+        dense: true,
+        title: Text('${i + 1}. ${plainHtml(q.stemHtml, 60)}',
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(fontSize: 14)),
+        subtitle: Padding(
+          padding: const EdgeInsets.only(top: 4),
+          child: Align(
+            alignment: Alignment.centerLeft,
+            child: AppBadge(q.qid, tone: BadgeTone.info),
           ),
-          children: <Widget>[
-            Text('${q.system} · ${q.qid}',
-                style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
-            const SizedBox(height: 8),
-            HtmlView(q.stemHtml),
-            const Divider(height: 20),
-            HtmlView(q.analysisHtml.isEmpty ? '<p>暂无解析</p>' : q.analysisHtml),
-          ],
         ),
+        trailing: Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+        onTap: () => Navigator.of(context).push<void>(MaterialPageRoute<void>(
+            builder: (_) => SourceQuestionsPage(list: list, start: i))),
       ),
     );
   }

@@ -83,15 +83,15 @@ export function Input(p: InputHTMLAttributes<HTMLInputElement>) { return <input 
 export function Textarea(p: TextareaHTMLAttributes<HTMLTextAreaElement>) { return <textarea className={cx(s.input, p.className)} {...p} /> }
 
 // ---------- 弹层 ----------
-export function Modal({ title, onClose, children, sheet }: { title: ReactNode; onClose: () => void; children: ReactNode; sheet?: boolean }) {
+export function Modal({ title, onClose, children, sheet, side }: { title: ReactNode; onClose: () => void; children: ReactNode; sheet?: boolean; side?: boolean }) {
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
   }, [onClose])
   return (
-    <div className={cx(s.overlay, sheet && s.sheet)} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={s.modal} role="dialog" aria-modal="true">
+    <div className={cx(s.overlay, sheet && s.sheet, side && s.side)} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div className={cx(s.modal, side && s.modalSide)} role="dialog" aria-modal="true">
         <div className={s.modalHead}><span>{title}</span><Button variant="ghost" size="sm" onClick={onClose} aria-label="关闭"><Icon name="x" /></Button></div>
         <div className={s.modalBody}>{children}</div>
       </div>
