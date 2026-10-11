@@ -92,7 +92,7 @@ class _CardSourcesState extends State<CardSources> {
             padding: const EdgeInsets.only(top: 4),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: AppBadge('答案 ${q.answer}', tone: BadgeTone.info),
+              child: AppBadge(q.qid, tone: BadgeTone.info),
             ),
           ),
           children: <Widget>[

@@ -21,7 +21,7 @@ export default function Sources({ cardId }: { cardId: number }) {
             <button type="button" className={s.srcHead} aria-expanded={isOpen} onClick={() => setOpen({ ...open, [q.id]: !isOpen })}>
               <span className={s.srcNo}>{i + 1}</span>
               <span className={s.srcStem}><HtmlView html={q.stem_html} /></span>
-              <Badge tone="info">答案 {q.answer}</Badge>
+              <Badge tone="info">{q.qid}</Badge>
             </button>
             {isOpen && (
               <div className={s.srcBody}>
