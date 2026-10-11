@@ -5,6 +5,7 @@ import '../../models.dart'
     show PlanDayCard, PlanDayDetail, PlanItem, PlanOption, PlanQuestionGroup, PlanToday;
 import '../../nav.dart';
 import '../../widgets/widgets.dart';
+import '../notes/note_time.dart' show confirmDialog;
 import 'today_common.dart';
 
 double _ratio(int a, int b) => b > 0 ? a / b : 0.0;
