@@ -152,66 +152,72 @@ class OptionTile extends StatelessWidget {
           foregroundPainter: dashed ? _DashedPainter(border, 12) : null,
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: 52),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: <Widget>[
-                  Container(
-                    width: 28,
-                    height: 28,
-                    alignment: Alignment.center,
-                    decoration:
-                        BoxDecoration(color: letterBg, shape: BoxShape.circle),
-                    child: Text(letter,
-                        style: TextStyle(
-                            color: letterFg,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13)),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        HtmlView(html),
-                        if (r != null) ...<Widget>[
-                          const SizedBox(height: 6),
-                          Row(
-                            children: <Widget>[
-                              Expanded(
-                                child: ProgressBar(
-                                  value: r / 100,
-                                  height: 5,
-                                  color: isAnswer ? c.good : cs.outline,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Text('选择率 $r%',
-                                  style: TextStyle(
-                                      fontSize: 11,
-                                      color: cs.onSurfaceVariant)),
-                            ],
-                          ),
-                        ],
-                      ],
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
+            child: Stack(
+              children: <Widget>[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 10, 13),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: <Widget>[
-                      Icon(icon, size: 22, color: iconColor),
-                      if (tag.isNotEmpty)
-                        Text(tag,
+                      Container(
+                        width: 28,
+                        height: 28,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                            color: letterBg, shape: BoxShape.circle),
+                        child: Text(letter,
                             style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: iconColor)),
+                                color: letterFg,
+                                fontWeight: FontWeight.w700,
+                                fontSize: 13)),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(child: HtmlView(html)),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: <Widget>[
+                          Icon(icon, size: 22, color: iconColor),
+                          if (tag.isNotEmpty)
+                            Text(tag,
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: iconColor)),
+                          if (r != null)
+                            Text('$r%',
+                                style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: isAnswer
+                                        ? c.good
+                                        : (wrongPick
+                                            ? c.bad
+                                            : cs.onSurfaceVariant))),
+                        ],
+                      ),
                     ],
                   ),
-                ],
-              ),
+                ),
+                if (r != null)
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: FractionallySizedBox(
+                      widthFactor: r / 100,
+                      alignment: Alignment.centerLeft,
+                      child: Container(
+                        height: 4,
+                        color: isAnswer
+                            ? c.good
+                            : (wrongPick
+                                ? c.bad
+                                : cs.outline.withOpacity(0.5)),
+                      ),
+                    ),
+                  ),
+              ],
             ),
           ),
         ),

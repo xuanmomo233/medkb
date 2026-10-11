@@ -15,7 +15,7 @@
 .hide { color: var(--text-3); font-size: 13px; text-align: center; }
 
 .options { display: flex; flex-direction: column; gap: 10px; }
-.option { display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 10px 14px; text-align: left; color: var(--text); background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--radius-sm); transition: border-color .15s, background .15s; }
+.option { position: relative; overflow: hidden; display: grid; grid-template-columns: 32px 1fr auto; align-items: center; gap: 12px; width: 100%; min-height: 54px; padding: 10px 14px 12px; text-align: left; color: var(--text); background: var(--surface); border: 1.5px solid var(--line); border-radius: var(--radius-sm); transition: border-color .15s, background .15s; }
 .option:hover:not(:disabled) { border-color: var(--brand); background: var(--surface-2); }
 .option:disabled { cursor: default; }
 .optLetter { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; border-radius: 50%; background: var(--surface-2); border: 1px solid var(--line); font-size: 13px; font-weight: 600; color: var(--text-2); }
@@ -36,9 +36,13 @@
 .optBad .optLetter { background: var(--bad); border-color: var(--bad); color: var(--surface); }
 .optBad .optMark, .optBad .optTag { color: var(--bad); }
 .optMiss { border-style: dashed; }
-.optRate { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-2); }
-.optRateTrack { flex: 1; height: 5px; border-radius: 3px; background: var(--surface-2); overflow: hidden; }
-.optRateFill { display: block; height: 100%; background: var(--text-3); border-radius: 3px; }
+.optRate { min-width: 34px; text-align: right; font-size: 12px; font-weight: 600; color: var(--text-3); }
+.optRateTrack { position: absolute; left: 0; right: 0; bottom: 0; height: 4px; }
+.optRateFill { display: block; height: 100%; background: var(--text-3); opacity: .5; }
+.optGood .optRate { color: var(--good); }
+.optGood .optRateFill { background: var(--good); opacity: 1; }
+.optBad .optRate { color: var(--bad); }
+.optBad .optRateFill { background: var(--bad); opacity: 1; }
 .optGood .optRateFill { background: var(--good); }
 .optBad .optRateFill { background: var(--bad); }
 

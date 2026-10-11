@@ -33,20 +33,20 @@ export default function OptionList({ q, picked, judged, reveal, stat, onPick }: 
             <span className={s.optLetter}>{L}</span>
             <span className={s.optBody}>
               <HtmlView html={html} className={s.optText} />
-              {judged && rate !== null && (
-                <span className={s.optRate}>
-                  <span className={s.optRateTrack}><span className={s.optRateFill} style={{ width: `${rate}%` }} /></span>
-                  <span>{rate}%</span>
-                </span>
-              )}
             </span>
             <span className={s.optSide}>
+              {judged && rate !== null && <span className={s.optRate}>{rate}%</span>}
               {missed && <span className={s.optTag}>漏选</span>}
               {wrongPick && <span className={s.optTag}>你的选择</span>}
               <span className={s.optMark} aria-hidden>
                 {mark === 'dot' ? <span className={s.optDot} /> : mark ? <Icon name={mark} size={14} /> : null}
               </span>
             </span>
+            {judged && rate !== null && (
+              <span className={s.optRateTrack} aria-hidden>
+                <span className={s.optRateFill} style={{ width: `${rate}%` }} />
+              </span>
+            )}
           </button>
         )
       })}
