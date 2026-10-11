@@ -2,7 +2,7 @@
 import { useSearchParams } from 'react-router-dom'
 import { api } from '@/api/endpoints'
 import type { ChatQuiz, ChatSendBody } from '@/api/types'
-import { Button, EmptyState, ErrorState, HtmlView, Modal, Spinner, useToast } from '@/ui'
+import { Button, EmptyState, ErrorState, HtmlView, Icon, Modal, Spinner, useToast } from '@/ui'
 import Composer from './Composer'
 import type { Outgoing } from './Composer'
 import QuizCard from './QuizCard'
@@ -63,13 +63,13 @@ export default function ChatPage() {
   return (
     <div className={s.page}>
       <div className={s.head}>
-        <div className={s.title}>🤖 AI 陪学{ctx && <span className={s.ctx}>已带入上下文</span>}</div>
+        <div className={s.title}><Icon name="robot" size={18} /> AI 陪学{ctx && <span className={s.ctx}>已带入上下文</span>}</div>
         <Button variant="ghost" size="sm" disabled={!items.length || pending} onClick={() => setConfirmClear(true)}>清空记录</Button>
       </div>
       <div className={s.scroll}>
         {loading ? <Spinner /> : loadErr ? <ErrorState error={loadErr} onRetry={() => { setLoading(true); load() }} /> : (
           <div className={s.list}>
-            {!items.length && !pending && <EmptyState icon="💬" text="你好！我是你的 AI 陪学，可以提问、让我出题或发图片/文件。" />}
+            {!items.length && !pending && <EmptyState icon="chat" text="你好！我是你的 AI 陪学，可以提问、让我出题或发图片/文件。" />}
             {items.map((m) => m.kind === 'quiz' ? (
               <div key={m.id} className={`${s.row} ${s.left}`}>
                 <QuizCard quiz={m.quiz} onResult={(r) => push({ id: nid(), kind: 'text', role: 'assistant', text: r.reply, html: r.reply_html })} />
@@ -78,7 +78,7 @@ export default function ChatPage() {
               <div key={m.id} className={`${s.row} ${s.right}`}>
                 <div className={`${s.bubble} ${s.user}`}>
                   {m.image && <img className={s.pic} src={m.image} alt="发送的图片" />}
-                  {m.fileName && <div className={s.fileLine}>📄 {m.fileName}</div>}
+                  {m.fileName && <div className={s.fileLine}><Icon name="file" size={13} /> {m.fileName}</div>}
                   {m.text && <div className={s.plain}>{m.text}</div>}
                 </div>
               </div>

@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { api } from '@/api/endpoints'
 import type { SearchHit, SearchKind } from '@/api/types'
-import { Badge, Button, EmptyState, ErrorState, Input, PageHeader, Segmented, Spinner } from '@/ui'
+import { Badge, Button, EmptyState, ErrorState, Icon, Input, PageHeader, Segmented, Spinner } from '@/ui'
 import Highlight from './Highlight'
 import { useLoad } from './useLoad'
 import s from './search.module.css'
@@ -56,7 +56,7 @@ export default function SearchPage() {
 
       {!q ? (
         <div className={s.guide}>
-          <EmptyState icon="🔍" text="输入关键词开始搜索" />
+          <EmptyState icon="search" text="输入关键词开始搜索" />
           <div className={s.hot}>
             <span className={s.hotLabel}>热门检索</span>
             {HOT.map((w) => <button key={w} type="button" className={s.chip} onClick={() => update(w, kind)}>{w}</button>)}
@@ -64,7 +64,7 @@ export default function SearchPage() {
         </div>
       ) : error ? <ErrorState error={error} onRetry={reload} />
         : !hits ? <Spinner />
-        : hits.length === 0 ? <EmptyState icon="🫥" text={`没有找到与「${q}」相关的内容`} />
+        : hits.length === 0 ? <EmptyState icon="search" text={`没有找到与「${q}」相关的内容`} />
         : (
           <>
             <div className={s.count}>共 {hits.length} 条结果</div>
@@ -79,7 +79,7 @@ export default function SearchPage() {
                         {h.state === 'mastered' && <Badge tone="good">已掌握</Badge>}
                         {h.state === 'again' && <Badge tone="bad">错题</Badge>}
                         {h.state === 'plan' && <Badge tone="info">计划中</Badge>}
-                        {h.starred && <span className={s.star} title="已收藏">★</span>}
+                        {h.starred && <span className={s.star} title="已收藏"><Icon name="star" size={13} fill /></span>}
                       </span>
                     </div>
                     {h.snippet && <p className={s.snippet}><Highlight text={h.snippet} q={q} /></p>}

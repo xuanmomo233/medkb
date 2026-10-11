@@ -2,7 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/endpoints'
 import type { QuizMode } from '@/api/types'
-import { Button, Card, ErrorState, Field, Input, PageHeader, useToast } from '@/ui'
+import { Button, Card, ErrorState, Field, Icon, Input, PageHeader, useToast } from '@/ui'
+import type { IconName } from '@/ui'
 import { FACET_LEVELS, MODES, readJson, toSearch } from './lib'
 import { useFacets } from './useFacets'
 import s from './home.module.css'
@@ -10,10 +11,10 @@ import s from './home.module.css'
 const MODE_KEY = 'quiz.mode'
 const MINS_KEY = 'quiz.mins'
 
-function Shortcut({ icon, title, desc, disabled, onClick }: { icon: string; title: string; desc: string; disabled?: boolean; onClick: () => void }) {
+function Shortcut({ icon, title, desc, disabled, onClick }: { icon: IconName; title: string; desc: string; disabled?: boolean; onClick: () => void }) {
   return (
     <button type="button" className={s.shortcut} disabled={disabled} onClick={onClick}>
-      <span className={s.scIcon} aria-hidden>{icon}</span>
+      <span className={s.scIcon} aria-hidden><Icon name={icon} size={22} /></span>
       <span className={s.scTitle}>{title}</span>
       <span className={s.scDesc}>{desc}</span>
     </button>
@@ -63,7 +64,7 @@ export default function QuizHome() {
           {MODES.map((m) => (
             <button key={m.value} type="button" role="radio" aria-checked={mode === m.value}
               className={`${s.mode} ${mode === m.value ? s.modeOn : ''}`} onClick={() => setMode(m.value)}>
-              <span className={s.modeName}>{mode === m.value ? '✓ ' : ''}{m.label}</span>
+              <span className={s.modeName}>{mode === m.value && <Icon name="check" size={13} />}{m.label}</span>
               <span className={s.modeDesc}>{m.desc}</span>
             </button>
           ))}
@@ -104,10 +105,10 @@ export default function QuizHome() {
       </Card>
 
       <div className={s.shortcuts}>
-        <Shortcut icon="🎯" title="全真模考" desc="180 题 · 限时 180 分钟" disabled={busy} onClick={startMock} />
-        <Shortcut icon="📕" title="错题本" desc="按章节回顾错题" onClick={() => nav('/quiz/wrongbook')} />
-        <Shortcut icon="📊" title="成绩记录" desc="测试与模考成绩" onClick={() => nav('/quiz/exams')} />
-        <Shortcut icon="⭐" title="收藏题" desc="集中复习收藏" onClick={() => nav(`/quiz/run?${toSearch({ starred: true, mode })}`)} />
+        <Shortcut icon="target" title="全真模考" desc="180 题 · 限时 180 分钟" disabled={busy} onClick={startMock} />
+        <Shortcut icon="x" title="错题本" desc="按章节回顾错题" onClick={() => nav('/quiz/wrongbook')} />
+        <Shortcut icon="trophy" title="成绩记录" desc="测试与模考成绩" onClick={() => nav('/quiz/exams')} />
+        <Shortcut icon="star" title="收藏题" desc="集中复习收藏" onClick={() => nav(`/quiz/run?${toSearch({ starred: true, mode })}`)} />
       </div>
     </div>
   )

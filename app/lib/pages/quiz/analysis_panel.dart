@@ -57,9 +57,9 @@ class AnalysisPanel extends StatelessWidget {
           ])),
           if (judged && picked.isNotEmpty) Text('你的选择 $picked'),
           if (judged && correct == true)
-            const AppBadge('✓ 回答正确', tone: BadgeTone.good),
+            const AppBadge('回答正确', tone: BadgeTone.good),
           if (judged && correct == false)
-            const AppBadge('✗ 回答错误', tone: BadgeTone.bad),
+            const AppBadge('回答错误', tone: BadgeTone.bad),
         ],
       ),
     ];

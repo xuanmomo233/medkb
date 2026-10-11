@@ -19,11 +19,11 @@ const CHIPS: { flt: PoolFilter | ''; label: string; count: (st: PoolPage['stats'
 function StateBadges({ it }: { it: PoolItem }) {
   return (
     <span className={s.badges}>
-      {it.state === 'again' && <Badge tone="bad">✗ 错</Badge>}
-      {it.state === 'mastered' && <Badge tone="good">✓ 掌握</Badge>}
+      {it.state === 'again' && <Badge tone="bad">错</Badge>}
+      {it.state === 'mastered' && <Badge tone="good">掌握</Badge>}
       {it.in_plan && <Badge tone="warn">计划</Badge>}
       {it.done && <Badge tone="info">已做</Badge>}
-      {it.starred && <Badge tone="warn">★ 收藏</Badge>}
+      {it.starred && <Badge tone="warn">收藏</Badge>}
     </span>
   )
 }

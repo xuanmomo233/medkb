@@ -57,7 +57,7 @@ class GreetingBlock extends StatelessWidget {
             constraints: const BoxConstraints(minHeight: 48),
             child: Center(
               child: left == null
-                  ? Text('设置考研日期\n开启倒计时 ›',
+                  ? Text('设置考研日期\n开启倒计时',
                       textAlign: TextAlign.right,
                       style: TextStyle(fontSize: 12, color: cs.primary))
                   : Column(

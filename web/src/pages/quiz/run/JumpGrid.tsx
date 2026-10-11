@@ -1,5 +1,5 @@
 import type { Question, QuizMode } from '@/api/types'
-import { Modal } from '@/ui'
+import { Icon, Modal } from '@/ui'
 import type { Ans } from './useQuizSession'
 import s from './run.module.css'
 
@@ -25,13 +25,13 @@ export default function JumpGrid({ questions, ans, idx, mode, onGo, onClose }: P
             <button key={q.id} type="button" className={`${s.cell} ${state} ${i === idx ? s.cellCur : ''}`}
               aria-label={`第 ${i + 1} 题，${label}`} aria-current={i === idx} onClick={() => { onGo(i); onClose() }}>
               {i + 1}
-              {!test && a?.judged && <span className={s.cellMark} aria-hidden>{a.correct ? '✓' : '✗'}</span>}
+              {!test && a?.judged && <span className={s.cellMark} aria-hidden><Icon name={a.correct ? 'check' : 'x'} size={11} /></span>}
             </button>
           )
         })}
       </div>
       <div className={s.legend}>
-        {test ? <><span className={s.lgDone}>已答</span><span>未答</span></> : <><span className={s.lgGood}>✓ 答对</span><span className={s.lgBad}>✗ 答错</span><span>未做</span></>}
+        {test ? <><span className={s.lgDone}>已答</span><span>未答</span></> : <><span className={s.lgGood}><Icon name="check" size={12} /> 答对</span><span className={s.lgBad}><Icon name="x" size={12} /> 答错</span><span>未做</span></>}
         <span className={s.lgCur}>当前</span>
       </div>
     </Modal>

@@ -13,7 +13,7 @@ export default function Exams() {
     <div>
       <PageHeader title="成绩记录" extra={<Button onClick={() => nav('/quiz')}>返回</Button>} />
       {error ? <ErrorState error={error} onRetry={load} /> : !list ? <Spinner /> : list.length === 0 ? (
-        <EmptyState icon="📝" text="还没有测试记录" action={<Button variant="primary" onClick={() => nav('/quiz')}>去测试</Button>} />
+        <EmptyState icon="trophy" text="还没有测试记录" action={<Button variant="primary" onClick={() => nav('/quiz')}>去测试</Button>} />
       ) : (
         <div className={s.list}>
           {list.map((e) => {

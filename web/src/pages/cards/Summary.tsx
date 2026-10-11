@@ -1,5 +1,5 @@
 ﻿import { Link } from 'react-router-dom'
-import { Button, Card } from '@/ui'
+import { Button, Card, Icon } from '@/ui'
 import type { Rating } from './query'
 import s from './run.module.css'
 
@@ -16,7 +16,7 @@ export default function Summary({ total, ratings, onRestart, onPrev }: {
   const skipped = total - vals.length
   return (
     <Card className={s.summary}>
-      <div className={s.sIcon} aria-hidden>🎉</div>
+      <div className={s.sIcon} aria-hidden><Icon name="trophy" size={36} /></div>
       <h2>本轮完成</h2>
       <p className={s.sSub}>共 {total} 张{skipped > 0 ? `，其中 ${skipped} 张未评分` : ''}</p>
       <div className={s.sStats}>

@@ -5,7 +5,7 @@
 .groupHead { display: flex; align-items: center; gap: 10px; width: 100%; padding: 14px 16px; border: 0; background: transparent; text-align: left; font-weight: 600; font-size: 15px; transition: background .15s; }
 .groupHead:hover { background: var(--surface-2); }
 .groupName { flex: 1; }
-.chev { display: inline-block; width: 16px; color: var(--text-3); font-size: 18px; transition: transform .15s; }
+.chev { display: inline-flex; align-items: center; width: 16px; color: var(--text-3); font-size: 18px; transition: transform .15s; }
 .chevOpen { transform: rotate(90deg); }
 .list { list-style: none; margin: 0; padding: 4px 8px 8px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 2px 8px; }
 .subGroup { border-top: 1px solid var(--line); }

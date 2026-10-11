@@ -161,10 +161,17 @@ class _QuizRunPageState extends State<QuizRunPage> {
               builder: (BuildContext c, int? v, Widget? _) {
                 if (v == null) return const SizedBox.shrink();
                 final AppColors col = AppColors.of(c);
-                return Text('⏱ ${_fmt(v)}',
-                    style: TextStyle(
-                        fontWeight: FontWeight.w700,
-                        color: v < 300 ? col.bad : null));
+                return Row(
+                  children: <Widget>[
+                    Icon(Icons.timer_outlined,
+                        size: 15, color: v < 300 ? col.bad : null),
+                    const SizedBox(width: 3),
+                    Text(_fmt(v),
+                        style: TextStyle(
+                            fontWeight: FontWeight.w700,
+                            color: v < 300 ? col.bad : null)),
+                  ],
+                );
               },
             ),
           if (ready)

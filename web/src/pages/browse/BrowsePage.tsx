@@ -2,7 +2,7 @@
 import { Link } from 'react-router-dom'
 import { api } from '@/api/endpoints'
 import type { ContentTree } from '@/api/types'
-import { Badge, EmptyState, ErrorState, Input, PageHeader, Segmented, Spinner } from '@/ui'
+import { Badge, EmptyState, ErrorState, Icon, Input, PageHeader, Segmented, Spinner } from '@/ui'
 import { useLoad } from './useLoad'
 import s from './browse.module.css'
 
@@ -95,7 +95,7 @@ export default function BrowsePage() {
               return (
                 <section key={id} className={s.group}>
                   <button type="button" className={s.groupHead} aria-expanded={isOpen} onClick={() => toggle(id, isOpen)}>
-                    <span className={`${s.chev} ${isOpen ? s.chevOpen : ''}`} aria-hidden>›</span>
+                    <span className={`${s.chev} ${isOpen ? s.chevOpen : ''}`} aria-hidden><Icon name="chevRight" size={13} /></span>
                     <span className={s.groupName}>{g.name}</span>
                     <Badge>{g.sub ? `${g.sub.length} 篇` : `${g.items.length} 章`}</Badge>
                   </button>
@@ -110,7 +110,7 @@ export default function BrowsePage() {
                                 <Link to={i.to} className={s.item}>
                                   <span className={s.itemLabel}>{i.label}</span>
                                   {i.count != null && <span className={s.itemExtra}>{i.count} 题</span>}
-                                  <span className={s.go} aria-hidden>›</span>
+                                  <span className={s.go} aria-hidden><Icon name="chevRight" size={13} /></span>
                                 </Link>
                               </li>
                             ))}
@@ -126,7 +126,7 @@ export default function BrowsePage() {
                           <Link to={i.to} className={s.item}>
                             <span className={s.itemLabel}>{i.label}</span>
                             {i.count != null && <span className={s.itemExtra}>{i.count} 题</span>}
-                            <span className={s.go} aria-hidden>›</span>
+                            <span className={s.go} aria-hidden><Icon name="chevRight" size={13} /></span>
                           </Link>
                         </li>
                       ))}

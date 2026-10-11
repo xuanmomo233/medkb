@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { Badge, Button, EmptyState, ErrorState, HtmlView, Modal, ProgressBar, Spinner } from '@/ui'
+import { Badge, Button, EmptyState, ErrorState, HtmlView, Icon, Modal, ProgressBar, Spinner } from '@/ui'
 import { MODES, parseRun } from '../lib'
 import AnalysisPanel from './AnalysisPanel'
 import JumpGrid from './JumpGrid'
@@ -54,13 +54,13 @@ function Session({ search }: { search: string }) {
   return (
     <div className={s.wrap}>
       <header className={s.top}>
-        <Button variant="ghost" size="sm" onClick={() => nav('/quiz')} aria-label="返回">‹ 返回</Button>
+        <Button variant="ghost" size="sm" onClick={() => nav('/quiz')} aria-label="返回"><Icon name="chevLeft" size={14} /> 返回</Button>
         <span className={s.topTitle}>{p.title || modeLabel}</span>
         {test && S.remaining !== null && (
-          <span className={`${s.timer} ${S.remaining < 300 ? s.timerWarn : ''}`} role="timer" aria-label="剩余时间">⏱ {fmtRemain(S.remaining)}</span>
+          <span className={`${s.timer} ${S.remaining < 300 ? s.timerWarn : ''}`} role="timer" aria-label="剩余时间"><Icon name="clock" size={13} /> {fmtRemain(S.remaining)}</span>
         )}
         {test && <span className={s.topMeta}>已答 {S.answeredCount}/{total}</span>}
-        <Button size="sm" onClick={() => setJump(true)} aria-label="题号跳转">{S.idx + 1} / {total} ▦</Button>
+        <Button size="sm" onClick={() => setJump(true)} aria-label="题号跳转">{S.idx + 1} / {total} <Icon name="grid" size={13} /></Button>
       </header>
       <ProgressBar value={((S.idx + 1) / total) * 100} />
 
@@ -95,11 +95,11 @@ function Session({ search }: { search: string }) {
       )}
 
       <nav className={s.bottom} aria-label="题目导航">
-        <Button onClick={() => S.go(S.idx - 1)} disabled={S.idx === 0}>‹ 上一题</Button>
+        <Button onClick={() => S.go(S.idx - 1)} disabled={S.idx === 0}><Icon name="chevLeft" size={14} /> 上一题</Button>
         {multiPending && <Button variant="primary" disabled={!cur?.picked} onClick={S.confirmMulti}>提交答案</Button>}
         {mode === 'recite' && <Button onClick={S.toggleReveal}>{S.revealed ? '隐藏答案' : '显示答案'}</Button>}
         {test && <Button variant="primary" onClick={() => setConfirm(true)} disabled={S.submitting}>交卷</Button>}
-        <Button onClick={() => S.go(S.idx + 1)} disabled={S.idx >= total - 1}>下一题 ›</Button>
+        <Button onClick={() => S.go(S.idx + 1)} disabled={S.idx >= total - 1}>下一题 <Icon name="chevRight" size={14} /></Button>
       </nav>
 
       {jump && <JumpGrid questions={S.questions} ans={S.ans} idx={S.idx} mode={mode} onGo={S.go} onClose={() => setJump(false)} />}

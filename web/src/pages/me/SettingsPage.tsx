@@ -4,7 +4,7 @@ import { api } from '@/api/endpoints'
 import type { UserPrefs } from '@/api/types'
 import { useAuth } from '@/app/auth'
 import { getReadingSize, setReadingSize, useTheme } from '@/app/theme'
-import { Button, Card, ErrorState, Field, Input, PageHeader, Segmented, Spinner, useToast } from '@/ui'
+import { Button, Card, ErrorState, Field, Icon, Input, PageHeader, Segmented, Spinner, useToast } from '@/ui'
 import s from './me.module.css'
 
 type Form = Pick<UserPrefs, 'daily_goal' | 'weak_min_samples' | 'weak_max_rate'>
@@ -34,7 +34,7 @@ function PrefsCards({ prefs }: { prefs: UserPrefs }) {
               <Button onClick={() => set('daily_goal', clamp(f.daily_goal - 5, 5, 500))} aria-label="减少">−</Button>
               <Input type="number" min={5} max={500} value={f.daily_goal}
                 onChange={(e) => set('daily_goal', clamp(Number(e.target.value), 5, 500))} />
-              <Button onClick={() => set('daily_goal', clamp(f.daily_goal + 5, 5, 500))} aria-label="增加">＋</Button>
+              <Button onClick={() => set('daily_goal', clamp(f.daily_goal + 5, 5, 500))} aria-label="增加"><Icon name="plus" size={14} /></Button>
             </div>
           </Field>
           <Field label="考研倒计时">
@@ -63,7 +63,7 @@ function PrefsCards({ prefs }: { prefs: UserPrefs }) {
         </div>
       </Card>
       <div className={s.saveBar}>
-        {justSaved && !dirty && <span className={s.saved}>✓ 已保存</span>}
+        {justSaved && !dirty && <span className={s.saved}><Icon name="check" size={13} /> 已保存</span>}
         <Button variant="primary" disabled={!dirty || save.isPending} onClick={() => save.mutate()}>
           {save.isPending ? '保存中…' : '保存'}
         </Button>
@@ -81,7 +81,7 @@ function Appearance() {
       <div className={s.group}>
         <Field label="主题">
           <Segmented value={theme} onChange={(v) => v !== theme && toggle()}
-            options={[{ value: 'light', label: '☀️ 亮色' }, { value: 'dark', label: '🌙 暗色' }]} />
+            options={[{ value: 'light', label: '亮色' }, { value: 'dark', label: '暗色' }]} />
         </Field>
         <Field label="阅读字号">
           <div className={s.setRow}>

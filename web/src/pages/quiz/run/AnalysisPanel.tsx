@@ -25,7 +25,7 @@ export default function AnalysisPanel({ q, picked, judged, correct, full, failed
         <span>正确答案 <strong className={s.answerText}>{q.answer}</strong></span>
         {judged && picked && <span className={s.mine}>你的选择 {picked}</span>}
         {judged && (correct
-          ? <Badge tone="good">✓ 回答正确</Badge> : <Badge tone="bad">✗ 回答错误</Badge>)}
+          ? <Badge tone="good">回答正确</Badge> : <Badge tone="bad">回答错误</Badge>)}
       </div>
 
       {rate !== null && st && (
@@ -54,7 +54,7 @@ export default function AnalysisPanel({ q, picked, judged, correct, full, failed
               <HtmlView html={c.body_html} />
             </div>
           ))}
-          <Button variant="primary" onClick={onAi} disabled={aiBusy}>{aiBusy ? 'AI 生成中…' : '✨ AI 生成解析'}</Button>
+          <Button variant="primary" onClick={onAi} disabled={aiBusy}>{aiBusy ? 'AI 生成中…' : 'AI 生成解析'}</Button>
         </div>
       ))}
 

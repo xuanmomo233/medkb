@@ -272,14 +272,14 @@ class _QuizPoolPageState extends State<QuizPoolPage> {
                           style: const TextStyle(
                               fontSize: 12, fontWeight: FontWeight.w700)),
                       if (it.state == ProgressState.again)
-                        const AppBadge('✗ 错', tone: BadgeTone.bad),
+                        const AppBadge('错', tone: BadgeTone.bad),
                       if (it.state == ProgressState.mastered)
-                        const AppBadge('✓ 掌握', tone: BadgeTone.good),
+                        const AppBadge('掌握', tone: BadgeTone.good),
                       if (it.inPlan)
                         const AppBadge('计划', tone: BadgeTone.warn),
                       if (it.done) const AppBadge('已做', tone: BadgeTone.info),
                       if (it.starred)
-                        const AppBadge('★ 收藏', tone: BadgeTone.warn),
+                        const AppBadge('收藏', tone: BadgeTone.warn),
                       if (it.wrongCount > 0)
                         Text('错 ${it.wrongCount} 次',
                             style: TextStyle(fontSize: 12, color: cs.error)),

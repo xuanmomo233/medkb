@@ -24,7 +24,7 @@ export default function Welcome() {
       </div>
       <div className={s.countdown} aria-live="polite">
         {!data ? <span className={s.sub}>&nbsp;</span> : left == null ? (
-          <Link to="/me/settings" className={s.link}>设置考试日期，开启倒计时 →</Link>
+          <Link to="/me/settings" className={s.link}>设置考试日期，开启倒计时</Link>
         ) : (
           <><span className={s.sub}>距考试还有</span><strong className={s.big}>{left}</strong><span className={s.sub}>天</span></>
         )}

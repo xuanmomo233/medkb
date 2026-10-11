@@ -1,7 +1,7 @@
 ﻿import { useCallback, useEffect } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { api } from '@/api/endpoints'
-import { Badge, Card, ErrorState, HtmlView, Spinner } from '@/ui'
+import { Badge, Card, ErrorState, HtmlView, Icon, Spinner } from '@/ui'
 import PageGallery from './PageGallery'
 import { useLoad } from './useLoad'
 import s from './chapter.module.css'
@@ -17,7 +17,7 @@ export default function ChapterPage() {
 
   return (
     <div className={s.wrap}>
-      <Link to="/browse" className={s.back}>‹ 返回目录</Link>
+      <Link to="/browse" className={s.back}><Icon name="chevLeft" size={14} /> 返回目录</Link>
       {error ? <ErrorState error={error} onRetry={reload} />
         : !data ? <Spinner />
         : (

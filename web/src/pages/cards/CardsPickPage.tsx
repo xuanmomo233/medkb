@@ -2,7 +2,8 @@
 import { Link } from 'react-router-dom'
 import { api } from '@/api/endpoints'
 import type { CardPartIndex } from '@/api/types'
-import { Badge, EmptyState, ErrorState, PageHeader, Spinner } from '@/ui'
+import { Badge, EmptyState, ErrorState, Icon, PageHeader, Spinner } from '@/ui'
+import type { IconName } from '@/ui'
 import { useLoad } from '@/pages/browse/useLoad'
 import s from './pick.module.css'
 
@@ -21,10 +22,10 @@ export default function CardsPickPage() {
     return [...m]
   }, [index])
 
-  const quick = [
-    { to: '/cards/run?due=1', icon: '⏰', title: '到期复习', desc: '按遗忘曲线到期的卡片' },
-    { to: '/cards/run?starred=1', icon: '⭐', title: '收藏卡片', desc: '你标星的重点考点' },
-    ...(planDay ? [{ to: `/cards/run?plan_day=${planDay}`, icon: '📅', title: '今日计划', desc: `第 ${planDay} 天的背卡任务` }] : []),
+  const quick: { to: string; icon: IconName; title: string; desc: string }[] = [
+    { to: '/cards/run?due=1', icon: 'clock', title: '到期复习', desc: '按遗忘曲线到期的卡片' },
+    { to: '/cards/run?starred=1', icon: 'star', title: '收藏卡片', desc: '你标星的重点考点' },
+    ...(planDay ? [{ to: `/cards/run?plan_day=${planDay}`, icon: 'calendar' as IconName, title: '今日计划', desc: `第 ${planDay} 天的背卡任务` }] : []),
   ]
 
   return (
@@ -33,14 +34,14 @@ export default function CardsPickPage() {
       <div className={s.quick}>
         {quick.map((q) => (
           <Link key={q.to} to={q.to} className={s.quickItem}>
-            <span className={s.quickIcon} aria-hidden>{q.icon}</span>
+            <span className={s.quickIcon} aria-hidden><Icon name={q.icon} size={22} /></span>
             <span><span className={s.quickTitle}>{q.title}</span><span className={s.quickDesc}>{q.desc}</span></span>
           </Link>
         ))}
       </div>
       {error ? <ErrorState error={error} onRetry={reload} />
         : !index ? <Spinner />
-        : groups.length === 0 ? <EmptyState icon="🃏" text="暂无卡片" />
+        : groups.length === 0 ? <EmptyState icon="cards" text="暂无卡片" />
         : groups.map(([subject, parts]) => (
           <section key={subject} className={s.section}>
             <h2 className={s.subject}>{subject}<Badge>{parts.reduce((n, p) => n + p.count, 0)} 张</Badge></h2>

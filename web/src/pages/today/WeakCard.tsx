@@ -19,7 +19,7 @@ export default function WeakCard() {
     <Card title="薄弱点分析">
       <Async q={q} height={200}>
         {(list) => list.length === 0 ? (
-          <EmptyState icon="🎯" text="继续刷题，累计样本后将自动分析薄弱点"
+          <EmptyState icon="target" text="继续刷题，累计样本后将自动分析薄弱点"
             action={<Link to="/me/settings" className={s.link}>调整阈值</Link>} />
         ) : (
           <ul className={s.list}>

@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom'
 import { api } from '@/api/endpoints'
 import type { Card, CardQuery } from '@/api/types'
 import { NoteSheet } from '@/features/notes'
-import { Button, Modal, ProgressBar, useToast } from '@/ui'
+import { Button, Icon, Modal, ProgressBar, useToast } from '@/ui'
 import CardFace from './CardFace'
 import { queryTitle } from './query'
 import type { Rating } from './query'
@@ -105,9 +105,9 @@ export default function CardRunner({ cards: initial, query, storeKey, onRestart 
   return (
     <div className={s.page}>
       <div className={s.top}>
-        <Link to="/cards" className={s.back}>‹ 返回</Link>
+        <Link to="/cards" className={s.back}><Icon name="chevLeft" size={14} /> 返回</Link>
         <span className={s.title}>{queryTitle(query)}</span>
-        <Button size="sm" onClick={() => setJump(true)}>{Math.min(idx + 1, total)} / {total} ▾</Button>
+        <Button size="sm" onClick={() => setJump(true)}>{Math.min(idx + 1, total)} / {total} <Icon name="chevDown" size={13} /></Button>
       </div>
       <ProgressBar value={(Math.min(idx, total) / total) * 100} />
 
@@ -123,13 +123,13 @@ export default function CardRunner({ cards: initial, query, storeKey, onRestart 
                   {r.label}<kbd>{r.key}</kbd>
                 </button>
               )) : <button type="button" className={`${s.rate} ${s.rFlip}`} onClick={() => setFlipped(true)}>翻面<kbd>空格</kbd></button>}
-              <button type="button" className={`${s.tool} ${card.starred ? s.toolOn : ''}`} onClick={() => void toggleStar()} aria-pressed={card.starred}>{card.starred ? '★' : '☆'}<span>收藏</span></button>
-              <button type="button" className={`${s.tool} ${card.state === 'plan' ? s.toolOn : ''}`} onClick={() => void addPlan()}><span aria-hidden>＋</span><span>{card.state === 'plan' ? '已加入' : '加入复习'}</span></button>
-              <button type="button" className={s.tool} onClick={() => setNoteOpen(true)}><span aria-hidden>📝</span><span>笔记</span></button>
+              <button type="button" className={`${s.tool} ${card.starred ? s.toolOn : ''}`} onClick={() => void toggleStar()} aria-pressed={card.starred}><Icon name="star" size={16} fill={card.starred} /><span>收藏</span></button>
+              <button type="button" className={`${s.tool} ${card.state === 'plan' ? s.toolOn : ''}`} onClick={() => void addPlan()}><Icon name={card.state === 'plan' ? 'check' : 'plus'} size={16} /><span>{card.state === 'plan' ? '已加入' : '加入复习'}</span></button>
+              <button type="button" className={s.tool} onClick={() => setNoteOpen(true)}><Icon name="note" size={16} /><span>笔记</span></button>
               <NoteSheet targetType="card" targetId={card.id} open={noteOpen} onClose={() => setNoteOpen(false)} />
             </div>
           </div>
-          <div className={s.keys}>空格 翻面 · 1/2/3 评分 · S 收藏 · ←/→ 切换</div>
+          <div className={s.keys}>空格 翻面 · 1/2/3 评分 · S 收藏 · 方向键切换</div>
         </>
       ) : (
         <Summary total={total} ratings={ratings} onRestart={onRestart} onPrev={() => go(total - 1)} />

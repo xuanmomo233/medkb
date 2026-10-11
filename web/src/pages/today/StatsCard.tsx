@@ -19,7 +19,7 @@ export default function StatsCard() {
               </div>
               <div>
                 <div className={s.meta}>近 30 天做题量</div>
-                {d.daily.every((x) => x.count === 0) ? <EmptyState icon="📊" text="近 30 天暂无做题记录" /> : (
+                {d.daily.every((x) => x.count === 0) ? <EmptyState icon="quiz" text="近 30 天暂无做题记录" /> : (
                   <div className={s.chart} role="img" aria-label="近 30 天做题柱状图">
                     {d.daily.map((x) => (
                       <div key={x.day} className={s.chartCol} title={`${x.day}：${x.count} 题，答对 ${x.correct}`}>

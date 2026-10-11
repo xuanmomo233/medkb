@@ -7,7 +7,7 @@
 .navItem { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: var(--radius-sm); color: var(--text-2); font-size: 15px; text-decoration: none !important; }
 .navItem:hover { background: var(--surface-2); color: var(--text); }
 .navActive { background: var(--brand-soft); color: var(--brand) !important; font-weight: 600; }
-.navIcon { width: 22px; text-align: center; font-size: 18px; }
+.navIcon { width: 22px; display: inline-flex; align-items: center; justify-content: center; font-size: 18px; }
 .sideFoot { margin-top: auto; display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }
 .user { padding: 4px 12px; font-size: 13px; color: var(--text-3); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 

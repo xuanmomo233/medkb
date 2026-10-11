@@ -2,7 +2,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
 import type { PublicNote, TargetType } from '@/api/types'
-import { Badge, Button, EmptyState, ErrorState, Modal, Segmented, Spinner, Textarea, useToast } from '@/ui'
+import { Badge, Button, EmptyState, ErrorState, Icon, Modal, Segmented, Spinner, Textarea, useToast } from '@/ui'
 import { fmtTime } from './time'
 import s from './notes.module.css'
 
@@ -30,7 +30,7 @@ function MineTab({ targetType, targetId }: Omit<Props, 'open' | 'onClose'>) {
   return (
     <>
       {q.isLoading ? <Spinner /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> :
-        !q.data?.length ? <EmptyState icon="📝" text="还没有笔记，记下你的理解吧" /> : (
+        !q.data?.length ? <EmptyState icon="note" text="还没有笔记，记下你的理解吧" /> : (
           <div className={s.list}>
             {q.data.map((n) => (
               <div key={n.id} className={s.item}>
@@ -77,7 +77,7 @@ function PublicTab({ targetType, targetId }: Omit<Props, 'open' | 'onClose'>) {
   if (q.isLoading) return <Spinner />
   if (q.isError) return <ErrorState error={q.error} onRetry={() => q.refetch()} />
   const list = [...(q.data ?? [])].sort((a, b) => b.likes - a.likes)
-  if (!list.length) return <EmptyState icon="💬" text="还没有公开讨论，来发表第一条吧" />
+  if (!list.length) return <EmptyState icon="chat" text="还没有公开讨论，来发表第一条吧" />
   return (
     <div className={s.list}>
       {list.map((n) => (
@@ -88,7 +88,7 @@ function PublicTab({ targetType, targetId }: Omit<Props, 'open' | 'onClose'>) {
             <span>{fmtTime(n.created_at)}</span>
             <span className={s.grow} />
             <button type="button" className={`${s.like} ${n.liked ? s.liked : ''}`} onClick={() => like.mutate(n.id)}>
-              {n.liked ? '👍' : '👍🏻'} {n.likes}
+              <Icon name="like" size={14} fill={n.liked} /> {n.likes}
             </button>
           </div>
           <div className={s.body}>{n.body}</div>

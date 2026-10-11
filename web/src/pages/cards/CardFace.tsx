@@ -27,7 +27,7 @@ export default function CardFace({ card, flipped, onFlip }: Props) {
         <span className={s.backBadges}>
           {card.state === 'mastered' && <Badge tone="good">已掌握</Badge>}
           {card.state === 'again' && <Badge tone="bad">易忘</Badge>}
-          {card.starred && <Badge tone="warn">★ 已收藏</Badge>}
+          {card.starred && <Badge tone="warn">已收藏</Badge>}
         </span>
       </div>
       <HtmlView html={card.body_html} />

@@ -1,7 +1,7 @@
 
 import { useNavigate } from 'react-router-dom'
 import { api } from '@/api/endpoints'
-import { Button, EmptyState, ErrorState, PageHeader, Spinner } from '@/ui'
+import { Button, EmptyState, ErrorState, Icon, PageHeader, Spinner } from '@/ui'
 import { fmtTime, toSearch } from './lib'
 import s from './list.module.css'
 import { useAsync } from './useAsync'
@@ -21,7 +21,7 @@ export default function WrongBook() {
           </div>
         } />
       {error ? <ErrorState error={error} onRetry={load} /> : !groups ? <Spinner /> : groups.length === 0 ? (
-        <EmptyState icon="🎉" text="暂无错题，继续保持" />
+        <EmptyState icon="trophy" text="暂无错题，继续保持" />
       ) : (
         <div className={s.list}>
           {groups.map((g) => (
@@ -32,7 +32,7 @@ export default function WrongBook() {
                 <span className={s.itemSub}>累计错 {g.wrong_total} 次 · 最近 {fmtTime(g.last_wrong_at)}</span>
               </span>
               <span className={s.count}>{g.count}<small>题</small></span>
-              <span className={s.arrow} aria-hidden>›</span>
+              <span className={s.arrow} aria-hidden><Icon name="chevRight" size={14} /></span>
             </button>
           ))}
         </div>

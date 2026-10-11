@@ -1,7 +1,7 @@
 ﻿import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
-import { Button, Card } from '@/ui'
+import { Button, Card, Icon } from '@/ui'
 import { Async } from './Async'
 import { keys } from './queries'
 import s from './today.module.css'
@@ -25,9 +25,9 @@ export default function CalendarCard() {
   return (
     <Card title="打卡日历" extra={
       <span className={s.calNav}>
-        <Button variant="ghost" size="sm" onClick={() => shift(-1)} aria-label="上个月">‹</Button>
+        <Button variant="ghost" size="sm" onClick={() => shift(-1)} aria-label="上个月"><Icon name="chevLeft" size={14} /></Button>
         <span className={s.calTitle}>{cur.y} 年 {cur.m + 1} 月</span>
-        <Button variant="ghost" size="sm" onClick={() => shift(1)} aria-label="下个月">›</Button>
+        <Button variant="ghost" size="sm" onClick={() => shift(1)} aria-label="下个月"><Icon name="chevRight" size={14} /></Button>
       </span>
     }>
       <Async q={q} height={220}>

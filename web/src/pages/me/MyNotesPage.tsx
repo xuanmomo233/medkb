@@ -21,7 +21,7 @@ export default function MyNotesPage() {
       <PageHeader title="我的笔记" sub={q.data ? `${q.data.length} 条` : undefined} />
       {q.isLoading ? <Spinner /> : q.isError ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> :
         !list.length ? (
-          <EmptyState icon="📝" text="还没有笔记，刷题或背卡时点「笔记」记录理解" action={<Button variant="primary" onClick={() => nav('/quiz')}>去刷题</Button>} />
+          <EmptyState icon="note" text="还没有笔记，刷题或背卡时点「笔记」记录理解" action={<Button variant="primary" onClick={() => nav('/quiz')}>去刷题</Button>} />
         ) : (
           <div className={s.list}>
             {list.map((n) => (

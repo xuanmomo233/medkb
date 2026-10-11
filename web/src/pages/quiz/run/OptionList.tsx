@@ -1,5 +1,5 @@
 import type { Question, QuestionStat } from '@/api/types'
-import { HtmlView } from '@/ui'
+import { HtmlView, Icon } from '@/ui'
 import { LETTERS } from '../lib'
 import { isMulti } from './useQuizSession'
 import s from './run.module.css'
@@ -25,7 +25,7 @@ export default function OptionList({ q, picked, judged, reveal, stat, onPick }: 
         const wrongPick = judged && on && !q.answer.includes(L)
         const missed = judged && isAns && !on
         const cls = [s.option, on && !judged && s.optSel, isAns && s.optGood, wrongPick && s.optBad, missed && s.optMiss].filter(Boolean).join(' ')
-        const mark = wrongPick ? '✗' : isAns ? '✓' : on ? '●' : ''
+        const mark = wrongPick ? 'x' : isAns ? 'check' : on ? 'dot' : ''
         const rate = total && stat ? Math.round(((stat.dist[L] ?? 0) / total) * 100) : null
         return (
           <button key={L} type="button" className={cls} disabled={judged}
@@ -43,7 +43,9 @@ export default function OptionList({ q, picked, judged, reveal, stat, onPick }: 
             <span className={s.optSide}>
               {missed && <span className={s.optTag}>漏选</span>}
               {wrongPick && <span className={s.optTag}>你的选择</span>}
-              <span className={s.optMark} aria-hidden>{mark}</span>
+              <span className={s.optMark} aria-hidden>
+                {mark === 'dot' ? <span className={s.optDot} /> : mark ? <Icon name={mark} size={14} /> : null}
+              </span>
             </span>
           </button>
         )

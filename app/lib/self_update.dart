@@ -22,7 +22,7 @@ class SelfUpdate {
       builder: (BuildContext ctx) => AlertDialog(
         title: const Text('发现新版本'),
         content: Text(
-            '${v.note}\n（当前 build ${Api.appBuild} → 最新 build ${v.build}）'),
+            '${v.note}\n（当前 build ${Api.appBuild}，最新 build ${v.build}）'),
         actions: <Widget>[
           TextButton(
               onPressed: () => Navigator.pop(ctx, false),

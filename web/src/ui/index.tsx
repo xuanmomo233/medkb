@@ -1,10 +1,14 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
+import { Icon } from './Icon'
+import type { IconName } from './Icon'
 import s from './ui.module.css'
 
 const cx = (...a: (string | false | undefined)[]) => a.filter(Boolean).join(' ')
 
 export { default as HtmlView } from './HtmlView'
+export { Icon } from './Icon'
+export type { IconName } from './Icon'
 
 // ---------- 按钮 ----------
 interface BtnProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -44,13 +48,13 @@ export function ProgressBar({ value, tone }: { value: number; tone?: 'good' | 'b
 
 // ---------- 状态页 ----------
 export function Spinner() { return <div className={s.center}><div className={s.spinner} /></div> }
-export function EmptyState({ icon = '📭', text, action }: { icon?: string; text: string; action?: ReactNode }) {
-  return <div className={s.center}><div className={s.centerIcon}>{icon}</div><div>{text}</div>{action}</div>
+export function EmptyState({ icon, text, action }: { icon?: IconName; text: string; action?: ReactNode }) {
+  return <div className={s.center}>{icon && <div className={s.centerIcon}><Icon name={icon} size={40} /></div>}<div>{text}</div>{action}</div>
 }
 export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (
     <div className={s.center}>
-      <div className={s.centerIcon}>⚠️</div>
+      <div className={s.centerIcon}><Icon name="flag" size={40} /></div>
       <div>{error instanceof Error ? error.message : '加载失败'}</div>
       {onRetry && <Button size="sm" onClick={onRetry}>重试</Button>}
     </div>
@@ -88,7 +92,7 @@ export function Modal({ title, onClose, children, sheet }: { title: ReactNode; o
   return (
     <div className={cx(s.overlay, sheet && s.sheet)} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={s.modal} role="dialog" aria-modal="true">
-        <div className={s.modalHead}><span>{title}</span><Button variant="ghost" size="sm" onClick={onClose} aria-label="关闭">✕</Button></div>
+        <div className={s.modalHead}><span>{title}</span><Button variant="ghost" size="sm" onClick={onClose} aria-label="关闭"><Icon name="x" /></Button></div>
         <div className={s.modalBody}>{children}</div>
       </div>
     </div>

@@ -175,9 +175,8 @@ class _LoginPageState extends State<LoginPage> {
                             color: cs.primary,
                             borderRadius: BorderRadius.circular(20),
                           ),
-                          child: Text('⚕',
-                              style: TextStyle(
-                                  fontSize: 38, color: cs.onPrimary)),
+                          child: Icon(Icons.monitor_heart,
+                              size: 40, color: cs.onPrimary),
                         ),
                       ),
                     ),

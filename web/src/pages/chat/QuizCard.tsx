@@ -59,7 +59,7 @@ export default function QuizCard({ quiz, onResult }: Props) {
             {busy ? '提交中…' : '提交'}
           </Button>
         )}
-        {result && <span className={result.correct ? s.good : s.bad}>{result.correct ? '✓ 回答正确' : `✗ 回答错误，正确答案 ${result.answer}`}</span>}
+        {result && <span className={result.correct ? s.good : s.bad}>{result.correct ? '回答正确' : `回答错误，正确答案 ${result.answer}`}</span>}
         {!quiz.qid.startsWith('L') && (
           <Button variant="ghost" size="sm" onClick={() => nav(`/search?q=${encodeURIComponent(quiz.qid)}`)}>查看原题</Button>
         )}

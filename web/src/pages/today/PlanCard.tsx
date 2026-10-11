@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
 import type { PlanItem, PlanToday } from '@/api/types'
-import { Badge, Button, Card, EmptyState, Modal, ProgressBar, useToast } from '@/ui'
+import { Badge, Button, Card, EmptyState, Icon, Modal, ProgressBar, useToast } from '@/ui'
 import { Async } from './Async'
 import { keys } from './queries'
 import PlanDay from './PlanDay'
@@ -17,7 +17,7 @@ function ItemRow({ it }: { it: PlanItem }) {
   return (
     <li>
       <div className={`${s.planRow} ${it.done ? s.planDone : ''}`}>
-        <span className={s.planNo}>{it.done ? '✓' : `D${it.day}`}</span>
+        <span className={s.planNo}>{it.done ? <Icon name="check" size={13} /> : `D${it.day}`}</span>
         <span className={s.itemTitle}>{it.label}</span>
         <span className={s.meta}>{it.card_done}/{it.cards}卡 · {it.question_done}/{it.questions}题</span>
       </div>
@@ -35,7 +35,7 @@ function Body({ p, onEdit, onRestart }: { p: PlanToday; onEdit: () => void; onRe
   return (
     <div className={s.stack}>
       {p.finished ? (
-        <EmptyState icon="🎉" text={`${p.total_days} 天计划已全部完成，太棒了！`}
+        <EmptyState icon="trophy" text={`${p.total_days} 天计划已全部完成，太棒了！`}
           action={<Button variant="primary" onClick={onEdit}>设置新计划</Button>} />
       ) : (
         <>
@@ -72,7 +72,7 @@ function Body({ p, onEdit, onRestart }: { p: PlanToday; onEdit: () => void; onRe
                 <span className={s.planNo}>{d === 1 ? '今' : `D${d}`}</span>
                 <span className={s.itemTitle}>{p.items.filter((i) => i.day === d).map((i) => i.part).join('、')}</span>
                 <span className={s.meta}>{p.items.filter((i) => i.day === d).length} 章</span>
-                <span aria-hidden="true">{open === d ? '▾' : '▸'}</span>
+                <span aria-hidden="true"><Icon name="chevDown" size={13} /></span>
               </button>
               {open === d && <PlanDay n={d} />}
             </li>
@@ -105,7 +105,7 @@ export default function PlanCard() {
     <Card title="学习计划">
       <Async q={q} height={260}>
         {(p) => !p.configured
-          ? <EmptyState icon="📋" text="还没有学习计划，自己选内容定天数" action={<Button variant="primary" onClick={() => setSetup(true)}>设置学习计划</Button>} />
+          ? <EmptyState icon="calendar" text="还没有学习计划，自己选内容定天数" action={<Button variant="primary" onClick={() => setSetup(true)}>设置学习计划</Button>} />
           : <Body p={p} onEdit={() => setSetup(true)} onRestart={() => setConfirm(true)} />}
       </Async>
       {setup && <PlanSetup onClose={() => setSetup(false)} />}

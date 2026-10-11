@@ -23,7 +23,8 @@
 .optText { line-height: 1.6; }
 .optText p { margin: 0; }
 .optSide { display: flex; align-items: center; gap: 6px; }
-.optMark { width: 20px; text-align: center; font-weight: 700; font-size: 16px; }
+.optMark { width: 20px; display: inline-flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; }
+.optDot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--brand); }
 .optTag { font-size: 12px; font-weight: 500; padding: 1px 8px; border-radius: 10px; background: var(--surface); border: 1px solid currentcolor; white-space: nowrap; }
 .optSel { border-color: var(--brand); background: var(--brand-soft); }
 .optSel .optLetter { background: var(--brand); border-color: var(--brand); color: var(--surface); }

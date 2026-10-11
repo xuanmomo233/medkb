@@ -36,8 +36,8 @@ class JumpGrid extends StatelessWidget {
                     _Legend(color: cs.surface, text: '当前', border: c.info),
                   ]
                 : <Widget>[
-                    _Legend(color: c.goodSoft, text: '✓ 答对'),
-                    _Legend(color: c.badSoft, text: '✗ 答错'),
+                    _Legend(color: c.goodSoft, text: '答对'),
+                    _Legend(color: c.badSoft, text: '答错'),
                     _Legend(color: cs.onSurface.withOpacity(0.08), text: '未做'),
                     _Legend(color: cs.surface, text: '当前', border: c.info),
                   ],
@@ -56,16 +56,16 @@ class JumpGrid extends StatelessWidget {
             itemBuilder: (BuildContext ctx, int i) {
               final Ans? a = ans[questions[i].id];
               Color bg = cs.onSurface.withOpacity(0.08);
-              String mark = '';
+              IconData? mark;
               if (isTest) {
                 if ((a?.picked ?? '').isNotEmpty) bg = c.infoSoft;
               } else if (a != null && a.judged) {
                 if (a.correct == true) {
                   bg = c.goodSoft;
-                  mark = '✓';
+                  mark = Icons.check;
                 } else if (a.correct == false) {
                   bg = c.badSoft;
-                  mark = '✗';
+                  mark = Icons.close;
                 }
               }
               final bool cur = i == idx;
@@ -82,12 +82,26 @@ class JumpGrid extends StatelessWidget {
                       width: 2,
                     ),
                   ),
-                  child: Text(
-                    mark.isEmpty ? '${i + 1}' : '${i + 1}$mark',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: cur ? FontWeight.w800 : FontWeight.w500,
-                    ),
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: <Widget>[
+                      Center(
+                        child: Text(
+                          '${i + 1}',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight:
+                                cur ? FontWeight.w800 : FontWeight.w500,
+                          ),
+                        ),
+                      ),
+                      if (mark != null)
+                        Positioned(
+                          top: 3,
+                          right: 4,
+                          child: Icon(mark, size: 10),
+                        ),
+                    ],
                   ),
                 ),
               );

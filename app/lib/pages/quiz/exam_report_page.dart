@@ -143,7 +143,7 @@ class _ExamReportPageState extends State<ExamReportPage> {
           children: <Widget>[
             Expanded(child: Text(ch.chapter)),
             Text(
-              '${bad ? '✗ ' : '✓ '}${ch.correct}/${ch.total} · ${ch.rate.round()}%',
+              '${ch.correct}/${ch.total} · ${ch.rate.round()}%',
               style: TextStyle(
                   fontSize: 12, fontWeight: FontWeight.w600, color: col),
             ),

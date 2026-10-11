@@ -1,6 +1,6 @@
 ﻿import { useRef, useState } from 'react'
 import type { ClipboardEvent, KeyboardEvent } from 'react'
-import { Button, useToast } from '@/ui'
+import { Button, Icon, useToast } from '@/ui'
 import { MAX_FILE, compressImage, fileToBase64 } from './upload'
 import s from './chat.module.css'
 
@@ -49,13 +49,13 @@ export default function Composer({ busy, onSend }: Props) {
       </div>
       {(image || file) && (
         <div className={s.attach}>
-          {image && <div className={s.thumb}><img src={image} alt="待发送图片" /><button type="button" aria-label="移除图片" onClick={() => setImage(undefined)}>✕</button></div>}
-          {file && <div className={s.fileTag}>📄 {file.name}<button type="button" aria-label="移除文件" onClick={() => setFile(undefined)}>✕</button></div>}
+          {image && <div className={s.thumb}><img src={image} alt="待发送图片" /><button type="button" aria-label="移除图片" onClick={() => setImage(undefined)}><Icon name="x" size={12} /></button></div>}
+          {file && <div className={s.fileTag}><Icon name="file" size={13} /> {file.name}<button type="button" aria-label="移除文件" onClick={() => setFile(undefined)}><Icon name="x" size={12} /></button></div>}
         </div>
       )}
       <div className={s.inputRow}>
-        <Button variant="ghost" size="sm" aria-label="发送图片" title="发送图片" disabled={busy} onClick={() => imgRef.current?.click()}>🖼️</Button>
-        <Button variant="ghost" size="sm" aria-label="发送文件" title="发送文件" disabled={busy} onClick={() => fileRef.current?.click()}>📎</Button>
+        <Button variant="ghost" size="sm" aria-label="发送图片" title="发送图片" disabled={busy} onClick={() => imgRef.current?.click()}><Icon name="image" size={16} /></Button>
+        <Button variant="ghost" size="sm" aria-label="发送文件" title="发送文件" disabled={busy} onClick={() => fileRef.current?.click()}><Icon name="file" size={16} /></Button>
         <textarea className={s.input} rows={1} value={text} placeholder="问点什么…（Enter 发送，Shift+Enter 换行）"
           onChange={(e) => setText(e.target.value)} onKeyDown={onKey} onPaste={onPaste} />
         <Button variant="primary" disabled={!canSend} onClick={() => send()}>发送</Button>
