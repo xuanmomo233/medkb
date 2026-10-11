@@ -299,7 +299,7 @@ function san(html){  // 服务端/AI生成HTML白名单消毒：剥危险标签+
         if(!ok){c.removeAttribute(a.name);return;}
         const n=a.name.toLowerCase();
         if(n==='href'||n==='src'){
-          const v=a.value.replace(/[\s -]+/g,'');
+          const v=a.value.replace(/[\s\x00-\x1F]+/g,'');
           if(/^javascript:/i.test(v)||!SAN_URL.test(v))c.removeAttribute(a.name);
         }else if(n==='class'){
           const keep=[...c.classList].filter(x=>SAN_CLS.has(x));
