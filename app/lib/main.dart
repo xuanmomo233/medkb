@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'api.dart';
+import 'self_update.dart';
 import 'endpoints.dart';
 import 'models.dart' show User, VersionInfo;
 import 'pages/auth/login_page.dart';
@@ -92,26 +92,7 @@ class _GateState extends State<Gate> {
   Future<void> _checkUpdate(BuildContext context) async {
     final VersionInfo? v = await Api.checkUpdate();
     if (v == null || !context.mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (BuildContext ctx) => AlertDialog(
-        title: const Text('发现新版本'),
-        content: Text(
-            '${v.note}\n（当前 build ${Api.appBuild} → 最新 build ${v.build}）\n建议更新以获得最新功能。'),
-        actions: <Widget>[
-          TextButton(
-              onPressed: () => Navigator.pop(ctx), child: const Text('稍后')),
-          FilledButton(
-            onPressed: () {
-              launchUrl(Uri.parse('${Api.base}/app.apk'),
-                  mode: LaunchMode.externalApplication);
-              Navigator.pop(ctx);
-            },
-            child: const Text('去更新'),
-          ),
-        ],
-      ),
-    );
+    await SelfUpdate.prompt(context, v);
   }
 
   @override

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../api.dart';
 import '../../models.dart' show VersionInfo;
+import '../../self_update.dart';
 import '../../widgets/widgets.dart';
 
 String fmtYmd(DateTime d) =>
@@ -106,8 +107,11 @@ class VersionRow extends StatelessWidget {
           tail = '检查中…';
         } else {
           tail = '最新 build ${v.build}';
-          badge = v.build > Api.appBuild
-              ? const AppBadge('有新版本', tone: BadgeTone.warn)
+          final bool newer = v.build > Api.appBuild;
+          badge = newer
+              ? TextButton(
+                  onPressed: () => SelfUpdate.prompt(ctx, v),
+                  child: const Text('有新版本·点更新'))
               : const AppBadge('已是最新', tone: BadgeTone.good);
         }
         return Row(
