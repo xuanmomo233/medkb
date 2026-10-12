@@ -69,6 +69,21 @@ jobs:
           MEDKB_KEY_PASSWORD: ${{ secrets.MEDKB_KEY_PASSWORD }}
         run: flutter build apk --release --build-number ${{ github.run_number }}
 
+      # 校验产物签名：必须同时包含 v1(META-INF/*.RSA) 与 v2/v3 签名块，否则华为等机型无法安装
+      - name: verify apk signature
+        run: |
+          python3 - <<'EOF'
+          import zipfile
+          p = 'build/app/outputs/flutter-apk/app-release.apk'
+          names = zipfile.ZipFile(p).namelist()
+          has_v1 = any(n.startswith('META-INF/') and n.endswith(('.RSA', '.DSA', '.EC')) for n in names)
+          data = open(p, 'rb').read()
+          has_v2 = b'APK Sig Block 42' in data
+          print(f'v1={has_v1} v2/v3={has_v2}')
+          if not (has_v1 and has_v2):
+              raise SystemExit('APK 签名不完整（缺 v1 或 v2/v3），拒绝发布')
+          EOF
+
       - name: release apk
         uses: softprops/action-gh-release@v2
         with:

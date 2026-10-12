@@ -52,6 +52,10 @@ android {
                 storePassword = ksStorePass
                 keyAlias = ksAlias
                 keyPassword = ksKeyPass
+                // 显式开启 v1(JAR) + v2 签名：仅 v2/v3 的包在华为/荣耀安装器上会报「未包含任何证书」
+                enableV1Signing = true
+                enableV2Signing = true
+                enableV3Signing = true
             }
         }
     }
