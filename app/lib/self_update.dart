@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:crypto/crypto.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:open_filex/open_filex.dart';
@@ -33,11 +34,15 @@ class SelfUpdate {
         ],
       ),
     );
-    if (ok == true && context.mounted) await downloadFlow(context, v.build);
+    if (ok == true && context.mounted) {
+      await downloadFlow(context, v.build, v.apkSha256);
+    }
   }
 
   /// 带进度条的下载；完成后拉起安装器。
-  static Future<void> downloadFlow(BuildContext context, [int? build]) async {
+  /// [expectedSha] 非空时校验安装包 SHA256，防 CDN/服务端被替换的包被拉起安装。
+  static Future<void> downloadFlow(BuildContext context,
+      [int? build, String? expectedSha]) async {
     // ?v= 按版本号做缓存穿透，防 CDN 发旧包
     final Uri apk =
         Uri.parse('${Api.base}/app.apk?v=${build ?? Api.appBuild}');
@@ -104,11 +109,25 @@ class SelfUpdate {
             '${(got / 1048576).toStringAsFixed(1)} / ${(total / 1048576).toStringAsFixed(1)} MB';
       }
       await sink.close();
-      _close(dlg);
       if (cancel) {
+        _close(dlg);
         await f.delete().catchError((_) => f!);
         return;
       }
+      if (expectedSha != null && expectedSha.isNotEmpty) {
+        stat.value = '校验安装包…';
+        final String got =
+            (await sha256.bind(f.openRead()).first).toString();
+        if (got != expectedSha.trim().toLowerCase()) {
+          _close(dlg);
+          await f.delete().catchError((_) => f!);
+          if (context.mounted) {
+            toast(context, '安装包校验失败，已取消安装（请从官网重新下载）');
+          }
+          return;
+        }
+      }
+      _close(dlg);
       stat.value = '完成，调起安装器…';
       final OpenResult r = await OpenFilex.open(f.path,
           type: 'application/vnd.android.package-archive');

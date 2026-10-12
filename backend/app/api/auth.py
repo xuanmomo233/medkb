@@ -10,16 +10,19 @@ router = APIRouter()
 
 
 def _ip(request: Request) -> str:
-    fwd = request.headers.get("x-forwarded-for", "")
-    if fwd:
-        return fwd.split(",")[0].strip()
+    """取可信来源 IP：CF-Connecting-IP 由 Cloudflare 覆盖为真实访客 IP；
+    client.host 依赖 uvicorn --forwarded-allow-ips（仅信私网代理段）代理解链结果。"""
+    cf = request.headers.get("cf-connecting-ip", "").strip()
+    if cf:
+        return cf
     return request.client.host if request.client else ""
 
 
 @router.post("/auth/register", response_model=AuthResult)
 async def register(body: RegisterBody, session: Session, request: Request):
     token, user = await svc.register(
-        session, body.username, body.password, body.invite_code, request.headers.get("user-agent", "")
+        session, body.username, body.password, body.invite_code,
+        request.headers.get("user-agent", ""), _ip(request)
     )
     return AuthResult(token=token, user=UserOut.model_validate(user))
 

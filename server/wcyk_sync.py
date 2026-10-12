@@ -12,7 +12,7 @@ from wcyk_api import api
 WORK = '/opt/medkb'
 STATE = os.path.join(WORK, 'sync_state.json')
 ARCHIVE = os.path.join(WORK, 'wcyk_questions')
-DB = 'dbname=medkb user=user_DeDhkF password=password_6XeeG8 host=127.0.0.1'
+DB = os.environ['PG_DSN']  # cron 环境需 export PG_DSN（口令勿再入库）
 
 QTYPE = {'1': '单选', '2': '多选', '3': '多选', '5': '口诀', '6': '病例串', '7': '填空'}
 LETTERS = 'ABCDEFGHIJ'

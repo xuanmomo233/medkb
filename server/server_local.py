@@ -9,7 +9,7 @@ from flask import Flask, jsonify, request, send_file, Response
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 DB = os.path.join(BASE, 'kb.db')
-app = Flask(__name__, static_folder=BASE, static_url_path='')
+app = Flask(__name__, static_folder=None)  # 不暴露目录：避免把 kb.db/脚本当静态文件发出去
 
 def db():
     con = sqlite3.connect(DB)

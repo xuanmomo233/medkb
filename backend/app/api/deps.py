@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException
@@ -32,6 +32,10 @@ async def current_user(
     exp = tok.expires_at if tok.expires_at.tzinfo else tok.expires_at.replace(tzinfo=timezone.utc)
     if exp < now:
         raise HTTPException(401, "token expired")
+    lu = tok.last_used_at
+    if lu is None or now - (lu if lu.tzinfo else lu.replace(tzinfo=timezone.utc)) > timedelta(minutes=10):
+        tok.last_used_at = now
+        await session.commit()
     return user
 
 

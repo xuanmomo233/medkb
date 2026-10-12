@@ -182,7 +182,7 @@ class _BrowsePageState extends State<BrowsePage> {
   Widget _content(ContentTree tree, Future<void> Function() refresh) {
     final List<_Group> groups = _group(tree);
     final bool filtering = _kw.trim().isNotEmpty;
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: refresh,
       child: groups.isEmpty
           ? ListView(

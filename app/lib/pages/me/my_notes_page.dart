@@ -93,7 +93,7 @@ class _MyNotesPageState extends State<MyNotesPage> {
       body = const EmptyState('还没有笔记，做题或背卡时可随手记录',
           icon: Icons.edit_note_outlined);
     } else {
-      body = RefreshIndicator(
+      body = AppRefreshIndicator(
         onRefresh: _load,
         child: ListView.separated(
           physics: const AlwaysScrollableScrollPhysics(),

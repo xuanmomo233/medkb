@@ -7,7 +7,7 @@ import json, os, re, sys
 from collections import Counter, defaultdict
 import psycopg2, psycopg2.extras
 
-DB = 'dbname=medkb user=user_DeDhkF password=password_6XeeG8 host=127.0.0.1'
+DB = os.environ['PG_DSN']  # 例如 export PG_DSN='dbname=medkb user=... password=... host=127.0.0.1'
 
 SUBJ_HINT = [
     ('生理学', '生理'), ('生物化学', '生化|生物化学|分子生物|合成代谢|分解代谢'),

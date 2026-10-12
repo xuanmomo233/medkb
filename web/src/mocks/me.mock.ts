@@ -41,7 +41,7 @@ registerMock('DELETE', '/admin/invites/{code}', ({ params }) => {
 registerMock('PUT', '/auth/password', ({ body }) => {
   const b = body as { old_password?: string; new_password?: string }
   if (!b?.old_password) throw Object.assign(new Error('原密码错误'), { status: 403 })
-  if ((b.new_password ?? '').length < 6) throw Object.assign(new Error('新密码至少 6 位'), { status: 400 })
+  if ((b.new_password ?? '').length < 8) throw Object.assign(new Error('新密码至少 8 位'), { status: 400 })
   return undefined
 })
 

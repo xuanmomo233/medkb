@@ -1,10 +1,13 @@
+import hashlib
 import secrets
 import time
+from pathlib import Path
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile
 from sqlalchemy import delete, select
 
 from app.api.deps import AdminUser, Session
+from app.core.config import get_settings
 from app.core.security import verify_password
 from app.models import InviteCode, QuestionEdit, User
 from app.schemas.admin import (AdminQuestion, AdminQuestionPatch, AdminUserDelete, AdminUserOut,
@@ -128,6 +131,40 @@ async def revoke_invite(code: str, session: Session, admin: AdminUser):
         raise HTTPException(409, "已被使用，不可撤销")
     await session.delete(row)
     await session.commit()
+
+
+_IMG_MAX = 6 * 1024 * 1024
+
+
+def _img_ext(data: bytes) -> str | None:
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return ".png"
+    if data[:3] == b"\xff\xd8\xff":
+        return ".jpg"
+    if data[:6] in (b"GIF87a", b"GIF89a"):
+        return ".gif"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return ".webp"
+    return None
+
+
+@router.post("/images", status_code=201)
+async def upload_image(admin: AdminUser, file: UploadFile):
+    """管理员上传题目配图（App 端 /api/admin/images）：魔数校验 + sha1 命名存 uimg。"""
+    data = await file.read(_IMG_MAX + 1)
+    if len(data) > _IMG_MAX:
+        raise HTTPException(413, "图片过大（最大 6MB）")
+    ext = _img_ext(data)
+    if ext is None:
+        raise HTTPException(415, "仅支持 png/jpg/webp/gif")
+    name = hashlib.sha1(data).hexdigest()[:16] + ext
+    d = Path(get_settings().upload_dir)
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        (d / name).write_bytes(data)
+    except OSError:
+        raise HTTPException(500, "图片保存失败")
+    return {"url": f"/uimg/{name}"}
 
 
 @router.get("/site", response_model=SiteConfigOut)

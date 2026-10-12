@@ -66,7 +66,7 @@ class _MePageState extends State<MePage> {
     final bool admin = u?.isAdmin ?? Api.admin;
     return Scaffold(
       appBar: AppBar(title: const Text('我的')),
-      body: RefreshIndicator(
+      body: AppRefreshIndicator(
         onRefresh: _load,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),

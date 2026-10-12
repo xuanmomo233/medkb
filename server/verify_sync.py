@@ -1,6 +1,6 @@
 import psycopg2, psycopg2.extras
-con = psycopg2.connect('dbname=medkb user=user_DeDhkF password=password_6XeeG8 host=127.0.0.1',
-                       cursor_factory=psycopg2.extras.RealDictCursor)
+import os
+con = psycopg2.connect(os.environ['PG_DSN'], cursor_factory=psycopg2.extras.RealDictCursor)
 cur = con.cursor()
 cur.execute("SELECT COUNT(*) c FROM questions WHERE qid::bigint > 235287")
 print('new rows:', cur.fetchone()['c'])

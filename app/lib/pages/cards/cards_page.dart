@@ -127,7 +127,7 @@ class _CardsPageState extends State<CardsPage> {
       }
       children.add(const SizedBox(height: 8));
     });
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: () async {
         await refresh();
         await _loadPlan();

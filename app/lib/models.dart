@@ -110,9 +110,11 @@ class AuthResult {
 class VersionInfo {
   final int build;
   final String note;
-  const VersionInfo({required this.build, required this.note});
+  final String apkSha256;
+  const VersionInfo({required this.build, required this.note, this.apkSha256 = ''});
   factory VersionInfo.fromJson(Map<String, dynamic> j) =>
-      VersionInfo(build: _i(j['build']), note: _s(j['note']));
+      VersionInfo(build: _i(j['build']), note: _s(j['note']),
+                  apkSha256: _s(j['apk_sha256']));
 }
 
 // ---------- 内容 ----------

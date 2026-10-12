@@ -253,6 +253,10 @@ async def send_message(session: AsyncSession, uid: int, body) -> dict:
         img = ""
     fname = ftext = ""
     f = body.file
+    # 限频前置：超限用户不再触发文件解析（解压成本高）
+    if await is_rate_limited(session, uid):
+        await save_pair(session, uid, msg, RATE_MSG)
+        return _reply(RATE_MSG)
     if f and f.data:
         fname = chat_files.safe_name(f.name)
         parsed = await chat_files.file_text(fname, f.data)
@@ -266,9 +270,6 @@ async def send_message(session: AsyncSession, uid: int, body) -> dict:
     if ARITH_RE.match(msg) or GUARD_RE.search(msg):
         await save_pair(session, uid, msg, REFUSE_MSG)
         return _reply(REFUSE_MSG)
-    if await is_rate_limited(session, uid):
-        await save_pair(session, uid, msg, RATE_MSG)
-        return _reply(RATE_MSG)
     if not msg:
         msg = ("请识别并讲解这张图片里的医学内容（题目/图表/影像），按西医综合考点讲。"
                if img else "请讲解这份文件里的内容，按西医综合考点来。")

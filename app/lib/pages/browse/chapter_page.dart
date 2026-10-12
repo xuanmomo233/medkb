@@ -44,7 +44,7 @@ class ChapterPage extends StatelessWidget {
   }
 
   Widget _body(BuildContext context, ChapterDetail d, Future<void> Function() refresh) {
-    return RefreshIndicator(
+    return AppRefreshIndicator(
       onRefresh: refresh,
       child: ListView(
         physics: const AlwaysScrollableScrollPhysics(),

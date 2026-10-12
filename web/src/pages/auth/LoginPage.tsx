@@ -14,7 +14,7 @@ const NAME_RE = /^[\u4e00-\u9fa5A-Za-z0-9_-]{2,24}$/
 function validate(mode: Mode, username: string, password: string, invite: string): Errors {
   const e: Errors = {}
   if (!NAME_RE.test(username)) e.username = '用户名为 2-24 位中英文、数字、下划线或短横线'
-  if (password.length < 6) e.password = '密码至少 6 位'
+  if (password.length < 8) e.password = '密码至少 8 位'
   if (mode === 'register' && !invite.trim()) e.invite = '请输入邀请码'
   return e
 }
@@ -74,7 +74,7 @@ export default function LoginPage() {
           <Field label="密码">
             <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)}
               autoComplete={mode === 'login' ? 'current-password' : 'new-password'}
-              aria-invalid={!!errors.password} placeholder="至少 6 位" />
+              aria-invalid={!!errors.password} placeholder="至少 8 位" />
             {errors.password && <span className={s.error} role="alert">{errors.password}</span>}
           </Field>
           {mode === 'register' && (

@@ -53,7 +53,7 @@ class _LoginPageState extends State<LoginPage> {
 
   String? get _pwdErr {
     if (!_submitted) return null;
-    return _pwd.text.length >= 6 ? null : '密码至少 6 位';
+    return _pwd.text.length >= 8 ? null : '密码至少 8 位';
   }
 
   String? get _inviteErr {
@@ -241,7 +241,7 @@ class _LoginPageState extends State<LoginPage> {
                             },
                             decoration: InputDecoration(
                               labelText: '密码',
-                              hintText: '至少 6 位',
+                              hintText: '至少 8 位',
                               errorText: _pwdErr,
                               suffixIcon: IconButton(
                                 icon: Icon(_showPwd

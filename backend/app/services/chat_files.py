@@ -36,9 +36,12 @@ def _extract(name: str, b64: str) -> str | None:
             return raw.decode("utf-8", errors="replace")[:FILE_MAX_TXT]
         with zipfile.ZipFile(io.BytesIO(raw)) as z:
             info = z.getinfo("word/document.xml")
-            if info.file_size > _DOCX_XML_MAX:
+            # 流式截断读取：不信任 zip 头里的 file_size（可伪造），防解压炸弹撑爆内存
+            with z.open(info) as f:
+                buf = f.read(_DOCX_XML_MAX + 1)
+            if len(buf) > _DOCX_XML_MAX:
                 return None
-            xml = z.read(info).decode("utf-8", errors="replace")
+            xml = buf.decode("utf-8", errors="replace")
         return re.sub(r"<[^>]+>", "", xml.replace("</w:p>", "\n"))[:FILE_MAX_TXT]
     except Exception:
         return None

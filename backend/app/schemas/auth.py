@@ -33,3 +33,4 @@ class PasswordChange(BaseModel):
 class VersionInfo(BaseModel):
     build: int
     note: str
+    apk_sha256: str = ""

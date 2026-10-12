@@ -1,7 +1,10 @@
-﻿import hashlib
+﻿import asyncio
+import hashlib
+import ipaddress
 import re
+import socket
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query
@@ -12,7 +15,8 @@ from app.core.config import get_settings
 router = APIRouter(tags=["files"])
 
 IMG_HOSTS = ("ixunke.com", "ixunke.cn", "youjiangt.top")
-_EXTS = (".png", ".jpg", ".webp", ".gif", ".svg")
+_EXTS = (".png", ".jpg", ".webp", ".gif")
+_IMG_MAX = 10 * 1024 * 1024
 _PAGE = re.compile(r"page_\d+\.webp")
 _UIMG = re.compile(r"[\w.-]+\.(png|jpe?g|webp|gif)")
 _CACHE_HEADERS = {"Cache-Control": "public, max-age=2592000"}
@@ -41,15 +45,24 @@ async def uimg(name: str):
 
 
 def _host_ok(u: str) -> bool:
+    """白名单域名校验 + DNS 必须解析到公网 IP（防内网/DNS 重绑定）。"""
     try:
         p = urlparse(u)
     except ValueError:
         return False
-    h = (p.hostname or "").lower()
-    return p.scheme in ("http", "https") and any(h == d or h.endswith("." + d) for d in IMG_HOSTS)
+    h = (p.hostname or "").lower().rstrip(".")
+    if p.scheme not in ("http", "https") or not any(h == d or h.endswith("." + d) for d in IMG_HOSTS):
+        return False
+    try:
+        infos = socket.getaddrinfo(h, None)
+        ips = [ipaddress.ip_address(a[4][0].split("%")[0]) for a in infos]
+    except (OSError, ValueError):
+        return False
+    return bool(ips) and all(ip.is_global for ip in ips)
 
 
-def _ext(data: bytes, u: str) -> str:
+def _img_ext(data: bytes) -> str | None:
+    """只认真实位图魔数；svg/html 等一律拒收。"""
     if data[:8] == b"\x89PNG\r\n\x1a\n":
         return ".png"
     if data[:3] == b"\xff\xd8\xff":
@@ -58,18 +71,45 @@ def _ext(data: bytes, u: str) -> str:
         return ".gif"
     if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
         return ".webp"
-    if data[:5].lower().startswith(b"<svg") or b"<svg" in data[:200]:
-        return ".svg"
-    low = u.lower()
-    for e in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg"):
-        if e in low:
-            return ".jpg" if e == ".jpeg" else e
-    return ".jpg"
+    return None
+
+
+async def _fetch_image(u: str) -> tuple[bytes, str]:
+    """手动跟随重定向（每跳都做域名校验），流式读入并有体积上限。"""
+    url = u
+    if "ixunke.com" in (urlparse(u).hostname or ""):
+        url += ("&" if "?" in u else "?") + "tads=1"
+    try:
+        async with httpx.AsyncClient(timeout=20, headers={"User-Agent": "Mozilla/5.0"}) as c:
+            for _ in range(5):
+                async with c.stream("GET", url, follow_redirects=False) as r:
+                    if r.status_code in (301, 302, 303, 307, 308):
+                        url = urljoin(url, r.headers.get("location") or "")
+                        if not await asyncio.to_thread(_host_ok, url):
+                            raise HTTPException(403, "不允许的图片来源")
+                        continue
+                    r.raise_for_status()
+                    chunks, n = [], 0
+                    async for chunk in r.aiter_bytes(65536):
+                        n += len(chunk)
+                        if n > _IMG_MAX:
+                            raise HTTPException(413, "图片过大")
+                        chunks.append(chunk)
+                    data = b"".join(chunks)
+                    ext = _img_ext(data)
+                    if ext is None:
+                        raise HTTPException(415, "非图片内容")
+                    return data, ext
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, "图片抓取失败")
+    raise HTTPException(502, "图片抓取失败")
 
 
 @router.get("/img_proxy")
 async def img_proxy(u: str = Query("", max_length=2000)):
-    if not _host_ok(u):
+    if not await asyncio.to_thread(_host_ok, u):
         raise HTTPException(403, "不允许的图片来源")
     cache = Path(get_settings().img_cache_dir)
     h = hashlib.sha1(u.encode()).hexdigest()[:16]
@@ -77,27 +117,16 @@ async def img_proxy(u: str = Query("", max_length=2000)):
         fp = cache / (h + e)
         if fp.is_file():
             return FileResponse(fp, headers=_CACHE_HEADERS)
-    url = u
-    if "ixunke.com" in (urlparse(u).hostname or ""):
-        url += ("&" if "?" in u else "?") + "tads=1"
-    try:
-        async with httpx.AsyncClient(timeout=20, follow_redirects=True, headers={"User-Agent": "Mozilla/5.0"}) as c:
-            r = await c.get(url)
-            r.raise_for_status()
-            data = r.content
-    except Exception:
-        raise HTTPException(502, "图片抓取失败")
-    if data[:1] == b"<" and b"<svg" not in data[:200].lower():
-        return Response(data, media_type="text/html")
-    fp = cache / (h + _ext(data, u))
+    data, ext = await _fetch_image(u)
+    fp = cache / (h + ext)
     try:
         cache.mkdir(parents=True, exist_ok=True)
         tmp = fp.with_suffix(fp.suffix + ".tmp")
         tmp.write_bytes(data)
         tmp.replace(fp)
     except OSError:
-        return Response(data, media_type=_mime(fp.suffix))
-    return FileResponse(fp, headers=_CACHE_HEADERS)
+        pass
+    return Response(data, media_type=_mime(ext), headers=_CACHE_HEADERS)
 
 
 @router.get("/app.apk")
@@ -112,7 +141,7 @@ async def app_apk():
 def _mime(ext: str) -> str:
     return {
         ".png": "image/png", ".jpg": "image/jpeg", ".webp": "image/webp",
-        ".gif": "image/gif", ".svg": "image/svg+xml",
+        ".gif": "image/gif",
     }.get(ext, "application/octet-stream")
 
 

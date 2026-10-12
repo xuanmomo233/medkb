@@ -37,24 +37,28 @@ jobs:
       - name: inject build number
         run: sed -i "s/appBuild = [0-9]*/appBuild = ${{ github.run_number }}/" lib/api.dart
 
-      # 仓库不含二进制 wrapper jar / 脚本，构建前补齐
+      # 仓库不含二进制 wrapper jar / 脚本，构建前补齐；SHA256 固定防上游被篡改
       - name: fetch gradle wrapper
         run: |
-          curl -sL https://raw.githubusercontent.com/gradle/gradle/v8.14.0/gradlew -o android/gradlew
-          curl -sL https://raw.githubusercontent.com/gradle/gradle/v8.14.0/gradlew.bat -o android/gradlew.bat
-          curl -sL https://raw.githubusercontent.com/gradle/gradle/v8.14.0/gradle/wrapper/gradle-wrapper.jar -o android/gradle/wrapper/gradle-wrapper.jar
+          set -e
+          curl -fsSL https://raw.githubusercontent.com/gradle/gradle/v8.14.0/gradlew -o android/gradlew
+          curl -fsSL https://raw.githubusercontent.com/gradle/gradle/v8.14.0/gradlew.bat -o android/gradlew.bat
+          curl -fsSL https://raw.githubusercontent.com/gradle/gradle/v8.14.0/gradle/wrapper/gradle-wrapper.jar -o android/gradle/wrapper/gradle-wrapper.jar
+          echo "fb49f8cb2e5b1d83fba3dcc2c0dd0934c5655cbaf8bd1510ada7cc02692095ca  android/gradlew" | sha256sum -c -
+          echo "49792578a7942e08b708df3d3902ddbfc49d2203775c0161ef0c24b23fe4aeae  android/gradlew.bat" | sha256sum -c -
+          echo "7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172  android/gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
           chmod +x android/gradlew
 
-      # 签名密钥从 secrets 解码（仓库不存放 jks/明文密码）；缺省时回退 debug 签名
+      # 签名密钥从 secrets 解码（仓库不存放 jks/明文密码）；缺密钥直接失败，拒绝发出 debug 签名包
       - name: decode keystore
         env:
           KS_B64: ${{ secrets.MEDKB_KEYSTORE_B64 }}
         run: |
-          if [ -n "$KS_B64" ]; then
-            echo "$KS_B64" | tr -d '[:space:]' | base64 -d > android/app/medkb.jks
-          else
-            echo "::warning::no MEDKB_KEYSTORE_B64 secret; release apk will use debug signing"
+          if [ -z "$KS_B64" ]; then
+            echo "::error::MEDKB_KEYSTORE_B64 未配置，拒绝以 debug 签名构建发布包"
+            exit 1
           fi
+          echo "$KS_B64" | tr -d '[:space:]' | base64 -d > android/app/medkb.jks
 
       # versionName 取 pubspec 语义版本；versionCode 用 run_number 单调递增（安卓按它判定升级）
       - name: build apk

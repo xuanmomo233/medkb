@@ -307,7 +307,7 @@ class _PasswordSectionState extends State<_PasswordSection> {
 
   bool get _ok =>
       _old.text.isNotEmpty &&
-      _new1.text.length >= 6 &&
+      _new1.text.length >= 8 &&
       _new1.text == _new2.text;
 
   Future<void> _save() async {
@@ -342,7 +342,7 @@ class _PasswordSectionState extends State<_PasswordSection> {
       children: <Widget>[
         field(_old, '原密码'),
         const SizedBox(height: 8),
-        field(_new1, '新密码（至少 6 位）'),
+        field(_new1, '新密码（至少 8 位）'),
         const SizedBox(height: 8),
         field(_new2, '确认新密码'),
         if (_new2.text.isNotEmpty && _new1.text != _new2.text)

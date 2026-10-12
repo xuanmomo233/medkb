@@ -18,6 +18,10 @@ def ksStorePass = keystoreProps['storePassword'] ?: System.getenv('MEDKB_STORE_P
 def ksAlias = keystoreProps['keyAlias'] ?: System.getenv('MEDKB_KEY_ALIAS')
 def ksKeyPass = keystoreProps['keyPassword'] ?: System.getenv('MEDKB_KEY_PASSWORD')
 def hasReleaseKey = ksFile && ksStorePass && ksAlias && ksKeyPass
+// CI 中绝不回退 debug 签名：secrets 缺失直接构建失败，避免发出无法覆盖安装的包
+if (System.getenv('CI') && !hasReleaseKey) {
+    throw new GradleException('CI release 构建缺少 MEDKB_* 签名 secrets，已拒绝回退 debug 签名')
+}
 
 android {
     namespace = "com.medkb.app"

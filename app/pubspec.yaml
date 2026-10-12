@@ -1,7 +1,7 @@
 name: medkb
 description: 医学知识库学习工具
 publish_to: 'none'
-version: 2.0.0+1
+version: 2.1.0+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0
+  crypto: ^3.0.5
   shared_preferences: ^2.2.0
   flutter_widget_from_html_core: ^0.15.2
   url_launcher: ^6.2.0

@@ -23,7 +23,7 @@ class ExamsPage extends StatelessWidget {
                     child: const Text('去测试')));
           }
           final ColorScheme cs = Theme.of(ctx).colorScheme;
-          return RefreshIndicator(
+          return AppRefreshIndicator(
             onRefresh: refresh,
             child: ListView.separated(
               padding: const EdgeInsets.all(16),

@@ -24,7 +24,7 @@ class WrongBookPage extends StatelessWidget {
             return const EmptyState('暂无错题，继续保持', icon: Icons.celebration_outlined);
           }
           final ColorScheme cs = Theme.of(ctx).colorScheme;
-          return RefreshIndicator(
+          return AppRefreshIndicator(
             onRefresh: refresh,
             child: ListView(
               padding: const EdgeInsets.all(16),

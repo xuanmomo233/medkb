@@ -109,14 +109,14 @@ function PasswordCard() {
     },
     onError: (e: Error) => toast(e.message, true),
   })
-  const ok = oldPw.length > 0 && newPw.length >= 6 && newPw === newPw2
+  const ok = oldPw.length > 0 && newPw.length >= 8 && newPw === newPw2
   return (
     <Card title="修改密码">
       <div className={s.group}>
         <Field label="原密码">
           <Input type="password" autoComplete="current-password" value={oldPw} onChange={(e) => setOldPw(e.target.value)} />
         </Field>
-        <Field label="新密码" hint="至少 6 位">
+        <Field label="新密码" hint="至少 8 位">
           <Input type="password" autoComplete="new-password" value={newPw} onChange={(e) => setNewPw(e.target.value)} />
         </Field>
         <Field label="确认新密码">
