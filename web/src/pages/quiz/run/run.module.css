@@ -59,6 +59,7 @@
 .analysisBody > :global(.rich) { width: 100%; }
 .related { width: 100%; padding: 10px 14px; background: var(--surface-2); border-radius: var(--radius-sm); margin-bottom: 6px; }
 .relatedTerm { font-weight: 600; }
+.relatedTerm :global(.rich p) { margin: 0; }
 .relatedHint { margin-left: 8px; font-weight: 400; font-size: 13px; color: var(--text-3); }
 .inlineErr { display: flex; align-items: center; gap: 10px; color: var(--text-2); }
 .tags { display: flex; flex-wrap: wrap; gap: 6px; }

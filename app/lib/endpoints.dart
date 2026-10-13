@@ -31,8 +31,15 @@ class Endpoints {
   // ---------- 背卡 ----------
   static Future<List<CardPartIndex>> cardIndex() async =>
       _list(await Api.get('/cards/index'), CardPartIndex.fromJson);
-  static Future<List<Card>> cards(CardQuery q) async =>
-      _list(await Api.get('/cards', query: q.toQuery()), Card.fromJson);
+  static Future<List<Card>> cards(CardQuery q, {bool cache = true}) async =>
+      _list(await Api.get('/cards', query: q.toQuery(), cache: cache), Card.fromJson);
+  static Future<AdminCard> adminCard(int id) async =>
+      AdminCard.fromJson(asMap(await Api.get('/admin/cards/$id', cache: false)));
+  static Future<int> adminSaveCard(int id, AdminCardPatch p) async {
+    final Map<String, dynamic> j = asMap(await Api.put('/admin/cards/$id', p.toJson()));
+    final Object? c = j['changed'];
+    return c is num ? c.toInt() : 0;
+  }
   static Future<List<SourceQuestion>> cardSources(int id) async =>
       _list(await Api.get('/cards/$id/sources'), SourceQuestion.fromJson);
 
@@ -45,8 +52,8 @@ class Endpoints {
     return _list(await Api.get('/quiz/questions', query: query), Question.fromJson);
   }
 
-  static Future<QuestionFull> questionFull(int id) async =>
-      QuestionFull.fromJson(asMap(await Api.get('/quiz/questions/$id')));
+  static Future<QuestionFull> questionFull(int id, {bool cache = true}) async =>
+      QuestionFull.fromJson(asMap(await Api.get('/quiz/questions/$id', cache: cache)));
   static Future<String> aiAnalysis(int id) async {
     final Map<String, dynamic> j =
         asMap(await Api.post('/quiz/questions/$id/ai-analysis', null, 120));

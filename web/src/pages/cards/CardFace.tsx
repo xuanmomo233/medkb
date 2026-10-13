@@ -14,7 +14,7 @@ export default function CardFace({ card, flipped, onFlip }: Props) {
       <div className={`${s.face} ${s.front}`} onClick={onFlip} role="button" tabIndex={0} aria-label="点击翻面"
         onKeyDown={(e) => { if (e.key === 'Enter') onFlip() }}>
         <div className={s.crumb}>{card.subject} · {card.part}{card.section ? ` · ${card.section}` : ''}</div>
-        <div className={s.term}>{card.term}</div>
+        <div className={s.term}>{card.term_html ? <HtmlView html={card.term_html} /> : card.term}</div>
         {card.hint && <div className={s.hint}>{card.hint}</div>}
         <div className={s.flipTip}>点击翻面 · 空格</div>
       </div>
@@ -23,7 +23,9 @@ export default function CardFace({ card, flipped, onFlip }: Props) {
   return (
     <div className={`${s.face} ${s.backFace}`}>
       <div className={s.backHead}>
-        <h2 className={s.backTerm}>{card.term}</h2>
+        {card.term_html
+          ? <HtmlView html={card.term_html} className={s.backTerm} />
+          : <h2 className={s.backTerm}>{card.term}</h2>}
         <span className={s.backBadges}>
           {card.state === 'mastered' && <Badge tone="good">已掌握</Badge>}
           {card.state === 'again' && <Badge tone="bad">易忘</Badge>}

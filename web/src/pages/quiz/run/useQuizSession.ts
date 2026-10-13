@@ -86,6 +86,27 @@ export function useQuizSession(search: string, p: RunParams) {
     })
   }, [])
 
+  const refreshFull = useCallback(async (id: number) => {
+    try {
+      const f = await api.questionFull(id)
+      setFull((m) => ({ ...m, [id]: f }))
+      setStats((m) => ({ ...m, [id]: f.stat }))
+      setFullErr((m) => {
+        if (!m[id]) return m
+        const { [id]: _, ...rest } = m
+        void _
+        return rest
+      })
+      setQuestions((qs) => qs.map((q) => q.id === id ? {
+        ...q, stem_html: f.stem_html, system: f.system, tags: f.tags,
+        analysis_html: f.analysis_html, analysis_empty: f.analysis_empty,
+      } : q))
+    } catch (e) {
+      setFullErr((m) => ({ ...m, [id]: true }))
+      toast(e instanceof Error ? e.message : '已保存，但刷新题目失败，请重试', true)
+    }
+  }, [toast])
+
   const cur = q ? ans[q.id] : undefined
   const showFull = !!q && (mode === 'recite' || !!cur?.judged || !hasOptions(q))
 
@@ -203,7 +224,7 @@ export function useQuizSession(search: string, p: RunParams) {
   return {
     status, error, reload: () => { setStatus('loading'); setReloadKey((k) => k + 1) },
     questions, idx, q, cur, ans, full, fullErr, stats, showFull, revealed,
-    toggleReveal: () => setRevealed((v) => !v), loadFull, go, pick, confirmMulti, redo, toggleMark, genAnalysis, aiBusy,
+    toggleReveal: () => setRevealed((v) => !v), loadFull, refreshFull, go, pick, confirmMulti, redo, toggleMark, genAnalysis, aiBusy,
     answeredCount, remaining, submit, submitting, resumeAt, dismissResume, jumpResume,
   }
 }

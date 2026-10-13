@@ -11,7 +11,7 @@ let nextId = 1
 const cardDb: Card[] = []
 function part(subject: string, partName: string, section: string, seeds: Seed[]) {
   for (const [term, hint, body] of seeds) {
-    cardDb.push({ id: nextId++, subject, part: partName, section, term, hint, body_html: body, state: '', starred: false })
+    cardDb.push({ id: nextId++, subject, part: partName, section, term, term_html: term.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2">'), hint, body_html: body, state: '', starred: false })
   }
 }
 
@@ -105,6 +105,24 @@ registerMock('GET', '/cards', ({ query }) => {
   return list
 })
 
+registerMock('GET', '/admin/cards/{id}', ({ params }) => {
+  const c = cardDb.find((x) => x.id === Number(params.id))
+  if (!c) throw new Error('卡片不存在')
+  return { id: c.id, subject: c.subject, part: c.part, section: c.section, term: c.term, hint: c.hint, body: c.body_html.replace(/<[^>]+>/g, '') }
+})
+registerMock('PUT', '/admin/cards/{id}', ({ params, body }) => {
+  const c = cardDb.find((x) => x.id === Number(params.id))
+  if (!c) throw new Error('卡片不存在')
+  const p = body as { section?: string; term?: string; hint?: string; body?: string }
+  let changed = 0
+  for (const key of ['section', 'term', 'hint'] as const) {
+    if (p[key] !== undefined && p[key] !== c[key]) { c[key] = p[key]!; changed++ }
+  }
+  if (p.term !== undefined) c.term_html = p.term.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img alt="$1" src="$2">')
+  if (typeof p.body === 'string' && p.body !== c.body_html) { c.body_html = fmt(p.body); changed++ }
+  return { changed }
+})
+
 registerMock('GET', '/cards/{id}/sources', ({ params }) => (Number(params.id) % 5 === 0 ? [] : sources.default))
 
 const STATE_OF: Partial<Record<MarkAction, ProgressState>> = { rate_again: 'again', rate_good: 'mastered', plan: 'plan', master: 'mastered', wrong: 'again', unmaster: '', unwrong: '' }
@@ -118,4 +136,3 @@ registerMock('POST', '/progress/mark', ({ body }) => {
   marks.set(b.target_id, cur)
   return undefined
 })
-

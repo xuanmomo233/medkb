@@ -239,6 +239,41 @@ class QuizSession extends ChangeNotifier {
     _emit();
   }
 
+  Future<void> refreshFull(int id) async {
+    try {
+      final QuestionFull f = await Endpoints.questionFull(id, cache: false);
+      if (_disposed) return;
+      full[id] = f;
+      fullErr.remove(id);
+      stats[id] = f.stat;
+      questions = questions.map((Question q) {
+        if (q.id != id) return q;
+        return Question(
+          id: q.id,
+          qid: q.qid,
+          chapter: q.chapter,
+          system: f.system,
+          qtype: q.qtype,
+          stemHtml: f.stemHtml,
+          parentHtml: q.parentHtml,
+          optionsHtml: q.optionsHtml,
+          answer: q.answer,
+          analysisHtml: f.analysisHtml,
+          analysisEmpty: f.analysisEmpty,
+          tags: f.tags,
+          state: q.state,
+          starred: q.starred,
+          done: q.done,
+          lastPicked: q.lastPicked,
+          lastCorrect: q.lastCorrect,
+        );
+      }).toList();
+    } catch (e) {
+      if (!_disposed) notify(errText(e));
+    }
+    _emit();
+  }
+
   void pick(Question q, String letter) {
     if (!hasOptionsQ(q) || isRecite) return;
     final Ans? cur = ans[q.id];
@@ -358,6 +393,8 @@ class QuizSession extends ChangeNotifier {
       } else if (f != null) {
         full[q.id] = QuestionFull(
           id: f.id,
+          system: f.system,
+          stemHtml: f.stemHtml,
           answer: f.answer,
           analysisHtml: h,
           analysisEmpty: false,

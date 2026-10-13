@@ -30,12 +30,15 @@ class QuestionStat(BaseModel):
 class RelatedCard(BaseModel):
     id: int
     term: str
+    term_html: str
     hint: str
     body_html: str
 
 
 class QuestionFull(BaseModel):
     id: int
+    system: str
+    stem_html: str
     answer: str
     analysis_html: str
     analysis_empty: bool

@@ -13,6 +13,7 @@ class CardOut(BaseModel):
     part: str
     section: str
     term: str
+    term_html: str
     hint: str
     body_html: str
     state: str

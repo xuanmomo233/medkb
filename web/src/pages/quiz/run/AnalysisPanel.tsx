@@ -14,9 +14,10 @@ interface Props {
   aiBusy: boolean
   onRetry: () => void
   onAi: () => void
+  onEdited: () => void
 }
 
-export default function AnalysisPanel({ q, picked, judged, correct, full, failed, stat, aiBusy, onRetry, onAi }: Props) {
+export default function AnalysisPanel({ q, picked, judged, correct, full, failed, stat, aiBusy, onRetry, onAi, onEdited }: Props) {
   const st = stat ?? full?.stat
   const rate = st && st.total ? Math.round((st.correct / st.total) * 100) : null
   return (
@@ -50,7 +51,7 @@ export default function AnalysisPanel({ q, picked, judged, correct, full, failed
           <div className={s.sectionTitle}>本题暂无解析</div>
           {full.related_cards.map((c) => (
             <div key={c.id} className={s.related}>
-              <div className={s.relatedTerm}>{c.term}{c.hint && <span className={s.relatedHint}>{c.hint}</span>}</div>
+              <div className={s.relatedTerm}>{c.term_html ? <HtmlView html={c.term_html} /> : c.term}{c.hint && <span className={s.relatedHint}>{c.hint}</span>}</div>
               <HtmlView html={c.body_html} />
             </div>
           ))}
@@ -61,7 +62,7 @@ export default function AnalysisPanel({ q, picked, judged, correct, full, failed
       {q.tags.length > 0 && (
         <div className={s.tags}>{q.tags.map((t) => <Badge key={t} tone="info">{t}</Badge>)}</div>
       )}
-      <QuestionExtras question={q} />
+      <QuestionExtras question={q} onEdited={onEdited} />
     </section>
   )
 }

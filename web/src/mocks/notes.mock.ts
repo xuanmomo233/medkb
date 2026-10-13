@@ -1,5 +1,6 @@
 ﻿import { registerMock } from './registry'
 import type { Note, PublicNote, TargetType } from '@/api/types'
+import { mockQuestionAdmin, updateMockQuestion } from './quiz.mock'
 
 interface Rec extends Note { user: string; likes: number; liked: boolean }
 let nextId = 100
@@ -36,10 +37,10 @@ registerMock('DELETE', '/notes/{id}', ({ params }) => {
   if (i >= 0) store.splice(i, 1)
 })
 
-const admin = new Map<number, { id: number; system: string; analysis: string; tags: string[] }>()
+const admin = new Map<number, { id: number; stem: string; system: string; analysis: string; tags: string[] }>()
 registerMock('GET', '/admin/questions/{id}', ({ params }) => {
   const id = Number(params.id)
-  if (!admin.has(id)) admin.set(id, { id, system: '循环系统', analysis: '## 解析\n\nβ 受体阻滞剂可改善 **HFrEF** 预后。\n\n- 从小剂量开始\n- 逐渐加量', tags: ['心衰', '药物治疗'] })
+  if (!admin.has(id)) admin.set(id, { id, stem: mockQuestionAdmin(id)?.stem ?? '', system: mockQuestionAdmin(id)?.system ?? '循环系统', analysis: '## 解析\n\nβ 受体阻滞剂可改善 **HFrEF** 预后。\n\n- 从小剂量开始\n- 逐渐加量', tags: ['心衰', '药物治疗'] })
   return admin.get(id)
 })
 registerMock('PUT', '/admin/questions/{id}', ({ params, body }) => {
@@ -48,5 +49,6 @@ registerMock('PUT', '/admin/questions/{id}', ({ params, body }) => {
   if (!cur) throw new Error('题目不存在')
   const p = body as Partial<typeof cur>
   Object.assign(cur, p)
+  updateMockQuestion(id, p)
   return { changed: Object.keys(p).length }
 })

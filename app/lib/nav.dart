@@ -4,6 +4,7 @@ import 'pages/browse/chapter_page.dart';
 import 'pages/browse/search_page.dart';
 import 'pages/cards/card_run_page.dart';
 import 'pages/notes/admin_edit_sheet.dart';
+import 'pages/notes/admin_card_edit_sheet.dart';
 import 'pages/notes/note_sheet.dart';
 import 'pages/quiz/exam_report_page.dart';
 import 'pages/quiz/exams_page.dart';
@@ -102,8 +103,11 @@ Future<void> openNotes(BuildContext context,
         {required String targetType, required int targetId}) =>
     showNoteSheet(context, targetType: targetType, targetId: targetId);
 
-Future<void> openAdminEdit(BuildContext context, int questionId) =>
+Future<bool> openAdminEdit(BuildContext context, int questionId) =>
     showAdminEditSheet(context, questionId);
+
+Future<bool> openAdminCardEdit(BuildContext context, int cardId) =>
+    showAdminCardEditSheet(context, cardId);
 
 Future<void> openWrongBook(BuildContext context) =>
     Navigator.of(context).push<void>(

@@ -4,14 +4,33 @@ from pydantic import BaseModel
 class AdminQuestion(BaseModel):
     id: int
     system: str
+    stem: str
     analysis: str
     tags: list[str]
 
 
 class AdminQuestionPatch(BaseModel):
     system: str | None = None
+    stem: str | None = None
     analysis: str | None = None
     tags: list[str] | None = None
+
+
+class AdminCard(BaseModel):
+    id: int
+    subject: str
+    part: str
+    section: str
+    term: str
+    hint: str
+    body: str
+
+
+class AdminCardPatch(BaseModel):
+    section: str | None = None
+    term: str | None = None
+    hint: str | None = None
+    body: str | None = None
 
 
 class ChangedOut(BaseModel):

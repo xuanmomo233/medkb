@@ -70,7 +70,15 @@ class _CardRunnerState extends State<CardRunner> {
     }
   }
 
-  void _patch(int id, {String? state, bool? starred}) {
+  void _patch(int id, {
+    String? section,
+    String? term,
+    String? termHtml,
+    String? hint,
+    String? bodyHtml,
+    String? state,
+    bool? starred,
+  }) {
     setState(() {
       _cards = _cards.map((Card c) {
         if (c.id != id) return c;
@@ -78,15 +86,34 @@ class _CardRunnerState extends State<CardRunner> {
           id: c.id,
           subject: c.subject,
           part: c.part,
-          section: c.section,
-          term: c.term,
-          hint: c.hint,
-          bodyHtml: c.bodyHtml,
+          section: section ?? c.section,
+          term: term ?? c.term,
+          termHtml: termHtml ?? c.termHtml,
+          hint: hint ?? c.hint,
+          bodyHtml: bodyHtml ?? c.bodyHtml,
           state: state ?? c.state,
           starred: starred ?? c.starred,
         );
       }).toList();
     });
+  }
+
+  Future<void> _editCard(int id) async {
+    final bool saved = await openAdminCardEdit(context, id);
+    if (!mounted || !saved) return;
+    try {
+      final List<Card> updated = await Endpoints.cards(CardQuery(ids: <int>[id]), cache: false);
+      if (!mounted || updated.isEmpty) return;
+      final Card c = updated.first;
+      _patch(id,
+          section: c.section,
+          term: c.term,
+          termHtml: c.termHtml,
+          hint: c.hint,
+          bodyHtml: c.bodyHtml);
+    } catch (e) {
+      if (mounted) toast(context, errText(e));
+    }
   }
 
   Future<bool> _send(int id, String action) async {
@@ -255,6 +282,12 @@ class _CardRunnerState extends State<CardRunner> {
               onPressed: () => openNotes(context,
                   targetType: TargetType.card, targetId: card.id),
             ),
+            if (Api.admin)
+              IconButton(
+                tooltip: '编辑卡片',
+                icon: const Icon(Icons.edit_outlined),
+                onPressed: () => _editCard(card.id),
+              ),
           ],
         ],
       ),

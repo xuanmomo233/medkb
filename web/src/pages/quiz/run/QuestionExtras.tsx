@@ -5,7 +5,7 @@ import { AdminEditSheet, NoteSheet } from '@/features/notes'
 import { Button, Icon } from '@/ui'
 import s from './run.module.css'
 
-export default function QuestionExtras({ question }: { question: Question }) {
+export default function QuestionExtras({ question, onEdited }: { question: Question; onEdited: () => void }) {
   const { user } = useAuth()
   const [notes, setNotes] = useState(false)
   const [edit, setEdit] = useState(false)
@@ -14,7 +14,7 @@ export default function QuestionExtras({ question }: { question: Question }) {
       <Button size="sm" onClick={() => setNotes(true)}><Icon name="note" size={14} /> 笔记 / 讨论</Button>
       {user?.is_admin && <Button size="sm" variant="ghost" onClick={() => setEdit(true)}><Icon name="edit" size={14} /> 编辑题目</Button>}
       <NoteSheet targetType="question" targetId={question.id} open={notes} onClose={() => setNotes(false)} />
-      {user?.is_admin && <AdminEditSheet questionId={question.id} open={edit} onClose={() => setEdit(false)} />}
+      {user?.is_admin && <AdminEditSheet questionId={question.id} open={edit} onClose={() => setEdit(false)} onSaved={onEdited} />}
     </div>
   )
 }

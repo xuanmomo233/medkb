@@ -1,5 +1,6 @@
 ﻿from datetime import datetime, timezone
 
+from fastapi import HTTPException
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -52,10 +53,59 @@ async def list_cards(
     for c, p in (await session.execute(stmt)).all():
         out.append({
             "id": c.id, "subject": c.subject, "part": c.part, "section": c.section or "",
-            "term": c.term, "hint": c.hint or "", "body_html": card_md(c.body),
+            "term": c.term, "term_html": md(c.term), "hint": c.hint or "", "body_html": card_md(c.body),
             "state": derive_state(p), "starred": bool(p and p.starred),
         })
     return out
+
+
+async def get_admin_card(session: AsyncSession, card_id: int):
+    from app.schemas.admin import AdminCard
+
+    c = await session.get(Card, card_id)
+    if c is None:
+        raise HTTPException(404, "卡片不存在")
+    return AdminCard(
+        id=c.id, subject=c.subject or "", part=c.part or "", section=c.section or "",
+        term=c.term or "", hint=c.hint or "", body=c.body or "",
+    )
+
+
+async def update_admin_card(session: AsyncSession, card_id: int, patch) -> int:
+    c = await session.get(Card, card_id)
+    if c is None:
+        raise HTTPException(404, "卡片不存在")
+    changed = 0
+    if patch.section is not None:
+        new = patch.section.strip()
+        if len(new) > 128:
+            raise HTTPException(400, "分节不能超过 128 字")
+        if new != (c.section or ""):
+            c.section = new
+            changed += 1
+    if patch.term is not None:
+        new = patch.term.strip()
+        if not new:
+            raise HTTPException(400, "卡片标题不能为空")
+        if len(new) > 200:
+            raise HTTPException(400, "卡片标题不能超过 200 字")
+        if new != (c.term or ""):
+            c.term = new
+            changed += 1
+    if patch.hint is not None:
+        if len(patch.hint) > 2000:
+            raise HTTPException(400, "提示不能超过 2000 字")
+        if patch.hint != (c.hint or ""):
+            c.hint = patch.hint
+            changed += 1
+    if patch.body is not None:
+        if len(patch.body) > 20000:
+            raise HTTPException(400, "正文过长（最多 20000 字）")
+        if patch.body != (c.body or ""):
+            c.body = patch.body
+            changed += 1
+    await session.commit()
+    return changed
 
 
 async def sources(session: AsyncSession, card_id: int) -> list[dict] | None:

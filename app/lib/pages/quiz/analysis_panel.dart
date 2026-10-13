@@ -99,8 +99,10 @@ class AnalysisPanel extends StatelessWidget {
       body.add(Text('本题暂无解析', style: title));
       for (final RelatedCard rc in f.relatedCards) {
         body.add(const SizedBox(height: 10));
-        body.add(Text(rc.term,
-            style: const TextStyle(fontWeight: FontWeight.w700)));
+        body.add(rc.termHtml.isEmpty
+            ? Text(rc.term,
+                style: const TextStyle(fontWeight: FontWeight.w700))
+            : HtmlView('<div style="font-weight:700">${rc.termHtml}</div>'));
         if (rc.hint.isNotEmpty) {
           body.add(Text(rc.hint,
               style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)));

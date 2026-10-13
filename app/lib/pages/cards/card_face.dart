@@ -29,10 +29,14 @@ class CardFront extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
               const SizedBox(height: 28),
-              Text(card.term,
-                  textAlign: TextAlign.center,
-                  style: t.textTheme.headlineSmall
-                      ?.copyWith(fontWeight: FontWeight.w800, height: 1.4)),
+              if (card.termHtml.isEmpty)
+                Text(card.term,
+                    textAlign: TextAlign.center,
+                    style: t.textTheme.headlineSmall
+                        ?.copyWith(fontWeight: FontWeight.w800, height: 1.4))
+              else
+                HtmlView(
+                    '<div style="text-align:center;font-size:1.5em;font-weight:800;line-height:1.4">${card.termHtml}</div>'),
               if (card.hint.isNotEmpty) ...<Widget>[
                 const SizedBox(height: 16),
                 Text(card.hint,
@@ -71,9 +75,13 @@ class _CardBackState extends State<CardBack> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Text(card.term,
-              style: t.textTheme.titleLarge
-                  ?.copyWith(fontWeight: FontWeight.w800)),
+          if (card.termHtml.isEmpty)
+            Text(card.term,
+                style: t.textTheme.titleLarge
+                    ?.copyWith(fontWeight: FontWeight.w800))
+          else
+            HtmlView(
+                '<div style="font-size:1.25em;font-weight:800">${card.termHtml}</div>'),
           const SizedBox(height: 6),
           Wrap(
             spacing: 6,

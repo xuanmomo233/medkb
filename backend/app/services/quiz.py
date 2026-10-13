@@ -221,9 +221,9 @@ async def question_full(session: AsyncSession, uid: int, qid: int) -> S.Question
     empty = not (q.analysis or "").strip()
     cards = await _related_cards(session, qid, 4) if empty else []
     return S.QuestionFull(
-        id=q.id, answer=q.answer or "",
+        id=q.id, system=q.system or "", stem_html=md(q.stem), answer=q.answer or "",
         analysis_html="" if empty else md(q.analysis), analysis_empty=empty,
-        related_cards=[S.RelatedCard(id=c.id, term=c.term, hint=c.hint or "", body_html=card_md(c.body)) for c in cards],
+        related_cards=[S.RelatedCard(id=c.id, term=c.term, term_html=md(c.term), hint=c.hint or "", body_html=card_md(c.body)) for c in cards],
         stat=await question_stat(session, qid), tags=_tags(q),
         state=derive_state(qp), starred=bool(qp and qp.starred),
     )
@@ -447,7 +447,7 @@ async def get_question(session: AsyncSession, qid: int):
     q = await session.get(Question, qid)
     if q is None:
         raise HTTPException(404, "题目不存在")
-    return AdminQuestion(id=q.id, system=q.system or "", analysis=q.analysis or "", tags=_tags(q))
+    return AdminQuestion(id=q.id, system=q.system or "", stem=q.stem or "", analysis=q.analysis or "", tags=_tags(q))
 
 
 async def update_question(session: AsyncSession, admin_id: int, qid: int, patch) -> int:
@@ -466,6 +466,14 @@ async def update_question(session: AsyncSession, admin_id: int, qid: int, patch)
         if new != (q.system or ""):
             changes.append(("system", q.system or "", new))
             q.system = new
+    if patch.stem is not None:
+        if not patch.stem.strip():
+            raise HTTPException(400, "题干不能为空")
+        if len(patch.stem) > 20000:
+            raise HTTPException(400, "题干过长（最多 20000 字）")
+        if patch.stem != (q.stem or ""):
+            changes.append(("stem", q.stem or "", patch.stem))
+            q.stem = patch.stem
     if patch.analysis is not None:
         if len(patch.analysis) > 20000:
             raise HTTPException(400, "解析内容过长（最多 20000 字）")

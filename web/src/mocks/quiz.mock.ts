@@ -37,6 +37,18 @@ const exams: ExamRecord[] = [
 
 const find = (id: number) => bank.find((q) => q.id === id)
 const mark = (id: number): Mark => marks.get(id) ?? { state: '', starred: false }
+export function mockQuestionAdmin(id: number) {
+  const q = find(id)
+  return q ? { stem: q.plain, system: q.system } : null
+}
+export function updateMockQuestion(id: number, patch: { stem?: string; system?: string; analysis?: string; tags?: string[] }) {
+  const q = find(id)
+  if (!q) return
+  if (patch.stem !== undefined) { q.plain = patch.stem; q.stem_html = `<p>${patch.stem}</p>` }
+  if (patch.system !== undefined) q.system = patch.system
+  if (patch.analysis !== undefined) { q.analysis_html = `<p>${patch.analysis}</p>`; q.analysis_empty = !patch.analysis }
+  if (patch.tags !== undefined) q.tags = patch.tags
+}
 const num = (v: unknown) => (v === undefined || v === '' ? undefined : Number(v))
 const flag = (v: unknown) => v === true || v === '1' || v === 'true'
 const idList = (v: unknown): number[] => (Array.isArray(v) ? v : String(v ?? '').split(',')).map(Number).filter(Boolean)
@@ -120,10 +132,10 @@ registerMock('GET', '/quiz/questions/{id}', ({ params }): QuestionFull => {
   if (!q) throw new Error('题目不存在')
   const v = view(q, false)
   const related = q.analysis_empty
-    ? [{ id: 9001, term: q.chapter, hint: '本章核心考点', body_html: `<p>${q.chapter}相关要点：结合教材章节复习，重点掌握定义、机制与典型临床表现。</p>` }]
+    ? [{ id: 9001, term: q.chapter, term_html: q.chapter, hint: '本章核心考点', body_html: `<p>${q.chapter}相关要点：结合教材章节复习，重点掌握定义、机制与典型临床表现。</p>` }]
     : []
   return {
-    id: q.id, answer: q.answer, analysis_html: v.analysis_html, analysis_empty: v.analysis_empty,
+    id: q.id, system: q.system, stem_html: q.stem_html, answer: q.answer, analysis_html: v.analysis_html, analysis_empty: v.analysis_empty,
     related_cards: related, stat: stat(q), tags: q.tags, state: v.state, starred: v.starred,
   }
 })

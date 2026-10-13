@@ -48,6 +48,7 @@ export interface Card {
   part: string
   section: string
   term: string
+  term_html: string
   hint: string
   body_html: string
   state: ProgressState
@@ -97,9 +98,11 @@ export interface Question {
   last_correct: boolean | null
 }
 export interface QuestionStat { total: number; correct: number; dist: Record<string, number> }
-export interface RelatedCard { id: number; term: string; hint: string; body_html: string }
+export interface RelatedCard { id: number; term: string; term_html: string; hint: string; body_html: string }
 export interface QuestionFull {
   id: number
+  system: string
+  stem_html: string
   answer: string
   analysis_html: string
   analysis_empty: boolean
@@ -231,6 +234,8 @@ export interface Invite { code: string; created_by: number; used_by: number | nu
 export interface AdminUser { id: number; username: string; is_admin: boolean; created_at: string | null; last_login_at: string | null; invite_code: string | null }
 export interface SiteConfig { exam_date: string }
 
-export interface AdminQuestion { id: number; system: string; analysis: string; tags: string[] }
-export interface AdminQuestionPatch { system?: string; analysis?: string; tags?: string[] }
+export interface AdminQuestion { id: number; system: string; stem: string; analysis: string; tags: string[] }
+export interface AdminQuestionPatch { system?: string; stem?: string; analysis?: string; tags?: string[] }
+export interface AdminCard { id: number; subject: string; part: string; section: string; term: string; hint: string; body: string }
+export interface AdminCardPatch { section?: string; term?: string; hint?: string; body?: string }
 export interface VersionInfo { build: number; note: string }

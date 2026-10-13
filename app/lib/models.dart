@@ -259,6 +259,7 @@ class Card {
   final String part;
   final String section;
   final String term;
+  final String termHtml;
   final String hint;
   final String bodyHtml;
   final String state;
@@ -269,6 +270,7 @@ class Card {
     required this.part,
     required this.section,
     required this.term,
+    required this.termHtml,
     required this.hint,
     required this.bodyHtml,
     required this.state,
@@ -280,6 +282,7 @@ class Card {
         part: _s(j['part']),
         section: _s(j['section']),
         term: _s(j['term']),
+        termHtml: _s(j['term_html']),
         hint: _s(j['hint']),
         bodyHtml: _s(j['body_html']),
         state: _s(j['state']),
@@ -548,17 +551,20 @@ class QuestionStat {
 class RelatedCard {
   final int id;
   final String term;
+  final String termHtml;
   final String hint;
   final String bodyHtml;
   const RelatedCard({
     required this.id,
     required this.term,
+    required this.termHtml,
     required this.hint,
     required this.bodyHtml,
   });
   factory RelatedCard.fromJson(Map<String, dynamic> j) => RelatedCard(
         id: _i(j['id']),
         term: _s(j['term']),
+        termHtml: _s(j['term_html']),
         hint: _s(j['hint']),
         bodyHtml: _s(j['body_html']),
       );
@@ -566,6 +572,8 @@ class RelatedCard {
 
 class QuestionFull {
   final int id;
+  final String system;
+  final String stemHtml;
   final String answer;
   final String analysisHtml;
   final bool analysisEmpty;
@@ -576,6 +584,8 @@ class QuestionFull {
   final bool starred;
   const QuestionFull({
     required this.id,
+    required this.system,
+    required this.stemHtml,
     required this.answer,
     required this.analysisHtml,
     required this.analysisEmpty,
@@ -587,6 +597,8 @@ class QuestionFull {
   });
   factory QuestionFull.fromJson(Map<String, dynamic> j) => QuestionFull(
         id: _i(j['id']),
+        system: _s(j['system']),
+        stemHtml: _s(j['stem_html']),
         answer: _s(j['answer']),
         analysisHtml: _s(j['analysis_html']),
         analysisEmpty: _b(j['analysis_empty']),
@@ -1340,17 +1352,20 @@ class ChatSendBody {
 
 class AdminQuestion {
   final int id;
+  final String stem;
   final String system;
   final String analysis;
   final List<String> tags;
   const AdminQuestion({
     required this.id,
+    required this.stem,
     required this.system,
     required this.analysis,
     required this.tags,
   });
   factory AdminQuestion.fromJson(Map<String, dynamic> j) => AdminQuestion(
         id: _i(j['id']),
+        stem: _s(j['stem']),
         system: _s(j['system']),
         analysis: _s(j['analysis']),
         tags: _ls(j['tags']),
@@ -1358,15 +1373,61 @@ class AdminQuestion {
 }
 
 class AdminQuestionPatch {
+  final String? stem;
   final String? system;
   final String? analysis;
   final List<String>? tags;
-  const AdminQuestionPatch({this.system, this.analysis, this.tags});
+  const AdminQuestionPatch({this.stem, this.system, this.analysis, this.tags});
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> m = <String, dynamic>{};
+    if (stem != null) m['stem'] = stem;
     if (system != null) m['system'] = system;
     if (analysis != null) m['analysis'] = analysis;
     if (tags != null) m['tags'] = tags;
+    return m;
+  }
+}
+
+class AdminCard {
+  final int id;
+  final String subject;
+  final String part;
+  final String section;
+  final String term;
+  final String hint;
+  final String body;
+  const AdminCard({
+    required this.id,
+    required this.subject,
+    required this.part,
+    required this.section,
+    required this.term,
+    required this.hint,
+    required this.body,
+  });
+  factory AdminCard.fromJson(Map<String, dynamic> j) => AdminCard(
+        id: _i(j['id']),
+        subject: _s(j['subject']),
+        part: _s(j['part']),
+        section: _s(j['section']),
+        term: _s(j['term']),
+        hint: _s(j['hint']),
+        body: _s(j['body']),
+      );
+}
+
+class AdminCardPatch {
+  final String? section;
+  final String? term;
+  final String? hint;
+  final String? body;
+  const AdminCardPatch({this.section, this.term, this.hint, this.body});
+  Map<String, dynamic> toJson() {
+    final Map<String, dynamic> m = <String, dynamic>{};
+    if (section != null) m['section'] = section;
+    if (term != null) m['term'] = term;
+    if (hint != null) m['hint'] = hint;
+    if (body != null) m['body'] = body;
     return m;
   }
 }

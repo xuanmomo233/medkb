@@ -80,7 +80,11 @@ class QuestionPageView extends StatelessWidget {
           onRedo: () => s.redo(q),
           onNotes: () => openNotes(context,
               targetType: TargetType.question, targetId: q.id),
-          onEdit: () => openAdminEdit(context, q.id),
+          onEdit: () async {
+            if (await openAdminEdit(context, q.id)) {
+              await s.refreshFull(q.id);
+            }
+          },
         ),
         if (showAnalysis) ...<Widget>[
           const SizedBox(height: 8),

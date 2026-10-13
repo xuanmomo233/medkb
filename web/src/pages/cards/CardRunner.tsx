@@ -3,7 +3,8 @@ import type { TouchEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { api } from '@/api/endpoints'
 import type { Card, CardQuery } from '@/api/types'
-import { NoteSheet } from '@/features/notes'
+import { useAuth } from '@/app/auth'
+import { AdminCardEditSheet, NoteSheet } from '@/features/notes'
 import { Button, Icon, Modal, ProgressBar, useToast } from '@/ui'
 import CardFace from './CardFace'
 import { queryTitle } from './query'
@@ -30,12 +31,14 @@ function restore(key: string, total: number): Saved {
 
 export default function CardRunner({ cards: initial, query, storeKey, onRestart }: Props) {
   const toast = useToast()
+  const { user } = useAuth()
   const [cards, setCards] = useState(initial)
   const [saved] = useState(() => restore(storeKey, initial.length))
   const [idx, setIdx] = useState(saved.idx)
   const [ratings, setRatings] = useState(saved.ratings)
   const [flipped, setFlipped] = useState(false)
   const [jump, setJump] = useState(false)
+  const [editOpen, setEditOpen] = useState(false)
   const [noteOpen, setNoteOpen] = useState(false)
   const touch = useRef<{ x: number; y: number } | null>(null)
   const total = cards.length
@@ -49,6 +52,17 @@ export default function CardRunner({ cards: initial, query, storeKey, onRestart 
   const go = useCallback((n: number) => { setIdx(Math.max(0, Math.min(total, n))); setFlipped(false) }, [total])
 
   const patch = (id: number, p: Partial<Card>) => setCards((a) => a.map((c) => (c.id === id ? { ...c, ...p } : c)))
+  const refreshCard = async (id: number) => {
+    try {
+      const updated = (await api.cards({ ids: [id] }))[0]
+      if (updated) patch(id, {
+        section: updated.section, term: updated.term, term_html: updated.term_html,
+        hint: updated.hint, body_html: updated.body_html,
+      })
+    } catch (e) {
+      toast(e instanceof Error ? e.message : '刷新卡片失败', true)
+    }
+  }
   const send = useCallback(async (id: number, action: Parameters<typeof api.mark>[0]['action']) => {
     try { await api.mark({ target_type: 'card', target_id: id, action }); return true } catch (e) {
       toast(e instanceof Error ? e.message : '操作失败', true)
@@ -78,7 +92,7 @@ export default function CardRunner({ cards: initial, query, storeKey, onRestart 
   }
 
   useEffect(() => {
-    if (jump) return
+    if (jump || editOpen) return
     const h = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
       if (t.closest('input, textarea, select, [contenteditable="true"]') || e.ctrlKey || e.metaKey || e.altKey) return
@@ -91,7 +105,7 @@ export default function CardRunner({ cards: initial, query, storeKey, onRestart 
     }
     document.addEventListener('keydown', h)
     return () => document.removeEventListener('keydown', h)
-  }, [jump, idx, card, flipped, go, rate, toggleStar])
+  }, [jump, editOpen, idx, card, flipped, go, rate, toggleStar])
 
   const onTouchEnd = (e: TouchEvent) => {
     const st = touch.current
@@ -126,7 +140,9 @@ export default function CardRunner({ cards: initial, query, storeKey, onRestart 
               <button type="button" className={`${s.tool} ${card.starred ? s.toolOn : ''}`} onClick={() => void toggleStar()} aria-pressed={card.starred}><Icon name="star" size={16} fill={card.starred} /><span>收藏</span></button>
               <button type="button" className={`${s.tool} ${card.state === 'plan' ? s.toolOn : ''}`} onClick={() => void addPlan()}><Icon name={card.state === 'plan' ? 'check' : 'plus'} size={16} /><span>{card.state === 'plan' ? '已加入' : '加入复习'}</span></button>
               <button type="button" className={s.tool} onClick={() => setNoteOpen(true)}><Icon name="note" size={16} /><span>笔记</span></button>
+              {user?.is_admin && <button type="button" className={s.tool} onClick={() => setEditOpen(true)}><Icon name="edit" size={16} /><span>编辑</span></button>}
               <NoteSheet targetType="card" targetId={card.id} open={noteOpen} onClose={() => setNoteOpen(false)} />
+              {user?.is_admin && <AdminCardEditSheet cardId={card.id} open={editOpen} onClose={() => setEditOpen(false)} onSaved={() => { void refreshCard(card.id) }} />}
             </div>
           </div>
           <div className={s.keys}>空格 翻面 · 1/2/3 评分 · S 收藏 · 方向键切换</div>

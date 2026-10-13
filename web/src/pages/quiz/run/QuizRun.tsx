@@ -91,7 +91,8 @@ function Session({ search }: { search: string }) {
 
       {showAnalysis && (
         <AnalysisPanel q={q} picked={cur?.picked ?? ''} judged={judged} correct={cur?.correct ?? null} full={S.full[q.id]}
-          failed={!!S.fullErr[q.id]} stat={S.stats[q.id]} aiBusy={S.aiBusy} onRetry={() => S.loadFull(q.id)} onAi={S.genAnalysis} />
+          failed={!!S.fullErr[q.id]} stat={S.stats[q.id]} aiBusy={S.aiBusy} onRetry={() => S.loadFull(q.id)} onAi={S.genAnalysis}
+          onEdited={() => { void S.refreshFull(q.id) }} />
       )}
 
       <nav className={s.bottom} aria-label="题目导航">

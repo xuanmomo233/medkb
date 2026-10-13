@@ -10,8 +10,9 @@ from app.api.deps import AdminUser, Session
 from app.core.config import get_settings
 from app.core.security import verify_password
 from app.models import InviteCode, QuestionEdit, User
-from app.schemas.admin import (AdminQuestion, AdminQuestionPatch, AdminUserDelete, AdminUserOut,
+from app.schemas.admin import (AdminCard, AdminCardPatch, AdminQuestion, AdminQuestionPatch, AdminUserDelete, AdminUserOut,
                                ChangedOut, InviteCreate, InviteOut, SiteConfigOut, SiteConfigPatch)
+from app.services import cards as admin_cards
 from app.services import quiz as admin_questions
 from app.services import study
 
@@ -45,6 +46,16 @@ async def get_question(qid: int, session: Session, admin: AdminUser):
 @router.put("/questions/{qid}", response_model=ChangedOut)
 async def put_question(qid: int, body: AdminQuestionPatch, session: Session, admin: AdminUser):
     return ChangedOut(changed=await admin_questions.update_question(session, admin.id, qid, body))
+
+
+@router.get("/cards/{card_id}", response_model=AdminCard)
+async def get_card(card_id: int, session: Session, admin: AdminUser):
+    return await admin_cards.get_admin_card(session, card_id)
+
+
+@router.put("/cards/{card_id}", response_model=ChangedOut)
+async def put_card(card_id: int, body: AdminCardPatch, session: Session, admin: AdminUser):
+    return ChangedOut(changed=await admin_cards.update_admin_card(session, card_id, body))
 
 
 @router.get("/users", response_model=list[AdminUserOut])

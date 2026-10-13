@@ -12,12 +12,14 @@ const splitTags = (v: string) => v.split(/[,，]/).map((t) => t.trim()).filter(B
 
 function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: number; onClose: () => void; onSaved?: () => void }) {
   const toast = useToast()
+  const [stem, setStem] = useState(data.stem)
   const [system, setSystem] = useState(data.system)
   const [tags, setTags] = useState(data.tags.join(', '))
   const [analysis, setAnalysis] = useState(data.analysis)
   const [saving, setSaving] = useState(false)
 
   const patch: AdminQuestionPatch = {}
+  if (stem !== data.stem) patch.stem = stem
   if (system !== data.system) patch.system = system
   const newTags = splitTags(tags)
   if (newTags.join('\n') !== data.tags.join('\n')) patch.tags = newTags
@@ -38,6 +40,7 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
 
   return (
     <div className={s.form}>
+      <Field label="题干（Markdown 原文）"><Textarea className={s.mono} value={stem} onChange={(e) => setStem(e.target.value)} /></Field>
       <Field label="系统分类"><Input value={system} onChange={(e) => setSystem(e.target.value)} /></Field>
       <Field label="标签" hint="多个标签用逗号分隔"><Input value={tags} onChange={(e) => setTags(e.target.value)} /></Field>
       <Field label="解析（Markdown 原文）"><Textarea className={s.mono} value={analysis} onChange={(e) => setAnalysis(e.target.value)} /></Field>
@@ -51,9 +54,12 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
 
 export default function AdminEditSheet({ questionId, open, onClose, onSaved }: Props) {
   const { user } = useAuth()
-  const enabled = open && !!user?.is_admin
-  const q = useQuery({ queryKey: ['admin-question', questionId], queryFn: () => api.adminQuestion(questionId), enabled, gcTime: 0 })
-  if (!enabled) return null
+  if (!open || !user?.is_admin) return null
+  return <OpenEditor questionId={questionId} open={open} onClose={onClose} onSaved={onSaved} />
+}
+
+function OpenEditor({ questionId, onClose, onSaved }: Props) {
+  const q = useQuery({ queryKey: ['admin-question', questionId], queryFn: () => api.adminQuestion(questionId), gcTime: 0, refetchOnWindowFocus: false })
   return (
     <Modal sheet title={`管理员改题 #${questionId}`} onClose={onClose}>
       {q.isLoading ? <Spinner /> : q.isError || !q.data ? <ErrorState error={q.error} onRetry={() => q.refetch()} /> :
@@ -61,4 +67,3 @@ export default function AdminEditSheet({ questionId, open, onClose, onSaved }: P
     </Modal>
   )
 }
-
