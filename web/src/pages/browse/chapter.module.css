@@ -10,6 +10,45 @@
 .metaItem dt::after { content: '：'; }
 .metaItem dd { margin: 0; color: var(--text); font-weight: 500; }
 .body { padding: 24px 28px; }
+/* Note-only reading layout; shared gallery and other chapter kinds remain unchanged. */
+.noteWrap { max-width: 760px; min-width: 0; }
+.noteBody { min-width: 0; }
+.noteRich { max-width: 42rem; margin-inline: auto; overflow-wrap: anywhere; }
+.noteRich h1 { font-size: 1.5em; margin: 0 0 1em; line-height: 1.45; }
+.noteRich h2 { font-size: 1.3em; margin: 2em 0 .8em; padding-bottom: .4em; border-bottom: 1px solid var(--line); line-height: 1.5; }
+.noteRich h3 { font-size: 1.12em; margin: 1.6em 0 .6em; line-height: 1.5; }
+.noteRich h4, .noteRich h5, .noteRich h6 { margin: 1.4em 0 .5em; line-height: 1.5; }
+.noteRich h2, .noteRich h3 { scroll-margin-top: 88px; }
+.noteRich > :first-child { margin-top: 0; }
+.noteRich p { margin: 0 0 .9em; }
+.noteRich ul, .noteRich ol { margin: .7em 0 1em; padding-left: 1.6em; }
+.noteRich li { margin: .35em 0; }
+.noteRich li > p { margin-bottom: .45em; }
+.noteRich li > ul, .noteRich li > ol { margin: .4em 0; }
+.noteRich img { max-width: 100%; height: auto; }
+.noteRich pre { max-width: 100%; overflow-x: auto; }
+.tableScroll { max-width: 100%; overflow-x: auto; margin: 1em 0; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.noteRich .tableScroll table { display: table; width: max-content; min-width: 100%; margin: 0; overflow: visible; }
+.noteRich th, .noteRich td { min-width: 7em; max-width: 24em; padding: 9px 12px; word-break: normal; overflow-wrap: anywhere; vertical-align: top; }
+.toc { margin-bottom: 16px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.toc summary { padding: 12px 16px; cursor: pointer; font-weight: 600; }
+.toc summary span { margin-left: 8px; color: var(--text-3); font-size: 13px; font-weight: 400; }
+.toc details > ol { max-height: 18rem; overflow-y: auto; margin: 0; padding: 0 16px 12px 38px; }
+.toc li { padding: 2px 0; }
+.toc li > ol { margin: 2px 0 4px; padding-left: 1.4em; list-style-type: lower-alpha; }
+.toc a { display: inline-block; padding: 4px 0; color: var(--text-2); overflow-wrap: anywhere; }
+.toc a:hover { color: var(--brand); }
+.toc a:focus-visible, .toc summary:focus-visible, .tableScroll:focus-visible, .noteRich h2:focus-visible, .noteRich h3:focus-visible { outline: 2px solid var(--brand); outline-offset: 3px; border-radius: 2px; }
+@media (max-width: 600px) {
+  .body.noteBody { padding: 20px 16px; }
+  .noteRich h2 { margin-top: 1.7em; }
+  .noteRich th, .noteRich td { padding: 8px 10px; }
+}
+@media print {
+  .toc { display: none; }
+  .tableScroll { overflow: visible; }
+  .noteRich .tableScroll table { width: 100%; }
+}
 .gallery { margin-top: 24px; }
 .galleryTitle { display: flex; align-items: baseline; gap: 10px; margin-bottom: 12px; }
 .galleryTitle span { font-size: 13px; font-weight: 400; color: var(--text-3); }

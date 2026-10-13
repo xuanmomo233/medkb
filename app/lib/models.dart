@@ -482,6 +482,9 @@ class Question {
   final String qtype;
   final String stemHtml;
   final String parentHtml;
+  final String caseGroup;
+  final int caseIndex;
+  final int caseTotal;
   final List<String> optionsHtml;
   final String answer;
   final String analysisHtml;
@@ -500,6 +503,9 @@ class Question {
     required this.qtype,
     required this.stemHtml,
     required this.parentHtml,
+    this.caseGroup = '',
+    this.caseIndex = 0,
+    this.caseTotal = 0,
     required this.optionsHtml,
     required this.answer,
     required this.analysisHtml,
@@ -519,6 +525,9 @@ class Question {
         qtype: _s(j['qtype']),
         stemHtml: _s(j['stem_html']),
         parentHtml: _s(j['parent_html']),
+        caseGroup: _s(j['case_group']),
+        caseIndex: _i(j['case_index']),
+        caseTotal: _i(j['case_total']),
         optionsHtml: _ls(j['options_html']),
         answer: _s(j['answer']),
         analysisHtml: _s(j['analysis_html']),

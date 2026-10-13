@@ -1,4 +1,5 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useId, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ButtonHTMLAttributes, HTMLAttributes, InputHTMLAttributes, ReactNode, TextareaHTMLAttributes } from 'react'
 import { Icon } from './Icon'
 import type { IconName } from './Icon'
@@ -84,18 +85,79 @@ export function Textarea(p: TextareaHTMLAttributes<HTMLTextAreaElement>) { retur
 
 // ---------- 弹层 ----------
 export function Modal({ title, onClose, children, sheet, side }: { title: ReactNode; onClose: () => void; children: ReactNode; sheet?: boolean; side?: boolean }) {
-  useEffect(() => {
-    const h = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
-    document.addEventListener('keydown', h)
-    return () => document.removeEventListener('keydown', h)
-  }, [onClose])
-  return (
-    <div className={cx(s.overlay, sheet && s.sheet, side && s.side)} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
-      <div className={cx(s.modal, side && s.modalSide)} role="dialog" aria-modal="true">
-        <div className={s.modalHead}><span>{title}</span><Button variant="ghost" size="sm" onClick={onClose} aria-label="关闭"><Icon name="x" /></Button></div>
+  const overlayRef = useRef<HTMLDivElement>(null)
+  const dialogRef = useRef<HTMLDivElement>(null)
+  const closeRef = useRef(onClose)
+  const titleId = useId()
+
+  useLayoutEffect(() => { closeRef.current = onClose }, [onClose])
+  useLayoutEffect(() => {
+    const overlay = overlayRef.current!
+    const dialog = dialogRef.current!
+    const previousFocus = document.activeElement
+    const previousOverflow = document.body.style.overflow
+    const background = Array.from(document.body.children)
+      .filter((element): element is HTMLElement => element instanceof HTMLElement && element !== overlay)
+      .map((element) => ({ element, inert: element.inert }))
+    const focusable = () => Array.from(dialog.querySelectorAll<HTMLElement>(
+      'button, a[href], input, select, textarea, [tabindex], [contenteditable="true"]',
+    )).filter((element) =>
+      element.tabIndex >= 0 && !element.matches(':disabled') &&
+      !element.closest('[inert]') && element.getClientRects().length > 0,
+    )
+    const focusFirst = () => (focusable()[0] ?? dialog).focus()
+
+    background.forEach(({ element }) => { element.inert = true })
+    document.body.style.overflow = 'hidden'
+    focusFirst()
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (overlay.inert || event.defaultPrevented) return
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        closeRef.current()
+      } else if (event.key === 'Tab') {
+        const elements = focusable()
+        const first = elements[0]
+        const last = elements.at(-1)
+        const active = document.activeElement
+        if (!first || !dialog.contains(active) || active === dialog ||
+          (!event.shiftKey && active === last) || (event.shiftKey && active === first)) {
+          event.preventDefault()
+          const target = event.shiftKey ? last ?? dialog : first ?? dialog
+          target.focus()
+        }
+      }
+    }
+    const handleFocus = (event: FocusEvent) => {
+      if (!overlay.inert && event.target instanceof Node && !dialog.contains(event.target)) focusFirst()
+    }
+    const observer = new MutationObserver(() => {
+      if (!overlay.inert && !dialog.contains(document.activeElement)) focusFirst()
+    })
+    observer.observe(dialog, {
+      childList: true, subtree: true, attributes: true,
+      attributeFilter: ['disabled', 'hidden', 'tabindex', 'class', 'style'],
+    })
+    document.addEventListener('keydown', handleKeyDown)
+    document.addEventListener('focusin', handleFocus)
+    return () => {
+      observer.disconnect()
+      document.removeEventListener('keydown', handleKeyDown)
+      document.removeEventListener('focusin', handleFocus)
+      background.forEach(({ element, inert }) => { element.inert = inert })
+      document.body.style.overflow = previousOverflow
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true })
+    }
+  }, [])
+
+  return createPortal(
+    <div ref={overlayRef} className={cx(s.overlay, sheet && s.sheet, side && s.side)} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={dialogRef} className={cx(s.modal, side && s.modalSide)} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
+        <div className={s.modalHead}><span id={titleId}>{title}</span><Button variant="ghost" size="sm" onClick={onClose} aria-label="关闭"><Icon name="x" /></Button></div>
         <div className={s.modalBody}>{children}</div>
       </div>
-    </div>
+    </div>, document.body,
   )
 }
 

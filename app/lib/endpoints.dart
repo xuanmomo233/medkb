@@ -217,6 +217,24 @@ class Endpoints {
   }
 
   // ---------- 管理员 ----------
+  static const int adminPreviewMaxChars = 20000;
+
+  /// Render only: the authenticated preview endpoint does not save content.
+  static Future<String> adminPreview(String text, {String kind = 'markdown'}) async {
+    if (kind != 'markdown' && kind != 'card') {
+      throw ArgumentError.value(kind, 'kind', 'Expected markdown or card');
+    }
+    if (text.runes.length > adminPreviewMaxChars) {
+      throw ArgumentError('Preview input exceeds $adminPreviewMaxChars characters');
+    }
+    final Map<String, dynamic> response = asMap(await Api.post(
+      '/admin/preview', <String, Object?>{'text': text, 'kind': kind},
+    ));
+    final Object? html = response['html'];
+    if (html is! String) throw const FormatException('Invalid preview response');
+    return html;
+  }
+
   static Future<AdminQuestion> adminQuestion(int id) async =>
       AdminQuestion.fromJson(asMap(await Api.get('/admin/questions/$id', cache: false)));
   static Future<int> adminSaveQuestion(int id, AdminQuestionPatch p) async {

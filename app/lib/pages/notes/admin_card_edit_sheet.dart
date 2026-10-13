@@ -3,6 +3,7 @@ import '../../api.dart';
 import '../../endpoints.dart';
 import '../../models.dart' show AdminCard, AdminCardPatch;
 import '../../widgets/widgets.dart';
+import 'admin_markdown_editor.dart';
 
 Future<bool> showAdminCardEditSheet(BuildContext context, int cardId) async {
   if (!Api.admin) {
@@ -146,16 +147,13 @@ class _AdminCardEditBodyState extends State<_AdminCardEditBody> {
                   decoration: const InputDecoration(labelText: '提示'),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                AdminMarkdownEditor(
                   controller: _body,
+                  label: '正文（Markdown 原文）',
+                  kind: 'card',
                   enabled: !_saving,
                   minLines: 8,
                   maxLines: 16,
-                  style: const TextStyle(fontFamily: 'monospace'),
-                  decoration: const InputDecoration(
-                    labelText: '正文（Markdown 原文）',
-                    alignLabelWithHint: true,
-                  ),
                 ),
               ],
             ),

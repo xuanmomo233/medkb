@@ -8,15 +8,23 @@ from sqlalchemy import delete, select
 
 from app.api.deps import AdminUser, Session
 from app.core.config import get_settings
+from app.core.render import card_md, md
 from app.core.security import verify_password
 from app.models import InviteCode, QuestionEdit, User
 from app.schemas.admin import (AdminCard, AdminCardPatch, AdminQuestion, AdminQuestionPatch, AdminUserDelete, AdminUserOut,
                                ChangedOut, InviteCreate, InviteOut, SiteConfigOut, SiteConfigPatch)
+from app.schemas.admin import MarkdownPreviewIn, MarkdownPreviewOut
 from app.services import cards as admin_cards
 from app.services import quiz as admin_questions
 from app.services import study
 
 router = APIRouter(prefix="/admin", tags=["admin"])
+
+
+@router.post("/preview", response_model=MarkdownPreviewOut)
+async def preview_markdown(body: MarkdownPreviewIn, admin: AdminUser):
+    render = card_md if body.kind == "card" else md
+    return MarkdownPreviewOut(html=render(body.text))
 
 _DEL_FAIL_WINDOW = 300
 _DEL_FAIL_LIMIT = 5

@@ -10,6 +10,7 @@ dependencies:
   flutter:
     sdk: flutter
   http: ^1.2.0
+  html: ^0.15.4
   crypto: ^3.0.5
   shared_preferences: ^2.2.0
   flutter_widget_from_html_core: ^0.15.2

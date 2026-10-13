@@ -67,6 +67,7 @@ export const api = {
   chatClear: () => del<void>('/chat/history'),
 
   // 管理员
+  adminPreview: (b: { text: string; kind: 'markdown' | 'card' }) => post<{ html: string }>('/admin/preview', b),
   adminQuestion: (id: number) => get<T.AdminQuestion>(`/admin/questions/${id}`),
   adminSaveQuestion: (id: number, p: T.AdminQuestionPatch) => put<{ changed: number }>(`/admin/questions/${id}`, p),
   adminCard: (id: number) => get<T.AdminCard>(`/admin/cards/${id}`),

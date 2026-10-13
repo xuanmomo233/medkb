@@ -9,6 +9,9 @@ class QuestionOut(BaseModel):
     qtype: str
     stem_html: str
     parent_html: str
+    case_group: str = ""
+    case_index: int = 0
+    case_total: int = 0
     options_html: list[str]
     answer: str
     analysis_html: str

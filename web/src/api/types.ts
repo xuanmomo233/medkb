@@ -86,6 +86,9 @@ export interface Question {
   qtype: string
   stem_html: string
   parent_html: string
+  case_group?: string
+  case_index?: number
+  case_total?: number
   options_html: string[]
   answer: string // 如 "A" / "ABD"；主观题可能非字母
   analysis_html: string // 懒加载模式下可能为空，用 getQuestionFull 取

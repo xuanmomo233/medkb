@@ -1,3 +1,5 @@
+import hashlib
+import json
 import re
 import time
 from collections import defaultdict, deque
@@ -13,6 +15,7 @@ from app.schemas import quiz as S
 from app.services import study
 from app.services.glm import glm_call
 from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, level_conditions, pool_flt_condition
+from app.services.question_groups import batches, complete_question_ids, group_key
 
 LETTERS = "ABCDEFGHIJ"
 SUBJECT_DIR = {
@@ -124,13 +127,16 @@ async def plan_day_qids(session: AsyncSession, user_id: int, day_no: int) -> lis
 async def _latest_attempts(session: AsyncSession, uid: int, qids: list[int]) -> dict[int, Attempt]:
     if not qids:
         return {}
-    sub = (
-        select(func.max(Attempt.id))
-        .where(Attempt.user_id == uid, Attempt.question_id.in_(qids))
-        .group_by(Attempt.question_id)
-    )
-    rows = (await session.execute(select(Attempt).where(Attempt.id.in_(sub)))).scalars().all()
-    return {a.question_id: a for a in rows}
+    out = {}
+    for chunk in batches(qids):
+        sub = (
+            select(func.max(Attempt.id))
+            .where(Attempt.user_id == uid, Attempt.question_id.in_(chunk))
+            .group_by(Attempt.question_id)
+        )
+        rows = (await session.execute(select(Attempt).where(Attempt.id.in_(sub)))).scalars().all()
+        out.update((a.question_id, a) for a in rows)
+    return out
 
 
 async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: bool) -> list[S.QuestionOut]:
@@ -139,38 +145,63 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
         plan_ids = await plan_day_qids(session, uid, p.plan_day)
         if not plan_ids:
             return []
+    # Apply filters to lightweight seeds, then complete cases WITHOUT applying
+    # progress/type filters to siblings. Only selected children load full content.
     stmt = (
-        select(Question, QP)
+        select(Question.id)
         .outerjoin(QP, and_(QP.question_id == Question.id, QP.user_id == uid))
         .where(*all_conditions(p, plan_ids))
     )
     unbounded = p.ids is not None or p.plan_day is not None
-    if p.random:
+    limit = None
+    if p.random and p.ids is None:
         stmt = stmt.where(or_(QP.mastered.is_(None), QP.mastered.is_(False))).order_by(func.random())
-        stmt = stmt.limit(min(p.limit or RANDOM_LIMIT, RANDOM_LIMIT))
-    elif p.shuffle:
+        limit = min(p.limit or RANDOM_LIMIT, RANDOM_LIMIT)
+    elif p.shuffle and p.ids is None:
         stmt = stmt.order_by(func.random())
         if not unbounded:
-            stmt = stmt.limit(min(p.limit or DEFAULT_LIMIT, MAX_LIMIT))
+            limit = min(p.limit or DEFAULT_LIMIT, MAX_LIMIT)
     else:
         stmt = stmt.order_by(Question.id)
         if not unbounded:
-            stmt = stmt.limit(min(p.limit or DEFAULT_LIMIT, MAX_LIMIT))
-    rows = (await session.execute(stmt)).all()
-    if p.ids is not None and not p.random and not p.shuffle:
-        pos = {}
-        for i, x in enumerate(p.ids):
-            pos.setdefault(x, i)
-        rows.sort(key=lambda r: pos.get(r[0].id, 1 << 30))
+            limit = min(p.limit or DEFAULT_LIMIT, MAX_LIMIT)
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    seed_ids = list((await session.execute(stmt)).scalars().all())
+    if p.ids is not None:
+        eligible = set(seed_ids)
+        seed_ids = [qid for qid in p.ids if qid in eligible]
+    qids = await complete_question_ids(session, seed_ids, limit)
+    rows_by_id = {}
+    for chunk in batches(qids):
+        rows = (await session.execute(
+            select(Question, QP)
+            .outerjoin(QP, and_(QP.question_id == Question.id, QP.user_id == uid))
+            .where(Question.id.in_(chunk))
+        )).all()
+        rows_by_id.update((q.id, (q, qp)) for q, qp in rows)
+    rows = [rows_by_id[qid] for qid in qids if qid in rows_by_id]
     last = await _latest_attempts(session, uid, [q.id for q, _ in rows])
+    case_members = defaultdict(list)
+    for q, _ in rows:
+        key = group_key(q.bank_group, q.bank, q.source_file, q.parent_stem)
+        if key is not None:
+            case_members[key].append(q.id)
+    case_meta = {}
+    for key, ids in case_members.items():
+        token = hashlib.sha256(json.dumps(key, ensure_ascii=False).encode()).hexdigest()[:24]
+        for index, qid in enumerate(ids, 1):
+            case_meta[qid] = (token, index, len(ids))
     out = []
     for q, qp in rows:
         a = last.get(q.id)
         empty = not (q.analysis or "").strip()
+        case_group, case_index, case_total = case_meta.get(q.id, ("", 0, 0))
         out.append(
             S.QuestionOut(
                 id=q.id, qid=q.qid, chapter=q.chapter or "", system=q.system or "", qtype=q.qtype or "",
                 stem_html=md(q.stem), parent_html=md(q.parent_stem),
+                case_group=case_group, case_index=case_index, case_total=case_total,
                 options_html=[md(str(o)) for o in _opts(q)],
                 answer=q.answer or "",
                 analysis_html="" if (lite or empty) else md(q.analysis),
@@ -302,10 +333,13 @@ class Recorder:
 
     @classmethod
     async def create(cls, session: AsyncSession, uid: int, qids: list[int]) -> "Recorder":
-        rows = (
-            await session.execute(select(QP).where(QP.user_id == uid, QP.question_id.in_(set(qids))))
-        ).scalars().all()
-        return cls(session, uid, {r.question_id: r for r in rows})
+        existing = {}
+        for chunk in batches(list(set(qids))):
+            rows = (await session.execute(
+                select(QP).where(QP.user_id == uid, QP.question_id.in_(chunk))
+            )).scalars().all()
+            existing.update((r.question_id, r) for r in rows)
+        return cls(session, uid, existing)
 
     def touch(self, qid: int, ok: bool | None) -> None:
         qp = self.qps.get(qid)

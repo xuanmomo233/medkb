@@ -1,4 +1,15 @@
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field
+
+
+class MarkdownPreviewIn(BaseModel):
+    text: str = Field(max_length=20000)
+    kind: Literal["markdown", "card"] = "markdown"
+
+
+class MarkdownPreviewOut(BaseModel):
+    html: str
 
 
 class AdminQuestion(BaseModel):

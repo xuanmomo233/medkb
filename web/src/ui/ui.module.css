@@ -1,13 +1,13 @@
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 38px; padding: 0 16px; border: 1px solid transparent; border-radius: var(--radius-sm); font-weight: 500; font-size: 14px; transition: background .15s, border-color .15s, opacity .15s; white-space: nowrap; }
-.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn:disabled, .btn[aria-disabled="true"] { opacity: .5; cursor: not-allowed; }
 .primary { background: var(--brand); color: #fff; }
-.primary:hover:not(:disabled) { background: var(--brand-hover); }
+.primary:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--brand-hover); }
 .default { background: var(--surface); border-color: var(--line); color: var(--text); }
-.default:hover:not(:disabled) { background: var(--surface-2); }
+.default:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--surface-2); }
 .ghost { background: transparent; color: var(--text-2); }
-.ghost:hover:not(:disabled) { background: var(--surface-2); color: var(--text); }
+.ghost:hover:not(:disabled):not([aria-disabled="true"]) { background: var(--surface-2); color: var(--text); }
 .danger { background: var(--bad-soft); color: var(--bad); }
-.danger:hover:not(:disabled) { filter: brightness(.96); }
+.danger:hover:not(:disabled):not([aria-disabled="true"]) { filter: brightness(.96); }
 .sm { height: 30px; padding: 0 10px; font-size: 13px; }
 .lg { height: 46px; padding: 0 22px; font-size: 16px; }
 .block { width: 100%; }

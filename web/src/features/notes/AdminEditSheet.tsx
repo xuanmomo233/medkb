@@ -3,7 +3,8 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
 import type { AdminQuestion, AdminQuestionPatch } from '@/api/types'
 import { useAuth } from '@/app/auth'
-import { Button, ErrorState, Field, Input, Modal, Spinner, Textarea, useToast } from '@/ui'
+import { Button, ErrorState, Field, Input, Modal, Spinner, useToast } from '@/ui'
+import MarkdownEditor from './MarkdownEditor'
 import s from './notes.module.css'
 
 interface Props { questionId: number; open: boolean; onClose: () => void; onSaved?: () => void }
@@ -40,10 +41,10 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
 
   return (
     <div className={s.form}>
-      <Field label="题干（Markdown 原文）"><Textarea className={s.mono} value={stem} onChange={(e) => setStem(e.target.value)} /></Field>
+      <MarkdownEditor label="题干（Markdown 原文）" value={stem} onChange={setStem} kind="markdown" />
       <Field label="系统分类"><Input value={system} onChange={(e) => setSystem(e.target.value)} /></Field>
       <Field label="标签" hint="多个标签用逗号分隔"><Input value={tags} onChange={(e) => setTags(e.target.value)} /></Field>
-      <Field label="解析（Markdown 原文）"><Textarea className={s.mono} value={analysis} onChange={(e) => setAnalysis(e.target.value)} /></Field>
+      <MarkdownEditor label="解析（Markdown 原文）" value={analysis} onChange={setAnalysis} kind="markdown" />
       <div className={s.actions}>
         <Button onClick={onClose}>取消</Button>
         <Button variant="primary" disabled={!dirty || saving} onClick={save}>{saving ? '保存中…' : '保存'}</Button>

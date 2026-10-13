@@ -50,7 +50,28 @@ class QuestionPageView extends StatelessWidget {
               color: cs.onSurface.withOpacity(0.05),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: HtmlView(q.parentHtml),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Text('共用题干${q.caseTotal > 0 ? ' · ${q.caseTotal} 个子题' : ''}',
+                    style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 8),
+                HtmlView(q.parentHtml),
+                if (q.caseGroup.isNotEmpty && q.caseTotal > 1)
+                  Wrap(
+                    spacing: 6,
+                    children: <Widget>[
+                      for (int i = 0; i < s.questions.length; i++)
+                        if (s.questions[i].caseGroup == q.caseGroup)
+                          ChoiceChip(
+                            label: Text('子题 ${s.questions[i].caseIndex}${(s.ans[s.questions[i].id]?.picked ?? '').isNotEmpty ? ' · 已答' : ''}'),
+                            selected: s.questions[i].id == q.id,
+                            onSelected: (_) => s.pageTo?.call(i),
+                          ),
+                    ],
+                  ),
+              ],
+            ),
           ),
           const SizedBox(height: 10),
         ],

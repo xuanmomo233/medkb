@@ -11,6 +11,8 @@
 .badges { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
 .qid { margin-left: auto; font-size: 12px; color: var(--text-3); }
 .parent { padding: 12px 14px; background: var(--surface-2); border-left: 3px solid var(--brand); border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+.parent > strong { display: block; font-size: 13px; color: var(--text-2); margin-bottom: 8px; }
+.caseNav { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
 .stem { font-size: calc(var(--reading-size) + 1px); font-weight: 500; }
 .hide { color: var(--text-3); font-size: 13px; text-align: center; }
 

@@ -3,6 +3,7 @@ import '../../api.dart';
 import '../../endpoints.dart';
 import '../../models.dart' show AdminQuestion, AdminQuestionPatch;
 import '../../widgets/widgets.dart';
+import 'admin_markdown_editor.dart';
 
 Future<bool> showAdminEditSheet(BuildContext context, int questionId) async {
   if (!Api.admin) {
@@ -136,14 +137,13 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
             child: ListView(
               padding: const EdgeInsets.fromLTRB(16, 4, 16, 8),
               children: <Widget>[
-                TextField(
+                AdminMarkdownEditor(
                   controller: _stem,
+                  label: '题干（Markdown 原文）',
+                  kind: 'markdown',
                   enabled: !_saving,
                   minLines: 4,
                   maxLines: 10,
-                  style: const TextStyle(fontFamily: 'monospace'),
-                  decoration: const InputDecoration(
-                      labelText: '题干（Markdown 原文）', alignLabelWithHint: true),
                 ),
                 const SizedBox(height: 12),
                 TextField(
@@ -159,13 +159,13 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
                       labelText: '标签', helperText: '用逗号分隔'),
                 ),
                 const SizedBox(height: 12),
-                TextField(
+                AdminMarkdownEditor(
                   controller: _analysis,
+                  label: '解析（Markdown 原文）',
+                  kind: 'markdown',
                   enabled: !_saving,
                   minLines: 8,
                   maxLines: 16,
-                  decoration: const InputDecoration(
-                      labelText: '解析（Markdown 原文）', alignLabelWithHint: true),
                 ),
               ],
             ),

@@ -50,6 +50,9 @@ function Session({ search }: { search: string }) {
   const showAnalysis = S.showFull && (mode !== 'recite' || S.revealed)
   const unanswered = total - S.answeredCount
   const modeLabel = MODES.find((m) => m.value === mode)?.label ?? ''
+  const siblings = q.case_group ? S.questions
+    .map((question, index) => ({ question, index }))
+    .filter(({ question }) => question.case_group === q.case_group) : []
 
   return (
     <div className={s.wrap}>
@@ -79,7 +82,18 @@ function Session({ search }: { search: string }) {
           <Badge>{q.chapter}</Badge>
           <span className={s.qid}>{q.qid}</span>
         </div>
-        {q.parent_html && <div className={s.parent}><HtmlView html={q.parent_html} /></div>}
+        {q.parent_html && <div className={s.parent}>
+          <strong>共用题干{q.case_total ? ` · ${q.case_total} 个子题` : ''}</strong>
+          <HtmlView html={q.parent_html} />
+          {siblings.length > 1 && <nav className={s.caseNav} aria-label="本病例子题">
+            {siblings.map(({ question, index }) => (
+              <Button key={question.id} size="sm" variant={question.id === q.id ? 'primary' : 'default'}
+                aria-current={question.id === q.id ? 'step' : undefined} onClick={() => S.go(index)}>
+                子题 {question.case_index}{S.ans[question.id]?.picked ? ' · 已答' : ''}
+              </Button>
+            ))}
+          </nav>}
+        </div>}
         <HtmlView html={q.stem_html} className={s.stem} />
         {hasOptions(q) && (
           <OptionList q={q} picked={cur?.picked ?? ''} judged={judged} reveal={reveal && (judged || S.revealed)}

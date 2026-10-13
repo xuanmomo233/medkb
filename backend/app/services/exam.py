@@ -8,10 +8,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Exam, Question
 from app.schemas import quiz as S
 from app.services.quiz import Recorder, iso
+from app.services.question_groups import batches, ordered_groups
 
-SUBMIT_MAX = 500
+# Up to 5,000 explicit seeds may each expand to four case children.
+SUBMIT_MAX = 20_000
 MOCK_QTYPES = ("单选", "多选", "病例子题", "病例串")
-_JUDGEABLE = re.compile(r"^[A-J]([^A-J]+[A-J])*$")
+_JUDGEABLE = re.compile(r"[A-J]+(?:[\s,，、/;；]+[A-J]+)*")
 UNKNOWN_SYSTEM = "未细分"
 
 
@@ -21,7 +23,11 @@ async def submit(session: AsyncSession, uid: int, title: str, items: list[S.Subm
     if len(items) > SUBMIT_MAX:
         raise HTTPException(400, f"单次最多交卷 {SUBMIT_MAX} 题")
     qids = list({it.question_id for it in items})
-    qs = {q.id: q for q in (await session.execute(select(Question).where(Question.id.in_(qids)))).scalars().all()}
+    qs = {}
+    for chunk in batches(qids):
+        qs.update((q.id, q) for q in (await session.execute(
+            select(Question).where(Question.id.in_(chunk))
+        )).scalars().all())
     title = (title or "").strip()[:80]
     exam = None
     if title:
@@ -82,12 +88,22 @@ async def exams(session: AsyncSession, uid: int) -> list[S.ExamRecord]:
 
 # ---------------- 模考抽题 ----------------
 def type_rank(qtype: str, answer: str) -> int:
-    """1 单选 / 2 病例 / 3 多选"""
-    if qtype in ("病例子题", "病例串"):
-        return 2
-    if qtype == "多选" or len(re.findall(r"[A-J]", answer or "")) > 1:
-        return 3
-    return 1
+    """Classify every child by its actual answer, even inside a case."""
+    return 3 if len(set(re.findall(r"[A-J]", (answer or "").upper()))) > 1 else 1
+
+
+def _reachable_size(counts: dict[int, int], target: int) -> bool:
+    reachable = 1
+    mask = (1 << (target + 1)) - 1
+    for size, available in counts.items():
+        available = min(available, target // size)
+        block = 1
+        while available:
+            take = min(block, available)
+            reachable = (reachable | (reachable << (take * size))) & mask
+            available -= take
+            block *= 2
+    return bool(reachable & (1 << target))
 
 
 def build_mock(
@@ -95,47 +111,93 @@ def build_mock(
     n: int,
     freq: dict[str, int] | None = None,
     rng: _random.Random | None = None,
+    groups: dict[int, tuple[int, ...]] | None = None,
 ) -> list[int]:
-    """pool: (id, system, is_real_exam, trank) 的列表；freq: system→真题题量权重。返回按 单选→病例→多选 排序的 ids。"""
+    """Sample atomic cases, budgeting each child by its own single/multi answer.
+
+    pool contains (id, system, real_exam, answer_type). Groups must include
+    metadata for every member, including children ineligible as mock seeds.
+    Case adjacency takes precedence over an impossible exact child count.
+    """
+    if n <= 0:
+        return []
     rng = rng or _random.Random()
-    freq = dict(freq or {})
-    freq[UNKNOWN_SYSTEM] = 1
-    pools: dict[int, dict[str, list[tuple[int, bool]]]] = {1: {}, 2: {}, 3: {}}
-    for qid, system, hot, tr in pool:
-        pools[tr].setdefault(system or UNKNOWN_SYSTEM, []).append((qid, bool(hot)))
-    quota = {1: round(n * 0.67), 2: max(1, round(n * 0.11))}
-    quota[3] = n - quota[1] - quota[2]
-    ids: list[int] = []
-    for tr in (1, 2, 3):
-        pl = pools[tr]
-        if not pl:
+    groups = groups or {}
+    by_id = {i: (system or UNKNOWN_SYSTEM, bool(hot), tr) for i, system, hot, tr in pool}
+    # Bucket by contributions (not a single representative question's type).
+    # This keeps selection bounded by the number of systems/case shapes rather
+    # than repeatedly scanning the entire ~69k-question mock pool.
+    buckets: dict[tuple[str, int, int, int], list[tuple[int, ...]]] = {}
+    used = set()
+    available: dict[str, int] = {}
+    for qid in by_id:
+        if qid in used:
             continue
-        systems = list(pl)
-        w = [freq.get(s, 1) for s in systems]
-        tot = sum(w) or 1
-        alloc = [min(len(pl[s]), round(quota[tr] * wi / tot)) for s, wi in zip(systems, w)]
-        while sum(alloc) > quota[tr]:
-            i = max(range(len(alloc)), key=lambda j: alloc[j])
-            alloc[i] -= 1
-        while sum(alloc) < quota[tr]:
-            progressed = False
-            for i in sorted(range(len(systems)), key=lambda j: -w[j]):
-                if sum(alloc) >= quota[tr]:
-                    break
-                if alloc[i] < len(pl[systems[i]]):
-                    alloc[i] += 1
-                    progressed = True
-            if not progressed:
-                break
-        for s, ki in zip(systems, alloc):
-            qs = list(pl[s])
-            rng.shuffle(qs)
-            hot = [i for i, h in qs if h]
-            cold = [i for i, h in qs if not h]
-            n_hot = min(len(hot), round(ki * 0.7))
-            ids += hot[:n_hot] + cold[: ki - n_hot]
-            if len(hot) > n_hot and len(cold) < ki - n_hot:
-                ids += hot[n_hot : n_hot + (ki - n_hot - len(cold))]
+        children = tuple(sorted(groups.get(qid, (qid,))))
+        if any(child not in by_id for child in children):
+            raise ValueError("mock pool must include every case child")
+        used.update(children)
+        system = by_id[children[0]][0]
+        singles = sum(by_id[i][2] != 3 for i in children)
+        multis = len(children) - singles
+        hot = sum(by_id[i][1] for i in children)
+        buckets.setdefault((system, singles, multis, hot), []).append(children)
+        available[system] = available.get(system, 0) + len(children)
+    for units in buckets.values():
+        rng.shuffle(units)
+    freq = freq or {}
+    weights = {s: max(0, freq.get(s, 1)) for s in available}
+    total_weight = sum(weights.values()) or 1
+    target_system = {s: min(available[s], round(n * w / total_weight)) for s, w in weights.items()}
+    quota = {1: round(n * 0.78), 3: n - round(n * 0.78)}
+    count_type = {1: 0, 3: 0}
+    count_system = {s: 0 for s in available}
+    hot_count = case_count = 0
+    ids: list[int] = []
+    size_counts: dict[int, int] = {}
+    for key, units in buckets.items():
+        size = key[1] + key[2]
+        size_counts[size] = size_counts.get(size, 0) + len(units)
+    while len(ids) < n:
+        remaining = n - len(ids)
+        choices = [(key, units) for key, units in buckets.items() if units]
+        if not choices:
+            break
+        fitting = [(key, units) for key, units in choices if key[1] + key[2] <= remaining]
+        if _reachable_size(size_counts, remaining):
+            viable = set()
+            for size, count in size_counts.items():
+                if size > remaining or not count:
+                    continue
+                reduced = {**size_counts, size: count - 1}
+                if _reachable_size(reduced, remaining - size):
+                    viable.add(size)
+            fitting = [(key, units) for key, units in fitting if key[1] + key[2] in viable]
+        # Prefer a fitting case, if any. Otherwise complete a final case.
+        choices = fitting or choices
+        def priority(entry):
+            system, singles, multis, hot = entry[0]
+            size = singles + multis
+            type_gain = min(singles, max(0, quota[1] - count_type[1])) + min(multis, max(0, quota[3] - count_type[3]))
+            system_gain = min(size, max(0, target_system[system] - count_system[system]))
+            hot_gain = min(hot, max(0, round(n * 0.7) - hot_count))
+            case_gain = min(size, max(0, round(n * 0.11) - case_count)) if size > 1 else 0
+            # Keep the historical ~11% case share while allocating each
+            # child's single/multi type separately. Weight equal shapes by
+            # their remaining pool size instead of over-sampling rare cases.
+            return ((4 * type_gain + 2 * system_gain + hot_gain + 3 * case_gain) / size,
+                    -max(0, size - remaining), rng.random() ** (1 / len(entry[1])))
+        key, units = max(choices, key=priority)
+        children = units.pop()
+        size_counts[len(children)] -= 1
+        ids.extend(children)
+        system, singles, multis, hot = key
+        count_type[1] += singles
+        count_type[3] += multis
+        count_system[system] += len(children)
+        hot_count += hot
+        if len(children) > 1:
+            case_count += len(children)
     return ids
 
 
@@ -158,6 +220,24 @@ async def mock(session: AsyncSession, n: int) -> list[int]:
     pool = [
         (i, s or UNKNOWN_SYSTEM, bool(hot), type_rank(qt, ans))
         for i, s, hot, qt, ans in rows
-        if _JUDGEABLE.match(ans or "")
+        if _JUDGEABLE.fullmatch((ans or "").strip().upper())
     ]
-    return build_mock(pool, n, freq)
+    eligible = {item[0] for item in pool}
+    # Only cases have a parent stem. Scan narrow IDs, not unbounded question
+    # ORM objects/text; then complete eligible case seeds regardless of whether
+    # a sibling itself passed the mock's answer/type seed rules.
+    grouped = (await session.execute(
+        select(Question.id).where(Question.qtype.in_(MOCK_QTYPES), Question.parent_stem != "")
+    )).scalars().all()
+    case_seeds = [qid for qid in grouped if qid in eligible]
+    groups = await ordered_groups(session, case_seeds)
+    by_id = {item[0]: item for item in pool}
+    missing = [qid for children in groups for qid in children if qid not in by_id]
+    for chunk in batches(missing):
+        for i, s, hot, qt, ans in (await session.execute(
+            select(Question.id, Question.system, Question.is_real_exam, Question.qtype, Question.answer)
+            .where(Question.id.in_(chunk))
+        )).all():
+            by_id[i] = (i, s or UNKNOWN_SYSTEM, bool(hot), type_rank(qt, ans))
+    group_map = {qid: children for children in groups for qid in children}
+    return build_mock(list(by_id.values()), n, freq, groups=group_map)

@@ -1,0 +1,23 @@
+.editor { display: flex; flex-direction: column; gap: 8px; width: 100%; min-width: 0; max-width: 100%; }
+.label { font-size: 13px; color: var(--text-2); font-weight: 500; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.source, .cell { width: 100%; min-width: 0; padding: 10px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); line-height: 1.6; resize: vertical; }
+.source { min-height: 240px; max-width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 13px; }
+.source:focus, .cell:focus { border-color: var(--brand); outline: 2px solid var(--brand-soft); }
+.hint { margin: 0; font-size: 12px; color: var(--text-3); overflow-wrap: anywhere; }
+.error { margin: 0; font-size: 13px; color: var(--bad); overflow-wrap: anywhere; }
+.builder, .preview { display: flex; flex-direction: column; gap: 10px; width: 100%; min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; background: var(--surface-2); }
+.builderTitle { font-size: 14px; color: var(--text-2); }
+.dimensions { display: flex; flex-wrap: wrap; gap: 12px; font-size: 13px; }
+.tableScroll { width: 100%; max-width: 100%; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; -webkit-overflow-scrolling: touch; }
+.draftTable { width: 100%; border-collapse: collapse; }
+.draftTable th, .draftTable td { min-width: 140px; padding: 4px; border: 1px solid var(--line); vertical-align: top; }
+.cell { min-width: 128px; padding: 6px 8px; font-size: 13px; }
+.preview { background: var(--surface); overflow-x: auto; overscroll-behavior-x: contain; }
+.preview > :global(.rich) { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.preview :global(table) { max-width: 100%; }
+.preview :global(pre) { max-width: 100%; overflow-x: auto; }
+@media (max-width: 480px) {
+  .builder, .preview { padding: 8px; }
+  .toolbar { gap: 6px; }
+}

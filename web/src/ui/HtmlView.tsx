@@ -2,7 +2,7 @@ import DOMPurify from 'dompurify'
 import { useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
 
-const ALLOWED_CLASS = new Set(['ex', 'yr', 'kw', 'sec', 'tag'])
+const ALLOWED_CLASS = new Set(['ex', 'yr', 'kw', 'sec', 'tag', 'manual'])
 
 DOMPurify.addHook('afterSanitizeAttributes', (node) => {
   if (node.hasAttribute('class')) {

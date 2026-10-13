@@ -4,6 +4,7 @@ import { api } from '@/api/endpoints'
 import type { AdminCard, AdminCardPatch } from '@/api/types'
 import { useAuth } from '@/app/auth'
 import { Button, ErrorState, Field, Input, Modal, Spinner, Textarea, useToast } from '@/ui'
+import MarkdownEditor from './MarkdownEditor'
 import s from './notes.module.css'
 
 interface Props { cardId: number; open: boolean; onClose: () => void; onSaved?: () => void }
@@ -40,7 +41,7 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminCard; id: number; o
       <Field label="分节"><Input value={section} onChange={(e) => setSection(e.target.value)} /></Field>
       <Field label="标题"><Input value={term} onChange={(e) => setTerm(e.target.value)} /></Field>
       <Field label="提示"><Textarea value={hint} onChange={(e) => setHint(e.target.value)} /></Field>
-      <Field label="正文（Markdown 原文）"><Textarea className={s.mono} value={body} onChange={(e) => setBody(e.target.value)} /></Field>
+      <MarkdownEditor label="正文（Markdown 原文）" value={body} onChange={setBody} kind="card" />
       <div className={s.actions}>
         <Button onClick={onClose}>取消</Button>
         <Button variant="primary" disabled={!dirty || saving} onClick={save}>{saving ? '保存中…' : '保存'}</Button>
