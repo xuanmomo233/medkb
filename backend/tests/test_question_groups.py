@@ -71,3 +71,39 @@ def test_flatten_empty_zero_and_soft_limit():
     assert flatten_groups([]) == []
     assert flatten_groups([(1, 2)], 0) == []
     assert flatten_groups([(1,), (2, 3, 4), (5,)], 2) == [1, 2, 3, 4]
+
+
+@pytest.mark.asyncio
+async def test_legacy_embedded_cases_from_either_child_and_namespace(session):
+    from app.services.question_groups import legacy_case_parts
+    parent = "男，22岁。3天前淋雨后突发寒战、高热、胸痛，咳铁锈色痰。"
+    for i in range(1, 5):
+        session.add(question(i, stem=f"（18~19题共用题干）{parent}子题{i}？",
+                             source_file="a.md" if i <= 2 else "b.md"))
+    session.add_all([question(i, stem=f"（1～4题共用题干）{parent}其他子题{i}？") for i in range(5, 9)])
+    session.add(question(9, stem="普通单题，无父题。"))
+    await session.flush()
+    assert await complete_question_ids(session, [2]) == [1, 2]
+    assert await complete_question_ids(session, [4, 1, 9]) == [3, 4, 1, 2, 9]
+    assert await complete_question_ids(session, [8], limit=1) == [5, 6, 7, 8]
+    parts = await legacy_case_parts(session, [2])
+    assert parts == {1: (parent, "子题1？", "（18~19题共用题干）"), 2: (parent, "子题2？", "（18~19题共用题干）")}
+    assert (await session.get(Question, 2)).parent_stem == ""
+    from app.services.quiz import list_questions, question_full
+    from app.services.quiz_filters import QuizParams
+    result = await list_questions(session, 1, QuizParams(ids=[2]), lite=True)
+    assert [q.id for q in result] == [1, 2]
+    assert result[0].case_total == 2 and result[1].case_index == 2
+    assert result[0].case_group == result[1].case_group
+    assert "咳铁锈色痰" in result[0].parent_html
+    assert "咳铁锈色痰" not in result[0].stem_html
+    assert (await question_full(session, 1, 2)).stem_html == result[1].stem_html
+
+
+@pytest.mark.asyncio
+async def test_legacy_ambiguous_or_incomplete_numbering_is_not_combined(session):
+    parent = "患者男性，临床表现详见病例。"
+    session.add_all([question(i, stem=f"（1~2题共用题干）{parent}问题{i}？") for i in range(1, 5)])
+    session.add(question(5, stem=f"（1~3题共用题干）{parent}问题5？"))
+    await session.flush()
+    assert await complete_question_ids(session, [1, 5]) == [1, 5]

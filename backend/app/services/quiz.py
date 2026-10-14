@@ -15,7 +15,7 @@ from app.schemas import quiz as S
 from app.services import study
 from app.services.glm import glm_call
 from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, level_conditions, pool_flt_condition
-from app.services.question_groups import batches, complete_question_ids, group_key
+from app.services.question_groups import batches, complete_question_ids, group_key, legacy_case_parts
 
 LETTERS = "ABCDEFGHIJ"
 SUBJECT_DIR = {
@@ -181,10 +181,12 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
         )).all()
         rows_by_id.update((q.id, (q, qp)) for q, qp in rows)
     rows = [rows_by_id[qid] for qid in qids if qid in rows_by_id]
+    legacy = await legacy_case_parts(session, [q.id for q, _ in rows if not (q.parent_stem or "").strip()])
     last = await _latest_attempts(session, uid, [q.id for q, _ in rows])
     case_members = defaultdict(list)
     for q, _ in rows:
-        key = group_key(q.bank_group, q.bank, q.source_file, q.parent_stem)
+        parent = "\n".join((legacy[q.id][2], legacy[q.id][0])) if q.id in legacy else q.parent_stem
+        key = group_key(q.bank_group, q.bank, q.source_file, parent)
         if key is not None:
             case_members[key].append(q.id)
     case_meta = {}
@@ -200,7 +202,8 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
         out.append(
             S.QuestionOut(
                 id=q.id, qid=q.qid, chapter=q.chapter or "", system=q.system or "", qtype=q.qtype or "",
-                stem_html=md(q.stem), parent_html=md(q.parent_stem),
+                stem_html=md(legacy.get(q.id, (q.parent_stem, q.stem))[1]),
+                parent_html=md(legacy.get(q.id, (q.parent_stem, q.stem))[0]),
                 case_group=case_group, case_index=case_index, case_total=case_total,
                 options_html=[md(str(o)) for o in _opts(q)],
                 answer=q.answer or "",
@@ -251,8 +254,9 @@ async def question_full(session: AsyncSession, uid: int, qid: int) -> S.Question
     qp = await session.get(QP, (uid, qid))
     empty = not (q.analysis or "").strip()
     cards = await _related_cards(session, qid, 4) if empty else []
+    legacy = await legacy_case_parts(session, [qid]) if not (q.parent_stem or "").strip() else {}
     return S.QuestionFull(
-        id=q.id, system=q.system or "", stem_html=md(q.stem), answer=q.answer or "",
+        id=q.id, system=q.system or "", stem_html=md(legacy.get(qid, (q.parent_stem, q.stem))[1]), answer=q.answer or "",
         analysis_html="" if empty else md(q.analysis), analysis_empty=empty,
         related_cards=[S.RelatedCard(id=c.id, term=c.term, term_html=md(c.term), hint=c.hint or "", body_html=card_md(c.body)) for c in cards],
         stat=await question_stat(session, qid), tags=_tags(q),

@@ -5,6 +5,8 @@ answer: only the exact trimmed common stem and its bank/source namespace.
 """
 
 from collections.abc import Iterable, Sequence
+from os.path import commonprefix
+import re
 
 from sqlalchemy import func, select, tuple_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,12 +35,51 @@ def group_key(bank_group: str, bank: str, source_file: str, parent_stem: str | N
     return (bank_group, bank, source_file, parent) if parent else None
 
 
+LEGACY_HEADER = re.compile(r"^[（(]\s*(\d+)\s*[~～〜\-—–至]\s*(\d+)\s*题共用题干[）)]")
+
+
+async def legacy_case_parts(session: AsyncSession, seed_ids: Sequence[int]) -> dict[int, tuple[str, str, str]]:
+    parts = {}
+    scopes = set()
+    for chunk in batches(seed_ids):
+        rows = (await session.execute(
+            select(Question.bank_group, Question.bank, Question.source_file, Question.stem)
+            .where(Question.id.in_(chunk), parent_expression(session) == "",
+                   func.substr(Question.stem, 1, 40).contains("共用题干"))
+        )).all()
+        for bg, bank, source, stem in rows:
+            match = LEGACY_HEADER.match(stem)
+            if match and 2 <= int(match[2]) - int(match[1]) + 1 <= 10:
+                scopes.add((bg, bank, source, match[0], int(match[2]) - int(match[1]) + 1))
+    for bg, bank, source, header, count in scopes:
+        rows = (await session.execute(
+            select(Question.id, Question.stem)
+            .where(Question.bank_group == bg, Question.bank == bank, Question.source_file == source,
+                   parent_expression(session) == "", Question.stem.startswith(header, autoescape=True))
+            .order_by(Question.id)
+        )).all()
+        # Reused numbering or incomplete exports are ambiguous, not permission to merge.
+        if len(rows) != count:
+            continue
+        shared = commonprefix([stem[len(header):] for _, stem in rows])
+        boundaries = list(re.finditer(r"[。！？；\n]", shared))
+        if not boundaries:
+            continue
+        boundary = boundaries[-1].end()
+        parent = shared[:boundary].strip()
+        children = [(qid, stem[len(header) + boundary:].strip()) for qid, stem in rows]
+        if len(parent) < 10 or any(not child for _, child in children):
+            continue
+        parts.update((qid, (parent, child, header)) for qid, child in children)
+    return parts
+
+
 async def ordered_groups(session: AsyncSession, seed_ids: Iterable[int]) -> list[tuple[int, ...]]:
     """Complete seeds, in first requested group order, with ascending child IDs.
 
     ID and key lookups are batched for driver parameter limits, not truncated.
-    Only identity columns are fetched; no stems/options/analysis ORM bank scan.
-    Empty parents remain independent single questions. Missing IDs are ignored.
+    Normal cases fetch identity columns only. Marked legacy stems are inspected
+    in their exact bank/file scope. Missing IDs and ambiguous markers are ignored.
     """
     seeds = list(dict.fromkeys(seed_ids))
     identity = (Question.id, Question.bank_group, Question.bank, Question.source_file, Question.parent_stem)
@@ -56,17 +97,31 @@ async def ordered_groups(session: AsyncSession, seed_ids: Iterable[int]) -> list
             # Python's exact equality also protects against a permissive DB collation.
             if key in members:
                 members[key].add(qid)
+    legacy = await legacy_case_parts(session, [qid for qid, key in keys.items() if key is None])
+    legacy_members = {}
+    # Scope each inferred case by its authoritative bank/file identity, not text alone.
+    if legacy:
+        identities = {}
+        for chunk in batches(list(legacy)):
+            for qid, bg, bank, source, _ in (await session.execute(select(*identity).where(Question.id.in_(chunk)))).all():
+                identities[qid] = (bg, bank, source, legacy[qid][2], legacy[qid][0])
+        grouped = {}
+        for qid, key in identities.items():
+            grouped.setdefault(key, []).append(qid)
+        for ids in grouped.values():
+            children = tuple(sorted(ids))
+            legacy_members.update((qid, children) for qid in children)
     out = []
     seen = set()
     for qid in seeds:
         if qid not in keys:
             continue
         key = keys[qid]
-        token = key if key is not None else qid
+        token = key if key is not None else legacy_members.get(qid, qid)
         if token in seen:
             continue
         seen.add(token)
-        children = members[key] | {qid} if key is not None else {qid}
+        children = members[key] | {qid} if key is not None else legacy_members.get(qid, (qid,))
         out.append(tuple(sorted(children)))
     return out
 

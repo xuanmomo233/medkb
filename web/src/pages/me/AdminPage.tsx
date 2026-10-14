@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
 import type { AdminUser } from '@/api/types'
@@ -188,6 +189,10 @@ export default function AdminPage() {
   return (
     <div className={s.wrap}>
       <PageHeader title="管理中心" sub={user?.is_admin ? '管理员' : undefined} />
+      {user?.is_admin && <Card title="卡片与内容审核">
+        <p className={s.sectionHint}>原卡对比、重复候选、中文机制解释与章节整理建议；审核仅记录意见，不自动更改内容。</p>
+        <Link to="/me/admin/review">进入内容审核</Link>
+      </Card>}
       <SiteCard />
       <UsersCard />
       <InvitesCard />

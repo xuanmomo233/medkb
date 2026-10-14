@@ -7,7 +7,7 @@ from app.models.learning import (
     QuestionProgress,
     ScheduleItem,
 )
-from app.models.social import ChatMessage, Note, NoteLike, QuestionEdit
+from app.models.social import ChatMessage, EditorialReview, Note, NoteLike, QuestionEdit
 from app.models.user import AuthToken, Checkin, InviteCode, SiteConfig, User, UserPlan, UserPlanItem, UserPrefs
 
 __all__ = [
@@ -15,5 +15,5 @@ __all__ = [
     "UserPlan", "UserPlanItem",
     "Chapter", "Question", "Card", "CardQuestion", "PlanDay", "PlanDayPart",
     "QuestionProgress", "CardProgress", "Exam", "Attempt", "ScheduleItem",
-    "Note", "NoteLike", "ChatMessage", "QuestionEdit",
+    "Note", "NoteLike", "ChatMessage", "QuestionEdit", "EditorialReview",
 ]
