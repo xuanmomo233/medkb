@@ -8,6 +8,14 @@ export interface ReviewDecision {
   updated_by: number | null
   updated_at: string | null
 }
+export interface ReviewExecution {
+  status: string
+  description: string
+  affected_ids: number[]
+  batch_id: string
+  created_at: string
+  needs_recheck: boolean
+}
 export interface ReviewSummary {
   id: string
   category: string
@@ -15,6 +23,7 @@ export interface ReviewSummary {
   subjects: string[]
   card_ids: number[]
   decision: ReviewDecision
+  execution?: ReviewExecution | null
 }
 export interface ReviewList {
   dataset_id: string
@@ -46,11 +55,11 @@ export interface ReviewDetail extends ReviewSummary {
   chapter_id?: number
   source_file?: string
   line?: number
-  executed: false
+  executed: boolean
   differing_fields: string[]
   requires_media_review: boolean
   sources: { title: string; url: string }[]
-  cards: { snapshot: ReviewCard; current: ReviewCard | null; changed: boolean }[]
+  cards: { snapshot: ReviewCard; current: ReviewCard | null; changed: boolean; merged_into?: number | null }[]
 }
 
 export const reviewApi = {

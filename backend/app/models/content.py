@@ -1,7 +1,7 @@
-from sqlalchemy import ForeignKey, Index, Integer, String, Text
+from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, JsonType
+from app.models.base import Base, CreatedMixin, JsonType
 
 
 class Chapter(Base):
@@ -68,6 +68,32 @@ class CardQuestion(Base):
     question_id: Mapped[int] = mapped_column(
         ForeignKey("questions.id", ondelete="CASCADE"), primary_key=True, index=True
     )
+
+
+class CardMerge(Base, CreatedMixin):
+    __tablename__ = "card_merges"
+    __table_args__ = (CheckConstraint("alias_id != canonical_id"),)
+
+    alias_id: Mapped[int] = mapped_column(ForeignKey("cards.id", ondelete="RESTRICT"), primary_key=True)
+    canonical_id: Mapped[int] = mapped_column(ForeignKey("cards.id", ondelete="RESTRICT"), index=True)
+    batch_id: Mapped[str] = mapped_column(String(64), index=True)
+
+
+class CardOriginal(Base, CreatedMixin):
+    __tablename__ = "card_originals"
+
+    card_id: Mapped[int] = mapped_column(ForeignKey("cards.id", ondelete="RESTRICT"), primary_key=True)
+    data: Mapped[dict] = mapped_column(JsonType)
+
+
+class CardRelation(Base, CreatedMixin):
+    __tablename__ = "card_relations"
+    __table_args__ = (CheckConstraint("left_id < right_id"),)
+
+    left_id: Mapped[int] = mapped_column(ForeignKey("cards.id", ondelete="RESTRICT"), primary_key=True)
+    right_id: Mapped[int] = mapped_column(ForeignKey("cards.id", ondelete="RESTRICT"), primary_key=True)
+    reason: Mapped[str] = mapped_column(Text, default="")
+    batch_id: Mapped[str] = mapped_column(String(64), index=True)
 
 
 class PlanDay(Base):

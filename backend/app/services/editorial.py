@@ -9,7 +9,8 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import card_md, md
-from app.models import Card, EditorialReview
+from app.models import Card, EditorialExecution, EditorialReview
+from app.services.card_merges import redirects, resolve
 from app.schemas.editorial import ReviewDecisionIn
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "editorial_review.json"
@@ -17,14 +18,14 @@ CLASSES = {
     "text_exact_all_non_id_fields": ("exact", "完整字段完全相同；仍需核对学习进度、题目关联和媒体，不能直接删卡。"),
     "same_subject_same_term_candidate": ("titles", "仅学科和标题相同。正文可能互补、冲突或指向不同考点，请逐段比较，默认保留。"),
     "same_term_collision_not_semantic_duplicate": ("titles", "同名但不同考点，不能按标题合并。"),
-    "cross_subject_same_term_link_candidate": ("cross_subject", "跨学科同名仅作关联候选，不应将不同学科的卡片合并。"),
+    "cross_subject_same_term_link_candidate": ("cross_subject", "按正文确定实际主学科；同一知识点先修正归类后合并，不同知识重点保留独立卡片并互引。不能只凭标题操作。"),
     "semantic_overlap_representative_not_record_duplicate": ("overlap", "存在部分机制或知识点重叠；请保留各卡独有内容，审核分拆、交叉引用或提炼公共解释的方案。"),
 }
 
 
 @lru_cache(maxsize=1)
 def catalog():
-    raw = DATA_PATH.read_bytes()
+    raw = DATA_PATH.read_bytes().replace(b"\r\n", b"\n")
     data = json.loads(raw)
     dataset = hashlib.sha256(raw).hexdigest()[:24]
     sources = {s["id"]: s for s in data["sources"]}
@@ -66,6 +67,14 @@ def decision_out(row: EditorialReview | None):
                 updated_at=row.updated_at.isoformat() if row and row.updated_at else None)
 
 
+def execution_out(row: EditorialExecution | None, review: EditorialReview | None):
+    if row is None:
+        return None
+    return dict(status=row.status, description=row.description, affected_ids=row.affected_ids,
+                batch_id=row.batch_id, created_at=row.created_at.isoformat(),
+                needs_recheck=row.review_version != (review.version if review else 0))
+
+
 async def decisions(session: AsyncSession, dataset: str):
     rows = (await session.execute(
         select(EditorialReview).where(EditorialReview.key.startswith(dataset + ":"))
@@ -76,6 +85,9 @@ async def decisions(session: AsyncSession, dataset: str):
 async def list_items(session: AsyncSession, category: str, status: str, query: str, offset: int, size: int):
     dataset, date, items = catalog()
     reviews = await decisions(session, dataset)
+    executions = {r.key.split(":", 1)[1]: r for r in (await session.scalars(
+        select(EditorialExecution).where(EditorialExecution.key.startswith(dataset + ":"))
+    )).all()}
     counts = {}
     for item in items.values():
         counts[item["category"]] = counts.get(item["category"], 0) + 1
@@ -89,6 +101,7 @@ async def list_items(session: AsyncSession, category: str, status: str, query: s
     return dict(dataset_id=dataset, audit_date=date, counts=counts, total=len(filtered), offset=offset,
                 items=[dict(id=i["id"], category=i["category"], title=i["title"], subjects=i["subjects"],
                             card_ids=i["card_ids"], decision=decision_out(reviews.get(i["id"])))
+                            | {"execution": execution_out(executions.get(i["id"]), reviews.get(i["id"]))}
                        for i in filtered[offset:offset + size]])
 
 
@@ -112,15 +125,20 @@ async def detail(session: AsyncSession, item_id: str):
         select(Card).where(Card.id.in_(item["card_ids"]))
     )).scalars()} if item["card_ids"] else {}
     cards = []
+    mapping = await redirects(session)
     for original in item["cards"]:
         current = live.get(original["id"])
         current_fields = {k: getattr(current, k) for k in CARD_FIELDS} if current else None
         cards.append(dict(snapshot=card_out(original), current=card_out(current_fields) if current_fields else None,
-                          changed=current_fields != {k: original[k] for k in CARD_FIELDS}))
+                          changed=current_fields != {k: original[k] for k in CARD_FIELDS},
+                          merged_into=resolve(mapping, original["id"]) if original["id"] in mapping else None))
     row = await session.get(EditorialReview, dataset + ":" + item_id)
+    execution = execution_out(await session.get(EditorialExecution, dataset + ":" + item_id), row)
+    executed = bool(execution and not execution["needs_recheck"]
+                    and execution["status"] in ("merged", "linked", "revised", "renamed"))
     return {**{k: v for k, v in item.items() if k != "cards"}, "cards": cards,
             "dataset_id": dataset, "audit_date": date, "proposal_html": card_md(item["proposal"]),
-            "decision": decision_out(row), "executed": False}
+            "decision": decision_out(row), "execution": execution, "executed": executed}
 
 
 async def save_decision(session: AsyncSession, admin_id: int, item_id: str, body: ReviewDecisionIn):

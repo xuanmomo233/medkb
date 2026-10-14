@@ -12,10 +12,15 @@ const categories: Record<string, string> = {
   titles: '同标题候选', cross_subject: '跨学科关联', chapters: '章节归类与排版',
 }
 const statuses: Record<ReviewStatus, string> = {
-  pending: '待审核', approved: '认可提案（未执行）', rejected: '不采纳', needs_revision: '需要修改',
+  pending: '待审核', approved: '认可提案', rejected: '不采纳', needs_revision: '需要修改',
 }
 const fields: Record<string, string> = {
   subject: '学科', term: '标题', body: '正文', hint: '提示', part: '章节', section: '分节', source_file: '来源',
+}
+const executionStatuses: Record<string, string> = {
+  merged: '已合并', linked: '已双向互引', revised: '已按意见修订', renamed: '已消歧标题',
+  deferred: '待核实，原文未改', kept: '保留独立知识点', unchanged: '不采纳，保持原样',
+  rolled_back: '已撤销',
 }
 
 export default function EditorialPage() {
@@ -48,7 +53,7 @@ function Workspace() {
       <div className={s.notice}>
         <strong>审核与执行分离</strong>
         <p>此处保存的只是审核状态和意见。认可提案也不会合并、删除、覆盖卡片或修改学习进度。</p>
-        <p>原始快照来自 {list.data?.audit_date ?? '内容审计'}。同标题不等于重复；语义重叠仅抽查样例，中文机制解释仍需按教材复核。</p>
+        <p>原始快照来自 {list.data?.audit_date ?? '内容审计'}。同标题不等于重复；实际执行结果会单独记录，未完成核验的原文不盲目合并。</p>
       </div>
       <nav className={s.categories} aria-label="审核分类">
         {Object.entries(categories).map(([key, label]) => (
@@ -76,6 +81,9 @@ function Workspace() {
               <span>{item.id} · {item.title}</span>
               <span className={s.meta}>{item.subjects.join(' / ')}{item.card_ids.length > 0 && ` · 卡片 ${item.card_ids.join('、')}`}</span>
               <Badge tone={item.decision.status === 'approved' ? 'good' : 'warn'}>{statuses[item.decision.status]}</Badge>
+              {item.execution && <Badge tone={item.execution.status === 'deferred' || item.execution.needs_recheck ? 'warn' : 'good'}>
+                {item.execution.needs_recheck ? '新意见待处理' : executionStatuses[item.execution.status] ?? '已处理'}
+              </Badge>}
             </button>)}
             {!data.items.length && <p>没有匹配的审核项目。</p>}
           </div>
@@ -102,9 +110,15 @@ function Detail({ item }: { item: ReviewDetail }) {
       {item.requires_media_review && <p>涉及图片或媒体，请核对原始图片；图片内容和使用权尚未核实。</p>}
       <details><summary>详细审核依据与保留要求（原稿）</summary><p className={s.prose}>{item.evidence}</p></details>
     </Card>
+    {item.execution && <Card title="内容执行结果">
+      {item.execution.needs_recheck && <p className={s.warning}>执行后出现了新审核意见，以下结果尚未包含新意见。</p>}
+      <p className={s.prose}>{item.execution.description}</p>
+      <p className={s.meta}>{new Date(item.execution.created_at).toLocaleString()} · 批次 {item.execution.batch_id}</p>
+    </Card>}
     {item.cards.length > 0 && <div className={s.compare}>
-      {item.cards.map(({ snapshot, current, changed }) => (
+      {item.cards.map(({ snapshot, current, changed, merged_into }) => (
         <Card key={snapshot.id} title={`原卡 #${snapshot.id}`}>
+          {merged_into && <p>已合并至 <Link to={`/cards/run?ids=${merged_into}`}>主卡 #{merged_into}</Link>；原文和历史保留。</p>}
           {changed && <p className={s.warning}>{current ? '当前卡已与审计快照不同，请同时核对。' : '当前题库中未找到该卡，以下仅为审计快照。'}</p>}
           <HtmlView html={(current ?? snapshot).term_html} />
           <p className={s.meta}>{(current ?? snapshot).subject} · {(current ?? snapshot).part} · {(current ?? snapshot).section}</p>
@@ -128,7 +142,9 @@ function Detail({ item }: { item: ReviewDetail }) {
       <HtmlView html={item.original_html} />
       <Link to={`/browse/chapter/${item.chapter_id}`}>查看章节</Link>
     </Card>}
-    {item.proposal_html && <Card title="建议内容 · 尚未发布"><HtmlView html={item.proposal_html} /></Card>}
+    {item.proposal_html && <Card title={item.executed ? '最初审查建议 · 当前内容与执行说明见上方' : '最初审查建议 · 尚未执行'}>
+      <HtmlView html={item.proposal_html} />
+    </Card>}
     {item.sources.length > 0 && <Card title="参考来源">
       <ul className={s.sources}>{item.sources.map((source) => <li key={source.url}>
         <a href={source.url} target="_blank" rel="noopener noreferrer">{source.title}</a>

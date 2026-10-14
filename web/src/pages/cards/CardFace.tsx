@@ -1,4 +1,5 @@
 ﻿import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import type { Card } from '@/api/types'
 import { Badge, Button, HtmlView } from '@/ui'
 import Sources from './Sources'
@@ -33,6 +34,22 @@ export default function CardFace({ card, flipped, onFlip }: Props) {
         </span>
       </div>
       <HtmlView html={card.body_html} />
+      {!!card.related_cards?.length && <section className={s.srcBox} aria-label="关联知识">
+        <h3>关联知识</h3>
+        {card.related_cards.map((item) => <p key={item.id}>
+          <Link to={`/cards/run?ids=${item.id}`}>{item.subject} · {item.term}</Link>
+          <span className={s.crumb}> · {item.reason}</span>
+        </p>)}
+      </section>}
+      {!!card.original_cards?.length && <details className={s.srcBox}>
+        <summary>整理前原文与合并来源（{card.original_cards.length} 张）</summary>
+        {card.original_cards.map((item) => <section key={item.id}>
+          <h3>#{item.id} · {item.term}</h3>
+          <p className={s.crumb}>{item.subject} · {item.part} · {item.section} · {item.source_file}</p>
+          {item.hint && <p>{item.hint}</p>}
+          <HtmlView html={item.body_html} />
+        </section>)}
+      </details>}
       <div className={s.srcBox}>
         <Button size="sm" variant="ghost" onClick={() => setShowSrc((v) => !v)}>{showSrc ? '收起源题详解' : '展开源题详解'}</Button>
         {showSrc && <Sources cardId={card.id} />}

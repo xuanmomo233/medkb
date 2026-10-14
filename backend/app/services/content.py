@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.render import md
 from app.models import Card, CardProgress, Chapter, Question, QuestionProgress
 from app.services.progress import derive_state
+from app.services.card_merges import visible
 
 _IMG = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _MD_NOISE = re.compile(r"[#*`>|]+|<[^>]+>")
@@ -153,7 +154,7 @@ async def search(session: AsyncSession, user_id: int, q: str, kind: str | None) 
         rows = (
             await session.execute(
                 select(Card.id, Card.term, Card.body)
-                .where(Card.term.ilike(pat, escape="\\") | Card.body.ilike(pat, escape="\\"))
+                .where(visible(), Card.term.ilike(pat, escape="\\") | Card.body.ilike(pat, escape="\\"))
                 .order_by(Card.id)
                 .limit(SEARCH_CAPS["card"])
             )
@@ -181,4 +182,3 @@ async def search(session: AsyncSession, user_id: int, q: str, kind: str | None) 
                 "snippet": snippet(split_fm(r.content_md)[1], q), "state": "", "starred": False,
             })
     return hits[:SEARCH_TOTAL]
-

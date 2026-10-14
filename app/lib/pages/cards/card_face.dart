@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart' hide Card;
 import '../../models.dart';
+import '../../nav.dart';
 import '../../widgets/widgets.dart';
 import 'card_sources.dart';
+import 'card_run_page.dart';
 
 class CardFront extends StatelessWidget {
   final Card card;
@@ -45,8 +47,7 @@ class CardFront extends StatelessWidget {
                         fontSize: 14, height: 1.6, color: cs.onSurfaceVariant)),
               ],
               const SizedBox(height: 32),
-              Text('点击翻面',
-                  style: TextStyle(fontSize: 12, color: cs.primary)),
+              Text('点击翻面', style: TextStyle(fontSize: 12, color: cs.primary)),
             ],
           ),
         ),
@@ -96,6 +97,44 @@ class _CardBackState extends State<CardBack> {
           ),
           const SizedBox(height: 10),
           HtmlView(card.bodyHtml),
+          if (card.relatedCards.isNotEmpty) ...<Widget>[
+            const Divider(height: 24),
+            Text('关联知识', style: t.textTheme.titleMedium),
+            for (final CardReference related in card.relatedCards)
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                title: Text('${related.subject} · ${related.term}'),
+                subtitle: Text(related.reason),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: () => Navigator.of(context).push(MaterialPageRoute<void>(
+                  builder: (_) =>
+                      CardRunPage(CardRunArgs(ids: <int>[related.id])),
+                )),
+              ),
+          ],
+          if (card.originalCards.isNotEmpty)
+            ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: Text('整理前原文与合并来源（${card.originalCards.length} 张）'),
+              children: <Widget>[
+                for (final CardOrigin original in card.originalCards)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: <Widget>[
+                        Text('#${original.id} · ${original.term}',
+                            style: t.textTheme.titleSmall),
+                        Text(
+                            '${original.subject} · ${original.part} · ${original.sourceFile}',
+                            style: t.textTheme.bodySmall),
+                        if (original.hint.isNotEmpty) Text(original.hint),
+                        HtmlView(original.bodyHtml),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
           const Divider(height: 24),
           TextButton.icon(
             onPressed: () => setState(() => _showSrc = !_showSrc),

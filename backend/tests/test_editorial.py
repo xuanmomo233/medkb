@@ -13,6 +13,22 @@ from app.schemas.editorial import ReviewDecisionIn
 from app.services import editorial
 
 
+def test_catalog_id_is_stable_across_windows_line_endings(tmp_path, monkeypatch):
+    editorial.catalog.cache_clear()
+    expected_id, _, original_items = editorial.catalog()
+    raw = editorial.DATA_PATH.read_bytes().replace(b"\r\n", b"\n")
+    alternative = tmp_path / "editorial_review.json"
+    alternative.write_bytes(raw.replace(b"\n", b"\r\n"))
+    monkeypatch.setattr(editorial, "DATA_PATH", alternative)
+    editorial.catalog.cache_clear()
+    try:
+        dataset_id, _, items = editorial.catalog()
+        assert dataset_id == expected_id
+        assert items == original_items
+    finally:
+        editorial.catalog.cache_clear()
+
+
 @pytest.mark.parametrize("path,method", [
     ("/api/admin/reviews", "get"),
     ("/api/admin/reviews/MECH-01", "get"),

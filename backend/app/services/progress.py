@@ -1,5 +1,4 @@
-﻿import re
-from datetime import datetime, timezone
+﻿from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -7,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Card, CardProgress, Question, QuestionProgress
 from app.services import sm2
+from app.services.card_merges import canonical_id
 
 _MODELS = {
     "question": (Question, QuestionProgress, "question_id"),
@@ -65,6 +65,8 @@ def _apply(p, action: str, target_type: str, now: datetime) -> None:
 async def mark(session: AsyncSession, user_id: int, target_type: str, target_id: int, action: str) -> bool:
     """返回 False 表示目标不存在。"""
     target_model, prog_model, fk = _MODELS[target_type]
+    if target_type == "card":
+        target_id = await canonical_id(session, target_id)
     if await session.get(target_model, target_id) is None:
         return False
     for attempt in range(2):
@@ -88,4 +90,3 @@ async def mark(session: AsyncSession, user_id: int, target_type: str, target_id:
             if attempt:
                 raise
     return True
-

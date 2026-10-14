@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import Boolean, DateTime, ForeignKey, Index, Integer, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import Base, CreatedMixin
+from app.models.base import Base, CreatedMixin, JsonType
 
 
 class Note(Base, CreatedMixin):
@@ -62,3 +62,24 @@ class EditorialReview(Base):
     version: Mapped[int] = mapped_column(Integer, default=1)
     updated_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"))
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
+
+class EditorialExecution(Base, CreatedMixin):
+    __tablename__ = "editorial_executions"
+
+    key: Mapped[str] = mapped_column(String(120), primary_key=True)
+    review_version: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(24))
+    description: Mapped[str] = mapped_column(Text)
+    affected_ids: Mapped[list] = mapped_column(JsonType, default=list)
+    batch_id: Mapped[str] = mapped_column(String(64), index=True)
+
+
+class EditorialBatch(Base, CreatedMixin):
+    __tablename__ = "editorial_batches"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    status: Mapped[str] = mapped_column(String(24))
+    plan_hash: Mapped[str] = mapped_column(String(64))
+    before: Mapped[dict] = mapped_column(JsonType)
+    after: Mapped[dict] = mapped_column(JsonType)

@@ -16,6 +16,7 @@ from app.services import study
 from app.services.glm import glm_call
 from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, level_conditions, pool_flt_condition
 from app.services.question_groups import batches, complete_question_ids, group_key, legacy_case_parts
+from app.services.card_merges import visible
 
 LETTERS = "ABCDEFGHIJ"
 SUBJECT_DIR = {
@@ -242,7 +243,7 @@ async def question_stat(session: AsyncSession, qid: int) -> S.QuestionStat:
 async def _related_cards(session: AsyncSession, qid: int, limit: int) -> list[Card]:
     stmt = (
         select(Card).join(CardQuestion, CardQuestion.card_id == Card.id)
-        .where(CardQuestion.question_id == qid).order_by(Card.id).limit(limit)
+        .where(visible(), CardQuestion.question_id == qid).order_by(Card.id).limit(limit)
     )
     return list((await session.execute(stmt)).scalars().all())
 

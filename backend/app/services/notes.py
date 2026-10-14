@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Card, Note, NoteLike, Question, User
 from app.services.content import plain
+from app.services.card_merges import canonical_id, original_ids
 
 _TARGETS = {"question": Question, "card": Card}
 
@@ -24,7 +25,10 @@ async def list_for_target(session: AsyncSession, user_id: int, target_type: str 
     if target_type:
         stmt = stmt.where(Note.target_type == target_type)
     if target_id is not None:
-        stmt = stmt.where(Note.target_id == target_id)
+        if target_type == "card":
+            stmt = stmt.where(Note.target_id.in_(await original_ids(session, target_id)))
+        else:
+            stmt = stmt.where(Note.target_id == target_id)
     stmt = stmt.order_by(Note.updated_at.desc(), Note.id.desc()).limit(500)
     return [_out(n) for n in (await session.execute(stmt)).scalars()]
 
@@ -44,6 +48,8 @@ async def list_mine(session: AsyncSession, user_id: int) -> list[dict]:
 
 
 async def create(session: AsyncSession, user_id: int, target_type: str, target_id: int, body: str, is_public: bool) -> bool:
+    if target_type == "card":
+        target_id = await canonical_id(session, target_id)
     if not await target_exists(session, target_type, target_id):
         return False
     session.add(Note(user_id=user_id, target_type=target_type, target_id=target_id, body=body, is_public=is_public))
@@ -62,13 +68,14 @@ async def delete_own(session: AsyncSession, user_id: int, note_id: int) -> bool:
 
 
 async def list_public(session: AsyncSession, user_id: int, target_type: str, target_id: int) -> list[dict]:
+    ids_for_target = await original_ids(session, target_id) if target_type == "card" else [target_id]
     likes = func.count(NoteLike.user_id).label("likes")
     rows = (
         await session.execute(
             select(Note, User.username, likes)
             .join(User, User.id == Note.user_id)
             .outerjoin(NoteLike, NoteLike.note_id == Note.id)
-            .where(Note.target_type == target_type, Note.target_id == target_id, Note.is_public.is_(True))
+            .where(Note.target_type == target_type, Note.target_id.in_(ids_for_target), Note.is_public.is_(True))
             .group_by(Note.id, User.username)
             .order_by(likes.desc(), Note.id)
             .limit(500)

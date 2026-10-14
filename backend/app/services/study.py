@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import date, datetime, time, timedelta, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import Integer, case, delete, func, select, tuple_, update
+from sqlalchemy import case, delete, func, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import (
@@ -23,6 +23,7 @@ from app.models import (
     UserPlanItem,
     UserPrefs,
 )
+from app.services.card_merges import original_ids, redirects, resolve, visible
 
 DEFAULT_EXAM_DATE = date(2026, 12, 19)
 
@@ -168,7 +169,8 @@ async def _flag_counts(session: AsyncSession, model, user_id: int, now: datetime
                 func.coalesce(func.sum(case((model.in_wrongbook.is_(True), 1), else_=0)), 0),
                 func.coalesce(func.sum(case((model.starred.is_(True), 1), else_=0)), 0),
                 func.coalesce(func.sum(case((model.mastered.is_(True), 1), else_=0)), 0),
-            ).where(model.user_id == user_id)
+            ).where(model.user_id == user_id,
+                    visible(model.card_id) if model is CardProgress else True)
         )
     ).one()
     return tuple(int(x) for x in row)
@@ -178,7 +180,10 @@ async def _count_seen_since(session: AsyncSession, model, user_id: int, since: d
     return int(
         (
             await session.execute(
-                select(func.count()).select_from(model).where(model.user_id == user_id, model.last_seen_at >= since)
+                select(func.count()).select_from(model).where(
+                    model.user_id == user_id, model.last_seen_at >= since,
+                    visible(model.card_id) if model is CardProgress else True,
+                )
             )
         ).scalar_one()
     )
@@ -227,7 +232,7 @@ async def _item_content(session: AsyncSession, items: list[UserPlanItem]) -> dic
         return {}
     keys = {(i.subject, i.part) for i in items}
     pair = tuple_(Card.subject, Card.part).in_(keys)
-    crows = (await session.execute(select(Card.subject, Card.part, Card.id).where(pair))).all()
+    crows = (await session.execute(select(Card.subject, Card.part, Card.id).where(pair, visible()))).all()
     dirs = {SUBJECT_DIR[s] for s, _ in keys if s in SUBJECT_DIR}
     qrows = (
         (
@@ -235,7 +240,7 @@ async def _item_content(session: AsyncSession, items: list[UserPlanItem]) -> dic
                 select(Card.subject, Card.part, Question.id)
                 .join(CardQuestion, CardQuestion.card_id == Card.id)
                 .join(Question, Question.id == CardQuestion.question_id)
-                .where(pair, Question.subject_dir.in_(dirs))
+                .where(pair, visible(), Question.subject_dir.in_(dirs))
                 .distinct()
             )
         ).all()
@@ -345,7 +350,7 @@ async def plan_today(session: AsyncSession, user_id: int) -> dict:
 async def plan_options(session: AsyncSession) -> list[dict]:
     crows = (
         await session.execute(
-            select(Card.subject, Card.part, func.count(Card.id)).group_by(Card.subject, Card.part)
+            select(Card.subject, Card.part, func.count(Card.id)).where(visible()).group_by(Card.subject, Card.part)
         )
     ).all()
     qcounts = {
@@ -354,6 +359,7 @@ async def plan_options(session: AsyncSession) -> list[dict]:
             await session.execute(
                 select(Card.subject, Card.part, func.count(func.distinct(CardQuestion.question_id)))
                 .join(CardQuestion, CardQuestion.card_id == Card.id)
+                .where(visible())
                 .group_by(Card.subject, Card.part)
             )
         ).all()
@@ -402,7 +408,7 @@ async def _parts_card_rows(session: AsyncSession, parts: list[tuple[str, str]]) 
         return []
     rows = await session.execute(
         select(Card.id, Card.term, Card.part)
-        .where(tuple_(Card.subject, Card.part).in_(parts))
+        .where(visible(), tuple_(Card.subject, Card.part).in_(parts))
         .order_by(Card.id)
     )
     return [tuple(r) for r in rows]
@@ -418,7 +424,7 @@ async def _parts_question_rows(session: AsyncSession, parts: list[tuple[str, str
         select(Question.id, Question.chapter)
         .join(CardQuestion, CardQuestion.question_id == Question.id)
         .join(Card, Card.id == CardQuestion.card_id)
-        .where(tuple_(Card.subject, Card.part).in_(parts), Question.subject_dir.in_(dirs))
+        .where(tuple_(Card.subject, Card.part).in_(parts), Question.subject_dir.in_(dirs), visible())
         .distinct()
         .order_by(Question.id)
     )
@@ -603,7 +609,8 @@ async def _generate_schedule(session: AsyncSession, user_id: int, day: date, pre
         due_c = (
             await session.execute(
                 select(CardProgress.card_id)
-                .where(CardProgress.user_id == user_id, CardProgress.in_plan.is_(True), CardProgress.due_at <= now)
+                .where(visible(CardProgress.card_id), CardProgress.user_id == user_id,
+                       CardProgress.in_plan.is_(True), CardProgress.due_at <= now)
                 .order_by(CardProgress.due_at)
                 .limit(goal - len(items))
             )
@@ -636,24 +643,30 @@ async def schedule_today(session: AsyncSession, user_id: int) -> dict:
             )
         ).scalars().all()
     qids = [r.item_id for r in rows if r.item_type == "question"]
-    cids = [r.item_id for r in rows if r.item_type == "card"]
+    mapping = await redirects(session)
+    cids = list(dict.fromkeys(resolve(mapping, r.item_id) for r in rows if r.item_type == "card"))
     qt: dict[int, str] = {}
     ct: dict[int, str] = {}
     if qids:
         qt = {i: _plain(s) for i, s in (await session.execute(select(Question.id, Question.stem).where(Question.id.in_(qids)))).all()}
     if cids:
         ct = {i: t for i, t in (await session.execute(select(Card.id, Card.term).where(Card.id.in_(cids)))).all()}
-    items = [
-        {
+    items_by_key = {}
+    for r in rows:
+        target = resolve(mapping, r.item_id) if r.item_type == "card" else r.item_id
+        key = (r.item_type, target)
+        if key in items_by_key:
+            items_by_key[key]["done"] |= r.done_at is not None
+            continue
+        items_by_key[key] = {
             "id": r.id,
             "item_type": r.item_type,
-            "item_id": r.item_id,
+            "item_id": target,
             "reason": r.reason,
-            "title": (qt if r.item_type == "question" else ct).get(r.item_id, ""),
+            "title": (qt if r.item_type == "question" else ct).get(target, ""),
             "done": r.done_at is not None,
         }
-        for r in rows
-    ]
+    items = list(items_by_key.values())
     return {"day": day, "goal": prefs.daily_goal, "items": items, "done_count": sum(1 for i in items if i["done"])}
 
 
@@ -661,6 +674,14 @@ async def schedule_done(session: AsyncSession, user_id: int, item_id: int) -> No
     item = await session.get(ScheduleItem, item_id)
     if item is None or item.user_id != user_id:
         raise HTTPException(404, "日程条目不存在")
-    if item.done_at is None:
+    if item.item_type == "card":
+        ids = await original_ids(session, item.item_id)
+        await session.execute(update(ScheduleItem).where(
+            ScheduleItem.user_id == user_id, ScheduleItem.day == item.day,
+            ScheduleItem.item_type == "card", ScheduleItem.item_id.in_(ids),
+            ScheduleItem.done_at.is_(None),
+        ).values(done_at=utcnow()))
+        await session.commit()
+    elif item.done_at is None:
         item.done_at = utcnow()
         await session.commit()

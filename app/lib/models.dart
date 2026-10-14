@@ -79,7 +79,12 @@ class FacetLevel {
   static const String chapter = 'chapter';
   static const String qtype = 'qtype';
   static const List<String> all = <String>[
-    bankGroup, bank, subjectDir, system, chapter, qtype,
+    bankGroup,
+    bank,
+    subjectDir,
+    system,
+    chapter,
+    qtype,
   ];
 }
 
@@ -111,10 +116,12 @@ class VersionInfo {
   final int build;
   final String note;
   final String apkSha256;
-  const VersionInfo({required this.build, required this.note, this.apkSha256 = ''});
-  factory VersionInfo.fromJson(Map<String, dynamic> j) =>
-      VersionInfo(build: _i(j['build']), note: _s(j['note']),
-                  apkSha256: _s(j['apk_sha256']));
+  const VersionInfo(
+      {required this.build, required this.note, this.apkSha256 = ''});
+  factory VersionInfo.fromJson(Map<String, dynamic> j) => VersionInfo(
+      build: _i(j['build']),
+      note: _s(j['note']),
+      apkSha256: _s(j['apk_sha256']));
 }
 
 // ---------- 内容 ----------
@@ -253,6 +260,53 @@ class CardPartIndex {
       );
 }
 
+class CardReference {
+  final int id;
+  final String term;
+  final String subject;
+  final String reason;
+  const CardReference({
+    required this.id,
+    required this.term,
+    required this.subject,
+    required this.reason,
+  });
+  factory CardReference.fromJson(Map<String, dynamic> j) => CardReference(
+        id: _i(j['id']),
+        term: _s(j['term']),
+        subject: _s(j['subject']),
+        reason: _s(j['reason']),
+      );
+}
+
+class CardOrigin {
+  final int id;
+  final String term;
+  final String subject;
+  final String part;
+  final String hint;
+  final String sourceFile;
+  final String bodyHtml;
+  const CardOrigin({
+    required this.id,
+    required this.term,
+    required this.subject,
+    required this.part,
+    required this.hint,
+    required this.sourceFile,
+    required this.bodyHtml,
+  });
+  factory CardOrigin.fromJson(Map<String, dynamic> j) => CardOrigin(
+        id: _i(j['id']),
+        term: _s(j['term']),
+        subject: _s(j['subject']),
+        part: _s(j['part']),
+        hint: _s(j['hint']),
+        sourceFile: _s(j['source_file']),
+        bodyHtml: _s(j['body_html']),
+      );
+}
+
 class Card {
   final int id;
   final String subject;
@@ -264,6 +318,8 @@ class Card {
   final String bodyHtml;
   final String state;
   final bool starred;
+  final List<CardReference> relatedCards;
+  final List<CardOrigin> originalCards;
   const Card({
     required this.id,
     required this.subject,
@@ -275,6 +331,8 @@ class Card {
     required this.bodyHtml,
     required this.state,
     required this.starred,
+    this.relatedCards = const <CardReference>[],
+    this.originalCards = const <CardOrigin>[],
   });
   factory Card.fromJson(Map<String, dynamic> j) => Card(
         id: _i(j['id']),
@@ -287,6 +345,16 @@ class Card {
         bodyHtml: _s(j['body_html']),
         state: _s(j['state']),
         starred: _b(j['starred']),
+        relatedCards: j['related_cards'] is List
+            ? (j['related_cards'] as List)
+                .map((dynamic v) => CardReference.fromJson(asMap(v)))
+                .toList()
+            : const <CardReference>[],
+        originalCards: j['original_cards'] is List
+            ? (j['original_cards'] as List)
+                .map((dynamic v) => CardOrigin.fromJson(asMap(v)))
+                .toList()
+            : const <CardOrigin>[],
       );
 }
 
@@ -703,9 +771,9 @@ class ExamReport {
         score100: _d(j['score_100']),
         score300: _d(j['score_300']),
         wrongIds: _li(j['wrong_ids']),
-        byChapter: asMapList(j['by_chapter']).map(ChapterRate.fromJson).toList(),
-        results:
-            asMapList(j['results']).map(ExamResultItem.fromJson).toList(),
+        byChapter:
+            asMapList(j['by_chapter']).map(ChapterRate.fromJson).toList(),
+        results: asMapList(j['results']).map(ExamResultItem.fromJson).toList(),
       );
 }
 
@@ -976,8 +1044,7 @@ class PlanToday {
         daysLeft: _i(j['days_left']),
         remaining: _i(j['remaining']),
         finished: _b(j['finished']),
-        todayItems:
-            asMapList(j['today_items']).map(PlanItem.fromJson).toList(),
+        todayItems: asMapList(j['today_items']).map(PlanItem.fromJson).toList(),
         items: asMapList(j['items']).map(PlanItem.fromJson).toList(),
       );
 }
@@ -1075,6 +1142,7 @@ class ScheduleItem {
   final int id;
   final String itemType;
   final int itemId;
+
   /// 'due' | 'weak'
   final String reason;
   final String title;
@@ -1270,8 +1338,7 @@ class ChatQuiz {
         system: _s(j['system']),
         multi: _b(j['multi']),
         stemHtml: _s(j['stem_html']),
-        options:
-            asMapList(j['options']).map(ChatQuizOption.fromJson).toList(),
+        options: asMapList(j['options']).map(ChatQuizOption.fromJson).toList(),
       );
 }
 
@@ -1321,8 +1388,7 @@ class ChatAnswerResult {
     required this.reply,
     required this.replyHtml,
   });
-  factory ChatAnswerResult.fromJson(Map<String, dynamic> j) =>
-      ChatAnswerResult(
+  factory ChatAnswerResult.fromJson(Map<String, dynamic> j) => ChatAnswerResult(
         correct: _b(j['correct']),
         answer: _s(j['answer']),
         qid: _s(j['qid']),
@@ -1334,9 +1400,11 @@ class ChatAnswerResult {
 class ChatSendBody {
   final String message;
   final String? context;
+
   /// dataURL
   final String? image;
   final String? fileName;
+
   /// base64
   final String? fileData;
   const ChatSendBody({
@@ -1448,7 +1516,13 @@ class Invite {
   final String? usedByUsername;
   final String? usedAt;
   final String? createdAt;
-  const Invite({required this.code, required this.createdBy, this.usedBy, this.usedByUsername, this.usedAt, this.createdAt});
+  const Invite(
+      {required this.code,
+      required this.createdBy,
+      this.usedBy,
+      this.usedByUsername,
+      this.usedAt,
+      this.createdAt});
   factory Invite.fromJson(Map<String, dynamic> j) => Invite(
         code: _s(j['code']),
         createdBy: _i(j['created_by']),
@@ -1466,8 +1540,13 @@ class AdminUser {
   final String? createdAt;
   final String? lastLoginAt;
   final String? inviteCode;
-  const AdminUser({required this.id, required this.username, required this.isAdmin,
-      this.createdAt, this.lastLoginAt, this.inviteCode});
+  const AdminUser(
+      {required this.id,
+      required this.username,
+      required this.isAdmin,
+      this.createdAt,
+      this.lastLoginAt,
+      this.inviteCode});
   factory AdminUser.fromJson(Map<String, dynamic> j) => AdminUser(
         id: _i(j['id']),
         username: _s(j['username']),
