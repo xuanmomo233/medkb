@@ -4,8 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.render import card_md
-from app.models import Card, CardMerge, CardOriginal, CardRelation
+from app.models import Card, CardMerge, CardRelation
 
 
 def visible(column=Card.id):
@@ -45,7 +44,7 @@ async def details(session: AsyncSession, ids: Sequence[int]) -> dict[int, dict]:
     if not ids:
         return {}
     mapping = await redirects(session)
-    out = {card_id: {"related_cards": [], "original_cards": []} for card_id in ids}
+    out = {card_id: {"related_cards": []} for card_id in ids}
     relations = (await session.scalars(select(CardRelation).where(
         or_(CardRelation.left_id.in_(ids), CardRelation.right_id.in_(ids))
     ))).all()
@@ -62,17 +61,4 @@ async def details(session: AsyncSession, ids: Sequence[int]) -> dict[int, dict]:
                     "id": target, "term": card.term, "subject": card.subject,
                     "part": card.part, "reason": row.reason,
                 })
-    source_ids = set(ids) | {i for i in mapping if resolve(mapping, i) in out}
-    for saved in (await session.scalars(select(CardOriginal).where(
-        CardOriginal.card_id.in_(source_ids)
-    ).order_by(CardOriginal.card_id))).all():
-        root = resolve(mapping, saved.card_id)
-        if root in out:
-            card = saved.data
-            out[root]["original_cards"].append({
-                "id": saved.card_id, "term": card["term"], "subject": card["subject"],
-                "part": card["part"], "section": card["section"], "hint": card["hint"],
-                "source_file": card["source_file"],
-                "body_html": card_md(card["body"]),
-            })
     return out

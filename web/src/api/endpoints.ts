@@ -18,7 +18,6 @@ export const api = {
   // 背卡
   cardIndex: () => get<T.CardPartIndex[]>('/cards/index'),
   cards: (q: T.CardQuery) => get<T.Card[]>('/cards', { ...q }),
-  cardSources: (id: number) => get<T.SourceQuestion[]>(`/cards/${id}/sources`),
 
   // 刷题
   facets: (f: T.QuizFilter) => get<T.FacetProgress>('/quiz/facets', { ...f }),

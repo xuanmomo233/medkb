@@ -279,34 +279,6 @@ class CardReference {
       );
 }
 
-class CardOrigin {
-  final int id;
-  final String term;
-  final String subject;
-  final String part;
-  final String hint;
-  final String sourceFile;
-  final String bodyHtml;
-  const CardOrigin({
-    required this.id,
-    required this.term,
-    required this.subject,
-    required this.part,
-    required this.hint,
-    required this.sourceFile,
-    required this.bodyHtml,
-  });
-  factory CardOrigin.fromJson(Map<String, dynamic> j) => CardOrigin(
-        id: _i(j['id']),
-        term: _s(j['term']),
-        subject: _s(j['subject']),
-        part: _s(j['part']),
-        hint: _s(j['hint']),
-        sourceFile: _s(j['source_file']),
-        bodyHtml: _s(j['body_html']),
-      );
-}
-
 class Card {
   final int id;
   final String subject;
@@ -319,7 +291,6 @@ class Card {
   final String state;
   final bool starred;
   final List<CardReference> relatedCards;
-  final List<CardOrigin> originalCards;
   const Card({
     required this.id,
     required this.subject,
@@ -332,7 +303,6 @@ class Card {
     required this.state,
     required this.starred,
     this.relatedCards = const <CardReference>[],
-    this.originalCards = const <CardOrigin>[],
   });
   factory Card.fromJson(Map<String, dynamic> j) => Card(
         id: _i(j['id']),
@@ -350,11 +320,6 @@ class Card {
                 .map((dynamic v) => CardReference.fromJson(asMap(v)))
                 .toList()
             : const <CardReference>[],
-        originalCards: j['original_cards'] is List
-            ? (j['original_cards'] as List)
-                .map((dynamic v) => CardOrigin.fromJson(asMap(v)))
-                .toList()
-            : const <CardOrigin>[],
       );
 }
 

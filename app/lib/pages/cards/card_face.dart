@@ -2,7 +2,6 @@ import 'package:flutter/material.dart' hide Card;
 import '../../models.dart';
 import '../../nav.dart';
 import '../../widgets/widgets.dart';
-import 'card_sources.dart';
 import 'card_run_page.dart';
 
 class CardFront extends StatelessWidget {
@@ -56,20 +55,12 @@ class CardFront extends StatelessWidget {
   }
 }
 
-class CardBack extends StatefulWidget {
+class CardBack extends StatelessWidget {
   final Card card;
   const CardBack({super.key, required this.card});
 
   @override
-  State<CardBack> createState() => _CardBackState();
-}
-
-class _CardBackState extends State<CardBack> {
-  bool _showSrc = false;
-
-  @override
   Widget build(BuildContext context) {
-    final Card card = widget.card;
     final ThemeData t = Theme.of(context);
     return AppCard(
       padding: const EdgeInsets.all(16),
@@ -112,36 +103,6 @@ class _CardBackState extends State<CardBack> {
                 )),
               ),
           ],
-          if (card.originalCards.isNotEmpty)
-            ExpansionTile(
-              tilePadding: EdgeInsets.zero,
-              title: Text('整理前原文与合并来源（${card.originalCards.length} 张）'),
-              children: <Widget>[
-                for (final CardOrigin original in card.originalCards)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: <Widget>[
-                        Text('#${original.id} · ${original.term}',
-                            style: t.textTheme.titleSmall),
-                        Text(
-                            '${original.subject} · ${original.part} · ${original.sourceFile}',
-                            style: t.textTheme.bodySmall),
-                        if (original.hint.isNotEmpty) Text(original.hint),
-                        HtmlView(original.bodyHtml),
-                      ],
-                    ),
-                  ),
-              ],
-            ),
-          const Divider(height: 24),
-          TextButton.icon(
-            onPressed: () => setState(() => _showSrc = !_showSrc),
-            icon: Icon(_showSrc ? Icons.expand_less : Icons.expand_more),
-            label: Text(_showSrc ? '收起源题详解' : '展开源题详解'),
-          ),
-          if (_showSrc) CardSources(cardId: card.id),
         ],
       ),
     );

@@ -3,7 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import CurrentUser, Session
-from app.schemas.cards import CardOut, CardPartIndex, SourceQuestion
+from app.schemas.cards import CardOut, CardPartIndex
 from app.services import cards as svc
 
 router = APIRouter(prefix="/cards", tags=["cards"])
@@ -36,11 +36,3 @@ async def cards(
     return await svc.list_cards(
         session, user.id, subject=subject, part=part, ids=id_list, plan_day=plan_day, starred=starred, due=due
     )
-
-
-@router.get("/{card_id}/sources", response_model=list[SourceQuestion])
-async def sources(card_id: int, session: Session, user: CurrentUser):
-    r = await svc.sources(session, card_id)
-    if r is None:
-        raise HTTPException(404, "卡片不存在")
-    return r

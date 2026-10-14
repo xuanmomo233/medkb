@@ -54,15 +54,10 @@ export interface Card {
   state: ProgressState
   starred: boolean
   related_cards?: { id: number; term: string; subject: string; part: string; reason: string }[]
-  original_cards?: { id: number; term: string; subject: string; part: string; section: string; hint: string; source_file: string; body_html: string }[]
 }
 export interface CardQuery {
   subject?: string; part?: string; ids?: number[]
   plan_day?: number; starred?: boolean; due?: boolean
-}
-export interface SourceQuestion {
-  id: number; qid: string; system: string
-  stem_html: string; answer: string; analysis_html: string
 }
 
 // ---------- 刷题 ----------

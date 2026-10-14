@@ -5,7 +5,7 @@ from sqlalchemy import and_, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import card_md, md
-from app.models import Card, CardProgress, CardQuestion, Question
+from app.models import Card, CardProgress
 from app.services import study
 from app.services.card_merges import canonical_id, canonical_ids, details, visible
 from app.services.progress import derive_state
@@ -115,24 +115,3 @@ async def update_admin_card(session: AsyncSession, card_id: int, patch) -> int:
     await session.commit()
     return changed
 
-
-async def sources(session: AsyncSession, card_id: int) -> list[dict] | None:
-    card_id = await canonical_id(session, card_id)
-    if await session.get(Card, card_id) is None:
-        return None
-    qs = (
-        await session.execute(
-            select(Question)
-            .join(CardQuestion, CardQuestion.question_id == Question.id)
-            .where(CardQuestion.card_id == card_id)
-            .order_by(Question.id)
-            .limit(12)
-        )
-    ).scalars()
-    return [
-        {
-            "id": q.id, "qid": q.qid, "system": q.system or "", "stem_html": md(q.stem),
-            "answer": q.answer or "", "analysis_html": md(q.analysis),
-        }
-        for q in qs
-    ]

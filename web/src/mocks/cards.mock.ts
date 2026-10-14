@@ -1,4 +1,4 @@
-import type { Card, CardPartIndex, CardQuery, MarkAction, ProgressState, SourceQuestion } from '@/api/types'
+import type { Card, CardPartIndex, CardQuery, MarkAction, ProgressState } from '@/api/types'
 import { NEXT, registerMock } from './registry'
 
 const fmt = (t: string) => t.replace(/\*\*(.+?)\*\*/g, '<mark class="kw">$1</mark>').replace(/\[\[(.+?)\]\]/g, '<span class="tag">$1</span>')
@@ -60,13 +60,6 @@ part('生理学', '血液循环', '心脏生理', [
   ['心音的产生机制', '第一心音与第二心音', table(['心音', '标志', '机制'], [['第一心音', '心室收缩开始', '房室瓣关闭，音调低、持续长'], ['第二心音', '心室舒张开始', '半月瓣关闭，音调高、持续短']])],
 ])
 
-const sources: Record<string, SourceQuestion[]> = {
-  default: [
-    { id: 9001, qid: 'Q-2019-017', system: '内科学', stem_html: '<p>下列关于该考点的叙述，正确的是</p><p>A. 最常见的病因为感染　B. 首选药物为青霉素　C. 以夜间发作为主</p>', answer: 'B', analysis_html: '<p>本题考查<mark class="kw">核心考点</mark>。A 项为常见诱因而非病因；C 项属于另一类疾病的特点。</p>' },
-    { id: 9002, qid: 'Q-2021-054', system: '内科学', stem_html: '<p>患者男，62 岁，活动后气促 1 年，加重伴双下肢水肿 3 天。最可能的诊断是</p>', answer: 'C', analysis_html: '<ul><li>慢性起病，活动后气促提示心功能不全</li><li>双下肢水肿提示体循环淤血</li></ul>' },
-  ],
-}
-
 const marks = new Map<number, { state: ProgressState; starred: boolean }>()
 const seedMark = (id: number, state: ProgressState, starred: boolean) => marks.set(id, { state, starred })
 seedMark(1, 'again', true)
@@ -122,8 +115,6 @@ registerMock('PUT', '/admin/cards/{id}', ({ params, body }) => {
   if (typeof p.body === 'string' && p.body !== c.body_html) { c.body_html = fmt(p.body); changed++ }
   return { changed }
 })
-
-registerMock('GET', '/cards/{id}/sources', ({ params }) => (Number(params.id) % 5 === 0 ? [] : sources.default))
 
 const STATE_OF: Partial<Record<MarkAction, ProgressState>> = { rate_again: 'again', rate_good: 'mastered', plan: 'plan', master: 'mastered', wrong: 'again', unmaster: '', unwrong: '' }
 registerMock('POST', '/progress/mark', ({ body }) => {
