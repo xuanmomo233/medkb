@@ -63,7 +63,8 @@ async def test_merge_preserves_originals_progress_notes_sources_and_rolls_back(s
     info = await details(session, [101, 103])
     assert [i["id"] for i in info[101]["related_cards"]] == [103]
     assert [i["id"] for i in info[103]["related_cards"]] == [101]
-    assert len(info[101]["original_cards"]) == 2
+    assert (await session.get(CardOriginal, 102)).data["body"] == "原文102"
+    assert all("original_cards" not in card for card in info.values())
     assert await apply(session, plan) == {"already_applied": True, "batch_id": plan["id"]}
     executed = await detail(session, "TERM-0192")
     assert executed["executed"] and executed["execution"]["status"] == "merged"
@@ -88,7 +89,7 @@ async def test_dry_run_rollback_leaves_cards_and_progress_unchanged(session):
 
 
 @pytest.mark.asyncio
-async def test_standalone_revision_preserves_displayable_original_and_rolls_back(session):
+async def test_standalone_revision_preserves_private_original_and_rolls_back(session):
     plan = await seed(session)
     plan["merges"] = []
     plan["patches"] = [{"id": 103, "patch": {"body": "根据管理员意见修订"}}]
@@ -97,8 +98,7 @@ async def test_standalone_revision_preserves_displayable_original_and_rolls_back
     original = await session.get(CardOriginal, 103)
     assert original.data["body"] == "原文103"
     info = await details(session, [103])
-    assert [item["id"] for item in info[103]["original_cards"]] == [103]
-    assert "原文103" in info[103]["original_cards"][0]["body_html"]
+    assert "original_cards" not in info[103]
     await rollback(session, plan["id"])
     await session.commit()
     assert (await session.get(Card, 103)).body == "原文103"

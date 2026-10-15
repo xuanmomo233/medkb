@@ -189,9 +189,9 @@ export default function AdminPage() {
   return (
     <div className={s.wrap}>
       <PageHeader title="管理中心" sub={user?.is_admin ? '管理员' : undefined} />
-      {user?.is_admin && <Card title="卡片与内容审核">
-        <p className={s.sectionHint}>原卡对比、重复候选、中文机制解释与章节整理建议；审核仅记录意见，不自动更改内容。</p>
-        <Link to="/me/admin/review">进入内容审核</Link>
+      {user?.is_admin && <Card title="待我审核">
+        <p className={s.sectionHint}>只看仍需你确认的内容；已审核待处理和历史记录单独查看。</p>
+        <Link to="/me/admin/review?queue=needs_review">进入待我审核</Link>
       </Card>}
       <SiteCard />
       <UsersCard />

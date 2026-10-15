@@ -1,6 +1,7 @@
 import { get, put } from './client'
 
 export type ReviewStatus = 'pending' | 'approved' | 'rejected' | 'needs_revision'
+export type ReviewQueue = 'needs_review' | 'waiting_execution' | 'completed' | 'all'
 export interface ReviewDecision {
   status: ReviewStatus
   note: string
@@ -23,12 +24,14 @@ export interface ReviewSummary {
   subjects: string[]
   card_ids: number[]
   decision: ReviewDecision
+  work_queue: Exclude<ReviewQueue, 'all'>
   execution?: ReviewExecution | null
 }
 export interface ReviewList {
   dataset_id: string
   audit_date: string
   counts: Record<string, number>
+  queue_counts: Record<ReviewQueue, number>
   total: number
   offset: number
   items: ReviewSummary[]
@@ -63,7 +66,7 @@ export interface ReviewDetail extends ReviewSummary {
 }
 
 export const reviewApi = {
-  list: (q: { category: string; status: string; q: string; offset: number }) => get<ReviewList>('/admin/reviews', q),
+  list: (q: { category: string; status: string; q: string; offset: number; queue: ReviewQueue }) => get<ReviewList>('/admin/reviews', q),
   detail: (id: string) => get<ReviewDetail>(`/admin/reviews/${encodeURIComponent(id)}`),
   save: (id: string, body: { status: ReviewStatus; note: string; expected_version: number }) =>
     put<ReviewDecision>(`/admin/reviews/${encodeURIComponent(id)}/decision`, body),

@@ -2,16 +2,18 @@ import hashlib
 import json
 from functools import lru_cache
 from pathlib import Path
+from typing import cast
 
 from fastapi import HTTPException
 from sqlalchemy import select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import card_md, md
 from app.models import Card, EditorialExecution, EditorialReview
 from app.services.card_merges import redirects, resolve
-from app.schemas.editorial import ReviewDecisionIn
+from app.schemas.editorial import ReviewDecisionIn, ReviewQueue
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "editorial_review.json"
 CLASSES = {
@@ -82,25 +84,46 @@ async def decisions(session: AsyncSession, dataset: str):
     return {r.key.split(":", 1)[1]: r for r in rows}
 
 
-async def list_items(session: AsyncSession, category: str, status: str, query: str, offset: int, size: int):
+def review_queue(review: EditorialReview | None, execution: EditorialExecution | None) -> ReviewQueue:
+    finished = {"merged", "linked", "revised", "renamed", "kept", "unchanged"}
+    pending_work = (
+        execution is None or execution.status not in finished
+        or execution.review_version != (review.version if review else 0)
+    )
+    if not pending_work:
+        return "completed"
+    return "needs_review" if review is None or review.status == "pending" else "waiting_execution"
+
+
+async def list_items(
+    session: AsyncSession, category: str, status: str, query: str, offset: int, size: int,
+    queue: ReviewQueue = "all",
+):
     dataset, date, items = catalog()
     reviews = await decisions(session, dataset)
     executions = {r.key.split(":", 1)[1]: r for r in (await session.scalars(
         select(EditorialExecution).where(EditorialExecution.key.startswith(dataset + ":"))
     )).all()}
-    counts = {}
-    for item in items.values():
-        counts[item["category"]] = counts.get(item["category"], 0) + 1
+    queues = {ident: review_queue(reviews.get(ident), executions.get(ident)) for ident in items}
+    queue_counts = {key: sum(value == key for value in queues.values())
+                    for key in ("needs_review", "waiting_execution", "completed")}
+    queue_counts["all"] = len(items)
     needle = query.strip().casefold()
-    filtered = [
+    scoped = [
         i for i in items.values()
-        if (not category or i["category"] == category)
+        if (queue == "all" or queues[i["id"]] == queue)
         and (not status or decision_out(reviews.get(i["id"]))["status"] == status)
         and (not needle or needle in " ".join([i["id"], i["title"], *i["subjects"], *map(str, i["card_ids"])]).casefold())
     ]
-    return dict(dataset_id=dataset, audit_date=date, counts=counts, total=len(filtered), offset=offset,
+    counts: dict[str, int] = {}
+    for item in scoped:
+        counts[item["category"]] = counts.get(item["category"], 0) + 1
+    filtered = [i for i in scoped if not category or i["category"] == category]
+    return dict(dataset_id=dataset, audit_date=date, counts=counts, queue_counts=queue_counts,
+                total=len(filtered), offset=offset,
                 items=[dict(id=i["id"], category=i["category"], title=i["title"], subjects=i["subjects"],
-                            card_ids=i["card_ids"], decision=decision_out(reviews.get(i["id"])))
+                            card_ids=i["card_ids"], decision=decision_out(reviews.get(i["id"])),
+                            work_queue=queues[i["id"]])
                             | {"execution": execution_out(executions.get(i["id"]), reviews.get(i["id"]))}
                        for i in filtered[offset:offset + size]])
 
@@ -133,12 +156,14 @@ async def detail(session: AsyncSession, item_id: str):
                           changed=current_fields != {k: original[k] for k in CARD_FIELDS},
                           merged_into=resolve(mapping, original["id"]) if original["id"] in mapping else None))
     row = await session.get(EditorialReview, dataset + ":" + item_id)
-    execution = execution_out(await session.get(EditorialExecution, dataset + ":" + item_id), row)
+    execution_row = await session.get(EditorialExecution, dataset + ":" + item_id)
+    execution = execution_out(execution_row, row)
     executed = bool(execution and not execution["needs_recheck"]
                     and execution["status"] in ("merged", "linked", "revised", "renamed"))
     return {**{k: v for k, v in item.items() if k != "cards"}, "cards": cards,
             "dataset_id": dataset, "audit_date": date, "proposal_html": card_md(item["proposal"]),
-            "decision": decision_out(row), "execution": execution, "executed": executed}
+            "decision": decision_out(row), "execution": execution, "executed": executed,
+            "work_queue": review_queue(row, execution_row)}
 
 
 async def save_decision(session: AsyncSession, admin_id: int, item_id: str, body: ReviewDecisionIn):
@@ -152,10 +177,10 @@ async def save_decision(session: AsyncSession, admin_id: int, item_id: str, body
             await session.rollback()
             raise HTTPException(409, "审核意见已被其他管理员更新，请刷新后重试") from None
     else:
-        result = await session.execute(
+        result = cast(CursorResult, await session.execute(
             update(EditorialReview).where(EditorialReview.key == key, EditorialReview.version == body.expected_version)
             .values(status=body.status, note=body.note, updated_by=admin_id, version=body.expected_version + 1)
-        )
+        ))
         if result.rowcount != 1:
             await session.rollback()
             raise HTTPException(409, "审核意见已被其他管理员更新，请刷新后重试")

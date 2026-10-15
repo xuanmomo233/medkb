@@ -14,7 +14,7 @@ from app.models import InviteCode, QuestionEdit, User
 from app.schemas.admin import (AdminCard, AdminCardPatch, AdminQuestion, AdminQuestionPatch, AdminUserDelete, AdminUserOut,
                                ChangedOut, InviteCreate, InviteOut, SiteConfigOut, SiteConfigPatch)
 from app.schemas.admin import MarkdownPreviewIn, MarkdownPreviewOut
-from app.schemas.editorial import ReviewDecisionIn
+from app.schemas.editorial import ReviewDecisionIn, ReviewQueue
 from app.services import cards as admin_cards
 from app.services import quiz as admin_questions
 from app.services import study
@@ -26,8 +26,8 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 @router.get("/reviews")
 async def list_reviews(session: Session, admin: AdminUser, category: str = "", status: str = "",
                        q: str = Query(default="", max_length=200), offset: int = Query(default=0, ge=0),
-                       size: int = Query(default=20, ge=1, le=100)):
-    return await editorial.list_items(session, category, status, q, offset, size)
+                       size: int = Query(default=20, ge=1, le=100), queue: ReviewQueue = "all"):
+    return await editorial.list_items(session, category, status, q, offset, size, queue)
 
 
 @router.get("/reviews/{item_id}")

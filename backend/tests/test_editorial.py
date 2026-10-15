@@ -8,7 +8,7 @@ from pydantic import ValidationError
 from app.api.admin import router
 from app.api.deps import current_user
 from app.core.db import get_session
-from app.models import Card, User
+from app.models import Card, EditorialExecution, EditorialReview, User
 from app.schemas.editorial import ReviewDecisionIn
 from app.services import editorial
 
@@ -102,3 +102,80 @@ def test_decision_validation():
         ReviewDecisionIn(status="delete", expected_version=0)
     with pytest.raises(ValidationError):
         ReviewDecisionIn(status="pending", note="x" * 4001, expected_version=0)
+
+
+@pytest.mark.parametrize("review_status,review_version,execution_status,execution_version,expected", [
+    (None, 0, "merged", 0, "completed"),
+    (None, 0, "kept", 0, "completed"),
+    (None, 0, None, 0, "needs_review"),
+    ("pending", 1, "deferred", 1, "needs_review"),
+    ("pending", 2, "merged", 1, "needs_review"),
+    ("approved", 2, "deferred", 1, "waiting_execution"),
+    ("needs_revision", 2, "merged", 1, "waiting_execution"),
+    ("rejected", 2, "merged", 1, "waiting_execution"),
+    ("approved", 2, "merged", 2, "completed"),
+    ("rejected", 1, "unchanged", 1, "completed"),
+    ("approved", 1, "rolled_back", 1, "waiting_execution"),
+    ("pending", 1, "unknown_status", 1, "needs_review"),
+])
+def test_review_work_queue(review_status, review_version, execution_status, execution_version, expected):
+    review = SimpleNamespace(status=review_status, version=review_version) if review_status else None
+    execution = SimpleNamespace(status=execution_status, review_version=execution_version) if execution_status else None
+    assert editorial.review_queue(review, execution) == expected
+
+
+@pytest.mark.asyncio
+async def test_work_queue_filters_counts_paging_and_saved_reviews(session, monkeypatch):
+    dataset = "work-queue-test"
+    fixtures = [
+        (None, 0, "merged", 0), ("pending", 1, "deferred", 1),
+        ("approved", 2, "deferred", 1), ("approved", 2, "merged", 1),
+        ("pending", 2, "merged", 1), ("approved", 2, "merged", 2),
+        (None, 0, None, 0), ("rejected", 1, "unchanged", 1),
+        ("needs_revision", 1, "rolled_back", 1),
+    ]
+    items = {}
+    for index, (review_status, version, execution_status, applied_version) in enumerate(fixtures):
+        ident = f"TEST-{index}"
+        items[ident] = dict(id=ident, category="titles", title=ident, subjects=["内科学"], card_ids=[])
+        if review_status:
+            session.add(EditorialReview(key=dataset + ":" + ident, status=review_status, version=version))
+        if execution_status:
+            session.add(EditorialExecution(key=dataset + ":" + ident, review_version=applied_version,
+                                           status=execution_status, description="test", batch_id="test"))
+    session.add(User(id=1, username="queue-test-admin", password_hash="unused", is_admin=True))
+    await session.commit()
+    monkeypatch.setattr(editorial, "catalog", lambda: (dataset, "test-date", items))
+    pending = await editorial.list_items(session, "", "", "", 0, 20, "needs_review")
+    assert {i["id"] for i in pending["items"]} == {"TEST-1", "TEST-4", "TEST-6"}
+    assert pending["counts"] == {"titles": 3}
+    assert pending["queue_counts"] == dict(needs_review=3, waiting_execution=3, completed=3, all=9)
+    assert all(i["work_queue"] == "needs_review" for i in pending["items"])
+    page = await editorial.list_items(session, "", "", "", 1, 1, "needs_review")
+    assert [i["id"] for i in page["items"]] == ["TEST-4"]
+    empty = await editorial.list_items(session, "exact", "", "", 0, 20, "needs_review")
+    assert empty["total"] == 0 and empty["counts"] == {"titles": 3}
+    match = await editorial.list_items(session, "", "", "TEST-1", 0, 20, "needs_review")
+    assert match["total"] == 1 and match["counts"] == {"titles": 1}
+    await editorial.save_decision(session, 1, "TEST-1", ReviewDecisionIn(
+        status="approved", note="已核对，等待执行", expected_version=1))
+    remaining = await editorial.list_items(session, "", "", "", 0, 20, "needs_review")
+    waiting = await editorial.list_items(session, "", "", "", 0, 20, "waiting_execution")
+    assert remaining["total"] == 2 and waiting["total"] == 4
+    assert "TEST-1" not in {i["id"] for i in remaining["items"]}
+    assert "TEST-1" in {i["id"] for i in waiting["items"]}
+    execution = await session.get(EditorialExecution, dataset + ":TEST-1")
+    assert execution.status == "deferred" and execution.review_version == 1
+
+
+def test_work_queue_query_validation():
+    app = FastAPI()
+    app.include_router(router, prefix="/api")
+
+    async def unused_session():
+        yield None
+
+    app.dependency_overrides[get_session] = unused_session
+    app.dependency_overrides[current_user] = lambda: SimpleNamespace(is_admin=True)
+    with TestClient(app) as client:
+        assert client.get("/api/admin/reviews?queue=invalid").status_code == 422
