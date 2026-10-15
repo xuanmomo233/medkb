@@ -12,6 +12,8 @@ COPY backend/app ./app
 RUN pip install --no-cache-dir . \
     && useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin medkb
 COPY backend/scripts ./scripts
+COPY backend/alembic.ini ./alembic.ini
+COPY backend/alembic ./alembic
 COPY --from=web /w/dist /app/web
 ENV PYTHONUNBUFFERED=1
 EXPOSE 8000

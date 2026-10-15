@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../api.dart';
 
-String _src(int n) => '${Api.base}/img/page_${n.toString().padLeft(3, '0')}.webp';
+String _src(int n, String? sourceKey) => sourceKey == null
+    ? '${Api.base}/img/page_${n.toString().padLeft(3, '0')}.webp'
+    : '${Api.base}/api/textbook-images/${Uri.encodeComponent(sourceKey)}/$n.webp';
 
 class _NetImage extends StatelessWidget {
   final String url;
   final BoxFit fit;
-  const _NetImage(this.url, {required this.fit});
+  final bool authenticated;
+  const _NetImage(this.url, {required this.fit, this.authenticated = false});
 
   @override
   Widget build(BuildContext context) {
@@ -14,6 +17,7 @@ class _NetImage extends StatelessWidget {
     return Image.network(
       url,
       fit: fit,
+      headers: authenticated ? <String, String>{'X-Token': Api.token} : null,
       loadingBuilder:
           (BuildContext c, Widget child, ImageChunkEvent? progress) {
         if (progress == null) return child;
@@ -33,12 +37,14 @@ class _NetImage extends StatelessWidget {
 
 class PageGallery extends StatelessWidget {
   final List<int> pages;
-  const PageGallery({super.key, required this.pages});
+  final String title;
+  final String? sourceKey;
+  const PageGallery({super.key, required this.pages, this.title = '导图原图', this.sourceKey});
 
   void _open(BuildContext context, int index) {
     Navigator.of(context).push<void>(MaterialPageRoute<void>(
       fullscreenDialog: true,
-      builder: (_) => _GalleryViewer(pages: pages, initial: index),
+      builder: (_) => _GalleryViewer(pages: pages, initial: index, sourceKey: sourceKey),
     ));
   }
 
@@ -50,7 +56,7 @@ class PageGallery extends StatelessWidget {
       children: <Widget>[
         Row(
           children: <Widget>[
-            Text('导图原图',
+            Text(title,
                 style: t.textTheme.titleMedium
                     ?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(width: 8),
@@ -83,7 +89,11 @@ class PageGallery extends StatelessWidget {
                 child: Stack(
                   fit: StackFit.expand,
                   children: <Widget>[
-                    _NetImage(_src(pages[i]), fit: BoxFit.cover),
+                    _NetImage(
+                      _src(pages[i], sourceKey),
+                      fit: BoxFit.cover,
+                      authenticated: sourceKey != null,
+                    ),
                     Positioned(
                       right: 4,
                       bottom: 4,
@@ -113,7 +123,8 @@ class PageGallery extends StatelessWidget {
 class _GalleryViewer extends StatefulWidget {
   final List<int> pages;
   final int initial;
-  const _GalleryViewer({required this.pages, required this.initial});
+  final String? sourceKey;
+  const _GalleryViewer({required this.pages, required this.initial, this.sourceKey});
 
   @override
   State<_GalleryViewer> createState() => _GalleryViewerState();
@@ -145,7 +156,11 @@ class _GalleryViewerState extends State<_GalleryViewer> {
         itemBuilder: (BuildContext c, int i) => InteractiveViewer(
           maxScale: 6,
           child: Center(
-            child: _NetImage(_src(widget.pages[i]), fit: BoxFit.contain),
+            child: _NetImage(
+              _src(widget.pages[i], widget.sourceKey),
+              fit: BoxFit.contain,
+              authenticated: widget.sourceKey != null,
+            ),
           ),
         ),
       ),

@@ -1,139 +1,100 @@
-# MedKB 运维手册（VPS 使用方法 + 项目工作流程）
+# MedKB 运维手册
 
-> 本文件描述线上环境的结构、常用运维命令、发版流程。**仓库必须保持 private**（含数据库凭据、邀请码；文档中不重复记录密钥，需要时用 `systemctl cat medkb.service` 查看）。
+部署路径、容器挂载和健康接口于 2026-10-16 实机核对。以下远端命令使用 Linux shell，本机命令使用 PowerShell 7。
 
-## 1. 架构总览
+## 运行结构
 
-```
-用户浏览器/App
-    │
-    ▼  https://luck.021209.xyz  (Cloudflare → 1Panel + OpenResty)
-    │  站点配置: /opt/1panel/www/conf.d/medkb.conf
-    │  80→301 https; 443 反代 → 127.0.0.1:8899
-    ▼
-medkb-api (docker compose, deploy/Dockerfile, uvicorn :8000)
-    ├── /              → /app/web/dist（React SPA，服务端 sanitize 后的 HTML）
-    ├── /app.apk       → /data/app-release.apk （App 更新下载，/api/version 带 sha256）
-    ├── /api/version   → MEDKB_VERSION 环境变量（"build|更新说明"）
-    ├── /api/*         → FastAPI（X-Token / Bearer，Argon2 + token 哈希）
-    ├── /img/<name>    → /opt/medkb/img/*.webp（导图页图，只读挂载）
-    └── 数据层
-        ├── PostgreSQL  dbname=medkb_v2（MEDKB_DATABASE_URL，见 deploy/.env）
-        └── /opt/medkb/kb.db（236MB SQLite 备份/本地开发用，勿删）
-```
+浏览器 / App → `https://luck.021209.xyz` → 反向代理 → `127.0.0.1:8899` → Docker `medkb-api:8000` → PostgreSQL `medkb_v2`。
 
-> **2026-10 安全整改**：旧栈 `server_cloud.py`（Flask）已从仓库删除，systemd `medkb.service` 废弃。
-> `server/` 下数据脚本（`wcyk_sync.py` 等）的 DB 连接改为环境变量 `PG_DSN`，**VPS 上的 cron
-> 调用前需 `export PG_DSN='dbname=medkb user=... password=... host=127.0.0.1'`**（口令写进 cron
-> 环境/root-only 的 env 文件，勿再入库）。
+| 位置 | 用途 |
+|---|---|
+| `/opt/medkb-v2/src/` | 生产构建源码；当前不是 Git checkout，不能在这里直接 `git pull` |
+| `/opt/medkb-v2/src/deploy/docker-compose.yml` | 当前运行的 Compose 配置 |
+| `/opt/medkb-v2/src/deploy/.env` | 生产环境变量，仅保存在服务器 |
+| `/opt/medkb/img` → `/data/img` | 导图图片，只读挂载 |
+| `/opt/medkb/app-release.apk` → `/data/app-release.apk` | 当前安装包，只读挂载 |
+| `/opt/medkb/uimg` → `/data/uimg` | 用户上传，可写 |
+| `/opt/medkb/imgcache` → `/data/imgcache` | 按需生成的图片缓存，可写 |
+| 镜像内 `/app/web` | 网页构建产物，由 FastAPI 提供 |
 
-本机还有另一个项目（ArcartX 云平台，nginx `conf.d/default.conf` → :5173），与本项目无关，勿动。
+旧 Flask 服务、systemd `medkb.service`、`VERSION` 文件和 `kb.db` 已不属于当前部署。不要用旧栈命令管理服务。
 
-## 2. SSH 登录
+## 连接与检查
+
+本机使用已配置的 SSH 别名，不在文档记录私钥或数据库口令：
 
 ```powershell
-ssh axs-vps        # 别名已配好：103.231.58.64:352, root, D:\Desktop\axs.pem
+ssh axs-vps
 ```
 
-- **注意**：`luck.021209.xyz` 的 22 端口不通，必须走别名（352 端口）。
-- 传文件：`scp 本地文件 axs-vps:/opt/medkb/`
+登录服务器后执行：
 
-## 3. 服务管理（新栈 docker）
-
-```bash
-cd /opt/medkb-v2/deploy        # 或你放置 deploy/ 的目录
-docker compose up -d --build   # 改代码后重建
-docker compose logs -f api     # 实时日志
-docker compose restart api
+```sh
+docker compose --project-directory /opt/medkb-v2/src/deploy ps
+docker compose --project-directory /opt/medkb-v2/src/deploy logs --tail 100 api
+curl --fail --silent --show-error http://127.0.0.1:8899/api/health
 ```
 
-- 静态资源（apk、img、kb）走 bind mount，落盘即生效不用重启。
-- 环境变量在 `deploy/.env`（MEDKB_DATABASE_URL / MEDKB_GLM_API_KEY / MEDKB_INVITE_CODE / MEDKB_VERSION / MEDKB_EXPOSE_DOCS），改后 `docker compose up -d`。
-- ~~旧栈 `medkb.service`(systemd + Flask) 已废弃，保持 disabled~~。
+`/api/health` 会执行数据库查询；正常返回 `{"status":"ok"}`，数据库异常返回 503。仅首页返回 200 不能证明数据库可用。
 
-## 4. 线上文件布局 `/opt/medkb/`
+## 服务端与网页发布
 
-| 文件/目录 | 作用 |
+1. 在本地完成 README 中的三端检查，并检查待发布差异。
+2. 将确认的源码同步至 `/opt/medkb-v2/src/`。当前通过文件同步发布，不依赖远端 Git。上传时排除 `.env`、签名文件、依赖缓存、测试缓存和本地构建产物；保留服务器的 `deploy/.env`。
+3. 构建新镜像，先运行数据库迁移，再启动服务：
+
+```sh
+docker compose --project-directory /opt/medkb-v2/src/deploy build api
+docker compose --project-directory /opt/medkb-v2/src/deploy run --rm api alembic upgrade head
+docker compose --project-directory /opt/medkb-v2/src/deploy up -d api
+docker compose --project-directory /opt/medkb-v2/src/deploy logs --tail 100 api
+curl --fail --silent --show-error http://127.0.0.1:8899/api/health
+curl --fail --silent --show-error https://luck.021209.xyz/api/health
+docker compose --project-directory /opt/medkb-v2/src/deploy exec api python scripts/verify_content_publication.py
+```
+
+前端已编译进镜像，修改 React 源码后需要重建。首次配置上传目录时，把 `/opt/medkb/uimg` 和 `/opt/medkb/imgcache` 的属主设为容器用户 UID/GID `10001:10001`。
+
+环境变量由 Compose 的 `.env` 注入。常用配置为 `MEDKB_DATABASE_URL`、`MEDKB_INVITE_CODE`、`MEDKB_GLM_API_KEY`、`MEDKB_VERSION`。变更环境变量后运行 `docker compose ... up -d api` 使容器重新创建，单纯 `restart` 不会重新读取配置。
+
+生产默认不开放 API 文档。临时排查可设置 `MEDKB_EXPOSE_DOCS=1` 并重新创建容器，用完后关闭。
+
+## Android 发布
+
+1. 修改 `app/pubspec.yaml` 的语义版本。main 推送后，发布工作流先运行三端检查，再生成 GitHub Release `build-N`。`N` 是发布工作流的 `run_number`。
+2. 下载该 Release 的签名 APK，上传至 `/opt/medkb/app-release.apk`。不要上传 debug 包。
+3. 在服务器 `deploy/.env` 中修改 `MEDKB_VERSION='N|v语义版本 更新说明'`，构建号必须与 APK 一致且大于已发布版本。
+4. APK 是单文件 bind mount；上传若替换了文件 inode，运行中的容器可能仍引用旧文件。因此替换 APK 后重新创建容器：
+
+```sh
+docker compose --project-directory /opt/medkb-v2/src/deploy up -d --force-recreate api
+curl --fail --silent --show-error http://127.0.0.1:8899/api/version
+sha256sum /opt/medkb/app-release.apk
+curl --fail --silent --show-error --head https://luck.021209.xyz/app.apk
+```
+
+确认 `/api/version` 的 `build`、`note` 与本次发布一致，`apk_sha256` 与落盘文件 SHA256 一致，并在已安装旧版本的设备上验证覆盖升级。完整构建说明见 [app/README.md](app/README.md)。
+
+## 数据与内容发布
+
+- 应用数据保存在 PostgreSQL `medkb_v2`，部署镜像不应重建或覆盖生产数据。
+- `backend/scripts/init_db.py` 仅用于空库初始化。已有数据库使用 Alembic；`20261016_01` 增加教材书目和内容出处表，`20261016_02` 将本地可核验的人卫第十版教材目录扩展到 13 本。
+- 旧格式题库同步仍使用 `PG_DSN`。`wcyk_sync.py` 写入旧格式字段，不能仅将 DSN 改成新库就用于 v2；导入新库前需转换、去重和验证。
+- 保留现有同步任务使用的 `.pgenv`、`sync_state.json`、题库原始数据和同步脚本。不要在排障输出中打印 `.pgenv` 或 `.env`。
+- 数据库是网页、App 与 AI 的运行时唯一内容源。章节、题目或卡片保存后，AI 后续检索立即读取当前数据库内容，不需要同步 Markdown 或重建文件索引。
+- 医学内容按人民卫生出版社第十版相应教材核验。题库旧答案、导图和教材出现冲突时，保留来源区别并明确差异，不能把导图或旧题答案当作教材结论。
+
+2026-10-15 按要求清理了旧备份和临时回滚材料。本轮未新增备份策略，不能假定历史编辑批次仍可回滚。
+
+## 常见排查
+
+| 现象 | 检查位置 |
 |---|---|
-| `server_cloud.py` | ~~生产服务端（Flask）~~ 已删除下线，勿恢复 |
-| `server.py` | 本地开发服务端（SQLite） |
-| `app.html` | 旧网页端（已下线，仅存档参考） |
-| `app-release.apk` | App 安装包，通过 /app.apk 下载 |
-| `VERSION` | `构建号\|更新说明`，App 启动时轮询 /api/version 提示更新 |
-| `kb.db` | SQLite 数据库（备份；生产用 PostgreSQL） |
-| `img/page_*.webp` | 导图页图（文件名=印刷页码） |
-| `uimg/` | 用户上传图片 |
-| `kb/` | 知识库静态资源 |
-| 其余 `*.py` | 历史数据清洗/迁移脚本（一次性工具，可不管） |
+| 网页白屏 | 浏览器控制台、网络请求、镜像内 `/app/web` 的构建产物 |
+| API 500 / 健康接口 503 | `docker compose ... logs --tail 100 api`、数据库连接与网络 |
+| API 401 | 登录是否过期，客户端是否携带 `X-Token` 或 Bearer token |
+| App 不提示更新 | `/api/version` 构建号、容器实际环境变量、APK 与接口 SHA256 |
+| 上传失败 | `uimg` / `imgcache` 挂载、空间和 UID 10001 的写权限 |
+| AI 引用旧内容 | 确认修改的是当前数据库记录；检查出处状态和容器是否运行新镜像 |
 
-## 5. 发版流程
-
-### 5.1 服务端 / 网页端（新栈）
-
-```powershell
-git push 后到 VPS 拉代码重建：
-ssh axs-vps "cd /opt/medkb-v2 && git pull && cd deploy && docker compose up -d --build"
-# 首次非 root 部署前执行一次（上传目录属主交给容器内 uid 10001）：
-ssh axs-vps "chown -R 10001:10001 /opt/medkb/uimg /opt/medkb/imgcache"
-```
-
-### 5.2 App（Flutter，走 CI 构建）
-
-1. 改 `app/` 代码 → 推送到 GitHub → `build-apk.yml` 自动构建
-   - 签名密钥从 Secrets 注入（`MEDKB_KEYSTORE_B64`/`MEDKB_KEY_ALIAS`/`MEDKB_KEY_PASSWORD`/`MEDKB_STORE_PASSWORD`）
-   - 本地手动构建：`app/android/app/key.properties`（gitignored，勿入库）
-2. CI 绿后下载产物：
-   ```powershell
-   gh run download <run_id> -n app-release -D D:\IDEA\project\.devin-tmp\apk
-   ```
-3. 上传 + 更新版本号：
-   ```powershell
-   scp app-release.apk axs-vps:/opt/medkb/app-release.apk
-   ssh axs-vps "echo '97|更新说明' > /opt/medkb/VERSION"
-   ```
-4. 验证：
-   ```powershell
-   curl.exe -s https://luck.021209.xyz/api/version   # build 应为新号
-   curl.exe -sI https://luck.021209.xyz/app.apk       # 200 + apk content-type
-   ```
-
-### 5.3 数据库
-
-- 生产新栈：PostgreSQL `medkb_v2`（docker `panel` 网络内的 postgresql 容器），凭据在 `deploy/.env`。
-- 旧库 `medkb` 仍被 `wcyk_sync.py` 每周增量写入；DSN 走 `PG_DSN` 环境变量。
-- 旧库 `medkb`（本机 127.0.0.1）。连库：`ssh axs-vps` 后用 `psql`，DSN 见 cron/root 环境配置。
-
-### 5.4 新栈部署注意
-
-- 容器内 uvicorn 以非 root 用户 `medkb`(uid 10001) 运行。**升级部署前在 VPS 执行一次**：
-  `ssh axs-vps "chown -R 10001:10001 /opt/medkb/uimg /opt/medkb/imgcache"`
-  （`/data/kb`、`/data/img`、apk 为只读挂载，无需改属主）
-- 生产默认关闭 `/docs`、`/openapi.json`；排障时在 `deploy/.env` 加 `MEDKB_EXPOSE_DOCS=1` 再重启。
-- `kb.db` 是 SQLite 镜像，本地 `server.py` 开发用；数据修正脚本历史上直接改库，**改前先备份**：`cp kb.db kb.db.bak` 或 `pg_dump`。
-
-## 6. Git / CI
-
-- 远端：`github.com/xuanmomo233/medkb`（**private，保持私有**）
-- 本机 git 直连经常 TLS 断 → 备用方案：`gh api repos/xuanmomo233/medkb/contents/<path>` PUT 单文件提交（先 GET 拿 sha）
-- CI：`.github/workflows/build-apk.yml` — push 到 main 自动构建 APK
-- 历史：`ff9d7b7` 是清史重建后的初始提交（旧签名密钥已移除）；**密钥本身未换**，若未来用户量变大建议走 Play App Signing 换钥。
-
-## 7. 常见排查
-
-| 现象 | 查法 |
-|---|---|
-| 网页白屏 | 浏览器 F12 console；Edge 无头验证：`msedge --headless=new --dump-dom <url>` |
-| API 全 401 | token 过期→正常；检查 X-Token 头 |
-| 改 app.html 没生效 | 用户端强刷 Ctrl+F5（服务端无缓存头时浏览器可能缓存） |
-| API 500 | `journalctl -u medkb -f` 看 Python traceback |
-| App 不提示更新 | /api/version 的 build 号是否递增；App 内"检查更新" |
-
-## 8. 内容维护工作流（题库/导图/背卡）
-
-数据流：**源文件（`知识点/*.md`）→ 清洗脚本 → SQLite/PG → API → 前端**
-
-- 导图页图：`img/page_N.webp` 文件名=印刷页码（修过 +1 偏移）
-- 章节/导图结构：库内 `chapters` 表（kind='mm' 导图）
-- 分类原则：按**实际考点**归章，不按题干病名；导图为准，10版教材次之，旧题库答案存疑展示分歧
-- 卡片 part 曾按生成批次错贴标签，已人工重排（内科/外科/生化/生理/病理/诊断全部守恒校验过）
-- 一次性修数据脚本放 `/opt/medkb/*.py` 和 `D:\IDEA\project\.devin-tmp\`
+其他项目共享此 VPS。操作限于上述路径、容器及本项目配置。

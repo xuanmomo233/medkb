@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import md
 from app.models import Question
-from app.services import glm, kb
+from app.services import glm, knowledge as kb
 from app.services.chat_agent import GUARD_RE
 
 SUBJ_KW = {"生理": "生理学", "生化": "生物化学", "病理": "病理学",

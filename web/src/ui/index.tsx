@@ -8,6 +8,7 @@ import s from './ui.module.css'
 const cx = (...a: (string | false | undefined)[]) => a.filter(Boolean).join(' ')
 
 export { default as HtmlView } from './HtmlView'
+export { default as Citations } from './Citations'
 export { Icon } from './Icon'
 export type { IconName } from './Icon'
 

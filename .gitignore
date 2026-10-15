@@ -17,9 +17,18 @@ build/
 *.log
 
 __pycache__/
+*.egg-info/
+.mypy_cache/
+.ruff_cache/
+node_modules/
 .env
 deploy/.env
 .venv/
 backend/.pytest_cache/
 
 .devin-apk*/
+
+# 本地正版教材原文：用于内容核验，不提交仓库或部署到 VPS
+references/textbooks/*.pdf
+# 渲染后的教材页图仅部署到受控的登录态资源目录，不提交仓库
+references/textbooks/rendered/

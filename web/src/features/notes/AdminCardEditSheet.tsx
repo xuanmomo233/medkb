@@ -1,10 +1,12 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
-import type { AdminCard, AdminCardPatch } from '@/api/types'
+import type { AdminCard, AdminCardPatch, ContentCitationInput } from '@/api/types'
 import { useAuth } from '@/app/auth'
 import { Button, ErrorState, Field, Input, Modal, Spinner, Textarea, useToast } from '@/ui'
 import MarkdownEditor from './MarkdownEditor'
+import CitationEditor from './CitationEditor'
+import { citationInputs, sameCitations } from './citationHelpers'
 import s from './notes.module.css'
 
 interface Props { cardId: number; open: boolean; onClose: () => void; onSaved?: () => void }
@@ -15,6 +17,8 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminCard; id: number; o
   const [term, setTerm] = useState(data.term)
   const [hint, setHint] = useState(data.hint)
   const [body, setBody] = useState(data.body)
+  const originalCitations = citationInputs(data.citations)
+  const [citations, setCitations] = useState<ContentCitationInput[]>(originalCitations)
   const [saving, setSaving] = useState(false)
 
   const patch: AdminCardPatch = {}
@@ -22,6 +26,7 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminCard; id: number; o
   if (term !== data.term) patch.term = term
   if (hint !== data.hint) patch.hint = hint
   if (body !== data.body) patch.body = body
+  if (!sameCitations(citations, originalCitations)) patch.citations = citations
   const dirty = Object.keys(patch).length > 0
 
   const save = async () => {
@@ -42,6 +47,7 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminCard; id: number; o
       <Field label="标题"><Input value={term} onChange={(e) => setTerm(e.target.value)} /></Field>
       <Field label="提示"><Textarea value={hint} onChange={(e) => setHint(e.target.value)} /></Field>
       <MarkdownEditor label="正文（Markdown 原文）" value={body} onChange={setBody} kind="card" />
+      <CitationEditor value={citations} onChange={setCitations} subject={data.subject} />
       <div className={s.actions}>
         <Button onClick={onClose}>取消</Button>
         <Button variant="primary" disabled={!dirty || saving} onClick={save}>{saving ? '保存中…' : '保存'}</Button>

@@ -12,6 +12,7 @@ export const api = {
 
   // 内容
   tree: () => get<T.ContentTree>('/content/tree'),
+  textbooks: () => get<{ sources: T.TextbookSource[] }>('/content/textbooks'),
   chapter: (id: number) => get<T.ChapterDetail>(`/content/chapters/${id}`),
   search: (q: string, kind?: T.SearchKind) => get<T.SearchHit[]>('/search', { q, kind }),
 
@@ -71,6 +72,8 @@ export const api = {
   adminSaveQuestion: (id: number, p: T.AdminQuestionPatch) => put<{ changed: number }>(`/admin/questions/${id}`, p),
   adminCard: (id: number) => get<T.AdminCard>(`/admin/cards/${id}`),
   adminSaveCard: (id: number, p: T.AdminCardPatch) => put<{ changed: number }>(`/admin/cards/${id}`, p),
+  adminSaveCitations: (type: 'chapter' | 'question' | 'card', id: number, citations: T.ContentCitationInput[]) =>
+    put<T.ContentCitation[]>(`/admin/content/${type}/${id}/citations`, { citations }),
   adminInvites: () => get<T.Invite[]>('/admin/invites'),
   adminNewInvite: (count = 1) => post<T.Invite[]>('/admin/invites', { count }),
   adminRevokeInvite: (code: string) => del(`/admin/invites/${code}`),

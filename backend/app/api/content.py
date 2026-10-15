@@ -3,8 +3,10 @@
 from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import CurrentUser, Session
-from app.schemas.content import ChapterDetail, ContentTree, SearchHit
+from app.schemas.content import ChapterDetail, ContentTree, SearchHit, TextbookCatalog
+from app.schemas.provenance import CitationTarget, ContentCitationOut
 from app.services import content as svc
+from app.services import provenance
 
 router = APIRouter(tags=["content"])
 
@@ -12,6 +14,19 @@ router = APIRouter(tags=["content"])
 @router.get("/content/tree", response_model=ContentTree)
 async def tree(session: Session, user: CurrentUser):
     return await svc.tree(session)
+
+
+@router.get("/content/textbooks", response_model=TextbookCatalog)
+async def textbooks(session: Session, user: CurrentUser):
+    return TextbookCatalog(sources=await provenance.list_sources(session))
+
+
+@router.get("/content/{target_type}/{target_id}/citations", response_model=list[ContentCitationOut])
+async def citations(target_type: CitationTarget, target_id: int, session: Session, user: CurrentUser):
+    model = provenance.TARGET_MODELS[target_type]
+    if await session.get(model, target_id) is None:
+        raise HTTPException(404, "内容不存在")
+    return await provenance.citations_for_target(session, target_type, target_id)
 
 
 @router.get("/content/chapters/{chapter_id}", response_model=ChapterDetail)

@@ -14,11 +14,13 @@ from app.models import InviteCode, QuestionEdit, User
 from app.schemas.admin import (AdminCard, AdminCardPatch, AdminQuestion, AdminQuestionPatch, AdminUserDelete, AdminUserOut,
                                ChangedOut, InviteCreate, InviteOut, SiteConfigOut, SiteConfigPatch)
 from app.schemas.admin import MarkdownPreviewIn, MarkdownPreviewOut
+from app.schemas.provenance import ContentCitationBatch, ContentCitationOut, CitationTarget
 from app.schemas.editorial import ReviewDecisionIn, ReviewQueue
 from app.services import cards as admin_cards
 from app.services import quiz as admin_questions
 from app.services import study
 from app.services import editorial
+from app.services import provenance
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -82,7 +84,15 @@ async def get_card(card_id: int, session: Session, admin: AdminUser):
 
 @router.put("/cards/{card_id}", response_model=ChangedOut)
 async def put_card(card_id: int, body: AdminCardPatch, session: Session, admin: AdminUser):
-    return ChangedOut(changed=await admin_cards.update_admin_card(session, card_id, body))
+    return ChangedOut(changed=await admin_cards.update_admin_card(session, admin.id, card_id, body))
+
+
+@router.put("/content/{target_type}/{target_id}/citations", response_model=list[ContentCitationOut])
+async def put_citations(target_type: CitationTarget, target_id: int, body: ContentCitationBatch,
+                        session: Session, admin: AdminUser):
+    await provenance.replace_citations(session, target_type, target_id, body.citations, admin.id)
+    await session.commit()
+    return await provenance.citations_for_target(session, target_type, target_id)
 
 
 @router.get("/users", response_model=list[AdminUserOut])

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.render import md
 from app.models import Card, CardProgress, Chapter, Question, QuestionProgress
 from app.services.progress import derive_state
+from app.services import provenance
 from app.services.card_merges import visible
 
 _IMG = re.compile(r"!\[[^\]]*\]\([^)]*\)")
@@ -107,6 +108,7 @@ async def chapter_detail(session: AsyncSession, cid: int) -> dict | None:
     return {
         "id": ch.id, "title": ch.title, "subject": ch.subject, "html": md(body),
         "meta": meta, "pages": [int(x) for x in (ch.pages or [])],
+        "citations": await provenance.citations_for_target(session, "chapter", ch.id),
     }
 
 

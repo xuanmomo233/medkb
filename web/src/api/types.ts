@@ -4,6 +4,27 @@
 export interface User { id: number; username: string; is_admin: boolean }
 export interface AuthResult { token: string; user: User }
 
+export type CitationStatus = 'unverified' | 'verified' | 'disputed'
+export interface TextbookSource { key: string; title: string; subject: string; publisher: string; edition: string }
+export interface ContentCitationInput {
+  source_key: string
+  chapter: string
+  section: string
+  page_start: number | null
+  page_end: number | null
+  note: string
+  status: CitationStatus
+}
+export interface ContentCitation extends ContentCitationInput {
+  id: number
+  title: string
+  subject: string
+  publisher: string
+  edition: string
+  verified_by: number | null
+  verified_at: string | null
+}
+
 // ---------- 内容 ----------
 export interface ChapterBrief { id: number; subject: string; title: string }
 export interface QuestionChapter { name: string; count: number }
@@ -21,6 +42,7 @@ export interface ChapterDetail {
   html: string
   meta: Record<string, string>
   pages: number[] // 导图页图：/img/page_{n}.webp
+  citations?: ContentCitation[]
 }
 export type SearchKind = 'question' | 'card' | 'chapter'
 export interface SearchHit {
@@ -54,6 +76,7 @@ export interface Card {
   state: ProgressState
   starred: boolean
   related_cards?: { id: number; term: string; subject: string; part: string; reason: string }[]
+  citations?: ContentCitation[]
 }
 export interface CardQuery {
   subject?: string; part?: string; ids?: number[]
@@ -111,6 +134,7 @@ export interface QuestionFull {
   tags: string[]
   state: ProgressState
   starred: boolean
+  citations?: ContentCitation[]
 }
 export interface AttemptResult { correct: boolean | null; answer: string; stat: QuestionStat }
 export interface SubmitItem { question_id: number; picked: number[] }
@@ -234,8 +258,8 @@ export interface Invite { code: string; created_by: number; used_by: number | nu
 export interface AdminUser { id: number; username: string; is_admin: boolean; created_at: string | null; last_login_at: string | null; invite_code: string | null }
 export interface SiteConfig { exam_date: string }
 
-export interface AdminQuestion { id: number; system: string; stem: string; analysis: string; tags: string[] }
-export interface AdminQuestionPatch { system?: string; stem?: string; analysis?: string; tags?: string[] }
-export interface AdminCard { id: number; subject: string; part: string; section: string; term: string; hint: string; body: string }
-export interface AdminCardPatch { section?: string; term?: string; hint?: string; body?: string }
+export interface AdminQuestion { id: number; subject_dir: string; system: string; stem: string; analysis: string; tags: string[]; citations?: ContentCitation[] }
+export interface AdminQuestionPatch { system?: string; stem?: string; analysis?: string; tags?: string[]; citations?: ContentCitationInput[] }
+export interface AdminCard { id: number; subject: string; part: string; section: string; term: string; hint: string; body: string; citations?: ContentCitation[] }
+export interface AdminCardPatch { section?: string; term?: string; hint?: string; body?: string; citations?: ContentCitationInput[] }
 export interface VersionInfo { build: number; note: string }

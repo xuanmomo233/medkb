@@ -29,6 +29,46 @@ class ProgressState {
   static const String plan = 'plan';
 }
 
+class ContentCitation {
+  final int id;
+  final String sourceKey;
+  final String title;
+  final String publisher;
+  final String edition;
+  final String chapter;
+  final String section;
+  final int? pageStart;
+  final int? pageEnd;
+  final String note;
+  final String status;
+  const ContentCitation({
+    required this.id,
+    required this.sourceKey,
+    required this.title,
+    required this.publisher,
+    required this.edition,
+    required this.chapter,
+    required this.section,
+    required this.pageStart,
+    required this.pageEnd,
+    required this.note,
+    required this.status,
+  });
+  factory ContentCitation.fromJson(Map<String, dynamic> j) => ContentCitation(
+        id: _i(j['id']),
+        sourceKey: _s(j['source_key']),
+        title: _s(j['title']),
+        publisher: _s(j['publisher']),
+        edition: _s(j['edition']),
+        chapter: _s(j['chapter']),
+        section: _s(j['section']),
+        pageStart: _in(j['page_start']),
+        pageEnd: _in(j['page_end']),
+        note: _s(j['note']),
+        status: _s(j['status']),
+      );
+}
+
 class TargetType {
   static const String question = 'question';
   static const String card = 'card';
@@ -196,6 +236,7 @@ class ChapterDetail {
   final String html;
   final Map<String, String> meta;
   final List<int> pages;
+  final List<ContentCitation> citations;
   const ChapterDetail({
     required this.id,
     required this.title,
@@ -203,6 +244,7 @@ class ChapterDetail {
     required this.html,
     required this.meta,
     required this.pages,
+    this.citations = const <ContentCitation>[],
   });
   factory ChapterDetail.fromJson(Map<String, dynamic> j) {
     final Map<String, String> meta = <String, String>{};
@@ -216,6 +258,7 @@ class ChapterDetail {
       html: _s(j['html']),
       meta: meta,
       pages: _li(j['pages']),
+      citations: asMapList(j['citations']).map(ContentCitation.fromJson).toList(),
     );
   }
 }
@@ -291,6 +334,7 @@ class Card {
   final String state;
   final bool starred;
   final List<CardReference> relatedCards;
+  final List<ContentCitation> citations;
   const Card({
     required this.id,
     required this.subject,
@@ -303,6 +347,7 @@ class Card {
     required this.state,
     required this.starred,
     this.relatedCards = const <CardReference>[],
+    this.citations = const <ContentCitation>[],
   });
   factory Card.fromJson(Map<String, dynamic> j) => Card(
         id: _i(j['id']),
@@ -320,6 +365,7 @@ class Card {
                 .map((dynamic v) => CardReference.fromJson(asMap(v)))
                 .toList()
             : const <CardReference>[],
+        citations: asMapList(j['citations']).map(ContentCitation.fromJson).toList(),
       );
 }
 
@@ -624,6 +670,7 @@ class QuestionFull {
   final List<String> tags;
   final String state;
   final bool starred;
+  final List<ContentCitation> citations;
   const QuestionFull({
     required this.id,
     required this.system,
@@ -636,6 +683,7 @@ class QuestionFull {
     required this.tags,
     required this.state,
     required this.starred,
+    this.citations = const <ContentCitation>[],
   });
   factory QuestionFull.fromJson(Map<String, dynamic> j) => QuestionFull(
         id: _i(j['id']),
@@ -650,6 +698,7 @@ class QuestionFull {
         tags: _ls(j['tags']),
         state: _s(j['state']),
         starred: _b(j['starred']),
+        citations: asMapList(j['citations']).map(ContentCitation.fromJson).toList(),
       );
 }
 

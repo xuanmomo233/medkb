@@ -12,6 +12,13 @@ class _ChapterReading {
   const _ChapterReading(this.detail, this.isNote);
 }
 
+class _TextbookGallery {
+  final String sourceKey;
+  final String title;
+  final List<int> pages;
+  const _TextbookGallery(this.sourceKey, this.title, this.pages);
+}
+
 class ChapterPage extends StatefulWidget {
   final int id;
   const ChapterPage(this.id, {super.key});
@@ -161,6 +168,23 @@ class _ChapterPageState extends State<ChapterPage> {
 
   Widget _body(BuildContext context, _ChapterReading reading, Future<void> Function() refresh) {
     final ChapterDetail d = reading.detail;
+    final Map<String, _TextbookGallery> textbook = <String, _TextbookGallery>{};
+    for (final ContentCitation citation in d.citations) {
+      final int? first = citation.pageStart;
+      final int last = citation.pageEnd ?? first ?? 0;
+      if (citation.status != 'verified' || first == null || last < first || last - first > 200) continue;
+      final current = textbook.putIfAbsent(
+        citation.sourceKey,
+        () => _TextbookGallery(citation.sourceKey, citation.title, <int>[]),
+      );
+      for (int page = first; page <= last; page++) {
+        if (!current.pages.contains(page)) current.pages.add(page);
+      }
+    }
+    final List<_TextbookGallery> textbookGalleries = textbook.values.toList();
+    for (final _TextbookGallery gallery in textbookGalleries) {
+      gallery.pages.sort();
+    }
     final List<NoteSection> sections =
         reading.isNote ? splitNoteSections(d.html) : <NoteSection>[];
     return AppRefreshIndicator(
@@ -197,6 +221,15 @@ class _ChapterPageState extends State<ChapterPage> {
             const SizedBox(height: 20),
             PageGallery(pages: d.pages),
           ],
+          for (final _TextbookGallery gallery in textbookGalleries) ...<Widget>[
+            const SizedBox(height: 20),
+            PageGallery(
+              pages: gallery.pages,
+              title: '教材原图 · ${gallery.title}',
+              sourceKey: gallery.sourceKey,
+            ),
+          ],
+          CitationList(d.citations),
         ],
       ),
     );

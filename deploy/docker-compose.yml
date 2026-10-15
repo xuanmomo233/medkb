@@ -9,8 +9,8 @@ services:
     ports:
       - "127.0.0.1:8899:8000"
     volumes:
-      - /opt/medkb/kb:/data/kb:ro
       - /opt/medkb/img:/data/img:ro
+      - /opt/medkb/textbooks:/data/textbooks:ro
       - /opt/medkb/app-release.apk:/data/app-release.apk:ro
       - /opt/medkb/uimg:/data/uimg
       - /opt/medkb/imgcache:/data/imgcache

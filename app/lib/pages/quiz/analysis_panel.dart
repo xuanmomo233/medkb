@@ -134,6 +134,8 @@ class AnalysisPanel extends StatelessWidget {
       ));
     }
 
+    if (f != null) body.add(CitationList(f.citations));
+
     return AppCard(
       padding: const EdgeInsets.all(14),
       child: Column(

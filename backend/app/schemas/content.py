@@ -1,6 +1,10 @@
 ﻿from pydantic import BaseModel
 
 
+from app.schemas.provenance import ContentCitationOut, TextbookSourceOut
+from pydantic import Field
+
+
 class ChapterBrief(BaseModel):
     id: int
     subject: str
@@ -35,6 +39,11 @@ class ChapterDetail(BaseModel):
     html: str
     meta: dict[str, str]
     pages: list[int]
+    citations: list[ContentCitationOut] = Field(default_factory=list)
+
+
+class TextbookCatalog(BaseModel):
+    sources: list[TextbookSourceOut]
 
 
 class SearchHit(BaseModel):

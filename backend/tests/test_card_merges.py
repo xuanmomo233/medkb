@@ -5,7 +5,7 @@ from sqlalchemy import func, select
 
 from app.models import (
     Card, CardMerge, CardOriginal, CardProgress, CardQuestion, CardRelation,
-    EditorialExecution, EditorialReview, Note,
+    EditorialBatch, EditorialExecution, EditorialReview, Note,
 )
 from app.services import cards, notes, progress, study
 from app.services.card_merges import canonical_id, details, resolve
@@ -102,6 +102,112 @@ async def test_standalone_revision_preserves_private_original_and_rolls_back(ses
     await rollback(session, plan["id"])
     await session.commit()
     assert (await session.get(Card, 103)).body == "原文103"
+
+
+@pytest.mark.asyncio
+async def test_deferred_execution_can_be_resumed_with_exact_guard_and_rollback(session):
+    plan = await seed(session)
+    key = plan["dataset_id"] + ":TERM-0192"
+    previous = EditorialExecution(
+        key=key, review_version=0, status="deferred", description="等待补充证据",
+        affected_ids=[101, 102], batch_id="earlier-batch",
+    )
+    session.add(previous)
+    await session.commit()
+    plan["expected_executions"] = {key: {
+        "status": "deferred", "description": "等待补充证据",
+        "affected_ids": [101, 102], "batch_id": "earlier-batch", "review_version": 0,
+    }}
+
+    await apply(session, plan)
+    await session.commit()
+    execution = await session.get(EditorialExecution, key)
+    assert execution.status == "merged"
+    assert execution.batch_id == plan["id"]
+
+    await rollback(session, plan["id"])
+    await session.commit()
+    execution = await session.get(EditorialExecution, key)
+    assert execution.status == "deferred"
+    assert execution.description == "等待补充证据"
+    assert execution.affected_ids == [101, 102]
+    assert execution.batch_id == "earlier-batch"
+    assert execution.review_version == 0
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("guard", ["missing", "stale", "finished"])
+async def test_existing_execution_resume_requires_exact_deferred_guard(session, guard):
+    plan = await seed(session)
+    key = plan["dataset_id"] + ":TERM-0192"
+    status = "merged" if guard == "finished" else "deferred"
+    session.add(EditorialExecution(
+        key=key, review_version=0, status=status, description="原执行结果",
+        affected_ids=[101, 102], batch_id="earlier-batch",
+    ))
+    await session.commit()
+    if guard != "missing":
+        plan["expected_executions"] = {key: {
+            "status": status, "description": "错误快照" if guard == "stale" else "原执行结果",
+            "affected_ids": [101, 102], "batch_id": "earlier-batch", "review_version": 0,
+        }}
+
+    with pytest.raises(ValueError):
+        await apply(session, plan)
+    await session.rollback()
+    assert await session.scalar(select(func.count()).select_from(CardMerge)) == 0
+    execution = await session.get(EditorialExecution, key)
+    assert execution.status == status and execution.batch_id == "earlier-batch"
+
+
+@pytest.mark.asyncio
+async def test_rejected_card_requires_explicit_audited_override(session):
+    dataset_id = catalog()[0]
+    cards_to_add = [
+        Card(id=9514, subject="生理学", part="12-口诀速记", section="数字·口诀",
+             term="梦到异国他乡", hint="", body="原文9514", source_file="口诀"),
+        Card(id=9913, subject="生理学", part="12-口诀速记", section="数字·口诀",
+             term="梦到异国他乡", hint="", body="原文9913", source_file="口诀"),
+    ]
+    session.add_all(cards_to_add)
+    review_key = dataset_id + ":MECH-05"
+    session.add(EditorialReview(
+        key=review_key, status="rejected", note="保持原卡", version=1,
+    ))
+    await session.commit()
+    plan = {
+        "id": "test-rejection-override", "dataset_id": dataset_id,
+        "expected_opinions": {
+            review_key: {"status": "rejected", "note": "保持原卡", "version": 1},
+        },
+        "expected_cards": {
+            str(card.id): digest(card_data(card)) for card in cards_to_add
+        },
+        "merges": [{
+            "target_id": 9514, "members": [9514, 9913],
+            "patch": {"body": "经用户明确授权后的完整合并正文"},
+        }],
+        "patches": [], "relations": [], "chapters": [],
+        "executions": [{
+            "group_id": "TERM-0451", "status": "merged",
+            "description": "用户明确授权解除保护", "card_ids": [9514, 9913],
+        }],
+    }
+
+    with pytest.raises(ValueError, match="冻结卡片"):
+        await apply(session, plan)
+    await session.rollback()
+
+    plan["rejection_overrides"] = [{
+        "card_id": 9514,
+        "review_key": review_key,
+        "reason": "用户明确要求无视该条冻结保护并完成合并",
+    }]
+    await apply(session, plan)
+    await session.commit()
+    assert await canonical_id(session, 9913) == 9514
+    batch = await session.get(EditorialBatch, plan["id"])
+    assert batch.before["rejection_overrides"] == plan["rejection_overrides"]
 
 
 @pytest.mark.asyncio

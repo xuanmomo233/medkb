@@ -13,3 +13,11 @@
 .form { display: flex; flex-direction: column; gap: 14px; }
 .mono { font-family: ui-monospace, Consolas, monospace; font-size: 13px; min-height: 260px; }
 .actions { display: flex; justify-content: flex-end; gap: 10px; }
+.citations { display: flex; flex-direction: column; gap: 10px; padding-top: 8px; border-top: 1px solid var(--line); }
+.citationHead { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.citationHint { margin: 0; color: var(--text-3); font-size: 12px; }
+.citationRow { display: grid; grid-template-columns: 2fr 1.5fr 1.5fr .8fr .8fr 1fr; gap: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
+.citationRow label { display: flex; flex-direction: column; gap: 6px; color: var(--text-2); font-size: 13px; }
+.citationRow select { height: 40px; padding: 0 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); color: var(--text); }
+.citationRow > :nth-last-child(2) { grid-column: 1 / -2; }
+@media (max-width: 760px) { .citationRow { grid-template-columns: 1fr 1fr; } .citationRow > :nth-last-child(2) { grid-column: 1 / -1; } }

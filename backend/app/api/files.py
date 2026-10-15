@@ -11,6 +11,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 
 from app.core.config import get_settings
+from app.api.deps import CurrentUser
 
 router = APIRouter(tags=["files"])
 
@@ -19,7 +20,9 @@ _EXTS = (".png", ".jpg", ".webp", ".gif")
 _IMG_MAX = 10 * 1024 * 1024
 _PAGE = re.compile(r"page_\d+\.webp")
 _UIMG = re.compile(r"[\w.-]+\.(png|jpe?g|webp|gif)")
+_TEXTBOOK_SOURCE = re.compile(r"[a-z0-9][a-z0-9-]{0,63}")
 _CACHE_HEADERS = {"Cache-Control": "public, max-age=2592000"}
+_PRIVATE_HEADERS = {"Cache-Control": "private, no-store"}
 
 
 def _safe_file(base: str, name: str) -> Path:
@@ -35,6 +38,23 @@ async def img(name: str):
     if not _PAGE.fullmatch(name):
         raise HTTPException(404, "文件不存在")
     return FileResponse(_safe_file(get_settings().img_dir, name), media_type="image/webp", headers=_CACHE_HEADERS)
+
+
+@router.get("/api/textbook-images/{source_key}/{page}.webp")
+async def textbook_image(source_key: str, page: int, user: CurrentUser):
+    """已登录用户读取已发布、且有教材出处关联的页图。
+
+    浏览器端以带 X-Token 的 fetch 读取，避免把教材图暴露为可匿名访问的静态 URL。
+    """
+    del user  # 依赖本身负责鉴权；所有已登录用户均可查看。
+    if not _TEXTBOOK_SOURCE.fullmatch(source_key) or not 1 <= page <= 9999:
+        raise HTTPException(404, "文件不存在")
+    source_dir = Path(get_settings().textbook_img_dir) / source_key
+    return FileResponse(
+        _safe_file(str(source_dir), f"page_{page:04d}.webp"),
+        media_type="image/webp",
+        headers=_PRIVATE_HEADERS,
+    )
 
 
 @router.get("/uimg/{name}")

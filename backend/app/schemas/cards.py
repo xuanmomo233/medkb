@@ -1,6 +1,9 @@
 ﻿from pydantic import BaseModel, Field
 
 
+from app.schemas.provenance import ContentCitationOut
+
+
 class RelatedCard(BaseModel):
     id: int
     term: str
@@ -27,3 +30,4 @@ class CardOut(BaseModel):
     state: str
     starred: bool
     related_cards: list[RelatedCard] = Field(default_factory=list)
+    citations: list[ContentCitationOut] = Field(default_factory=list)

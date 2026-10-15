@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.render import card_md, md
 from app.models import Attempt, Card, CardQuestion, Question, QuestionProgress as QP
 from app.schemas import quiz as S
-from app.services import study
+from app.services import provenance, study
 from app.services.glm import glm_call
 from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, level_conditions, pool_flt_condition
 from app.services.question_groups import batches, complete_question_ids, group_key, legacy_case_parts
@@ -262,6 +262,7 @@ async def question_full(session: AsyncSession, uid: int, qid: int) -> S.Question
         related_cards=[S.RelatedCard(id=c.id, term=c.term, term_html=md(c.term), hint=c.hint or "", body_html=card_md(c.body)) for c in cards],
         stat=await question_stat(session, qid), tags=_tags(q),
         state=derive_state(qp), starred=bool(qp and qp.starred),
+        citations=await provenance.citations_for_target(session, "question", q.id),
     )
 
 
@@ -486,7 +487,10 @@ async def get_question(session: AsyncSession, qid: int):
     q = await session.get(Question, qid)
     if q is None:
         raise HTTPException(404, "题目不存在")
-    return AdminQuestion(id=q.id, system=q.system or "", stem=q.stem or "", analysis=q.analysis or "", tags=_tags(q))
+    return AdminQuestion(
+        id=q.id, subject_dir=q.subject_dir or "", system=q.system or "", stem=q.stem or "", analysis=q.analysis or "", tags=_tags(q),
+        citations=await provenance.citations_for_target(session, "question", q.id),
+    )
 
 
 async def update_question(session: AsyncSession, admin_id: int, qid: int, patch) -> int:
@@ -532,7 +536,13 @@ async def update_question(session: AsyncSession, admin_id: int, qid: int, patch)
         if new_tags != _tags(q):
             changes.append(("tags", json.dumps(_tags(q), ensure_ascii=False), json.dumps(new_tags, ensure_ascii=False)))
             q.tags = new_tags
+    if patch.citations is not None:
+        citation_changed = await provenance.replace_citations(
+            session, "question", qid, patch.citations, admin_id,
+        )
+    else:
+        citation_changed = 0
     for field, old, new in changes:
         session.add(QuestionEdit(user_id=admin_id, question_id=qid, field=field, old_value=old, new_value=new))
     await session.commit()
-    return len(changes)
+    return len(changes) + citation_changed

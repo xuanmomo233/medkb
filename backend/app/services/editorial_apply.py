@@ -44,6 +44,16 @@ def _progress_data(row) -> dict:
     }
 
 
+def _execution_data(row: EditorialExecution) -> dict:
+    return {
+        "status": row.status,
+        "description": row.description,
+        "affected_ids": row.affected_ids,
+        "batch_id": row.batch_id,
+        "review_version": row.review_version,
+    }
+
+
 def _patch(card: Card, patch: dict) -> None:
     limits = {"subject": 32, "part": 64, "section": 128, "term": 200, "hint": 2000, "body": 20000}
     for key, value in patch.items():
@@ -70,10 +80,32 @@ async def apply(session: AsyncSession, plan: dict) -> dict:
     if actual != plan["expected_opinions"]:
         raise ValueError("管理员审核意见已更新，需要重新核对；没有执行内容修改")
     frozen = set(plan.get("frozen_ids", []))
+    rejected_cards: dict[int, set[str]] = defaultdict(set)
     for review in reviews:
         if review.status == "rejected":
             item = catalog()[2].get(review.key.split(":", 1)[1], {})
-            frozen.update(item.get("card_ids", []))
+            for card_id in item.get("card_ids", []):
+                frozen.add(card_id)
+                rejected_cards[card_id].add(review.key)
+    rejection_overrides = plan.get("rejection_overrides", [])
+    overridden_ids: set[int] = set()
+    for override in rejection_overrides:
+        if not isinstance(override, dict):
+            raise ValueError("不采纳保护例外格式无效")
+        card_id = override.get("card_id")
+        review_key = override.get("review_key")
+        reason = override.get("reason")
+        if (
+            not isinstance(card_id, int)
+            or not isinstance(review_key, str)
+            or not isinstance(reason, str)
+            or not reason.strip()
+            or card_id in overridden_ids
+            or review_key not in rejected_cards.get(card_id, set())
+        ):
+            raise ValueError("不采纳保护例外必须精确指向被拒审核项并说明原因")
+        overridden_ids.add(card_id)
+    frozen.difference_update(overridden_ids)
     touched = set()
     members_seen = set()
     aliases = {}
@@ -100,13 +132,36 @@ async def apply(session: AsyncSession, plan: dict) -> dict:
         digest(card_data(cards[i])) != plan["expected_cards"][str(i)] for i in ids
     ):
         raise ValueError("线上卡片已修改，需要重新审查；没有执行内容修改")
+    execution_rows: dict[str, EditorialExecution] = {}
+    execution_keys: set[str] = set()
+    expected_executions = plan.get("expected_executions", {})
+    for result in plan["executions"]:
+        key = plan["dataset_id"] + ":" + result["group_id"]
+        if key in execution_keys:
+            raise ValueError("执行方案包含重复审核项")
+        execution_keys.add(key)
+        row = await session.get(EditorialExecution, key, with_for_update=True)
+        if row is None:
+            if key in expected_executions and expected_executions[key] is not None:
+                raise ValueError("审核执行状态已更新，需要重新核对；没有执行内容修改")
+            continue
+        expected = expected_executions.get(key)
+        if expected is None:
+            raise ValueError("审核项已有执行结果，续办方案必须提供预期执行状态")
+        if _execution_data(row) != expected:
+            raise ValueError("审核执行状态已更新，需要重新核对；没有执行内容修改")
+        if row.status not in ("deferred", "blocked_medical", "rolled_back"):
+            raise ValueError("仅允许续办暂缓、医学阻塞或已回滚的审核项")
+        execution_rows[key] = row
     existing_aliases = set((await session.scalars(select(CardMerge.alias_id).where(
         CardMerge.alias_id.in_(members_seen)
     ))).all())
     if existing_aliases:
         raise ValueError("执行方案引用已合并的旧卡")
     before = {"cards": [card_data(cards[i]) for i in sorted(touched)],
-              "progress": [], "new_progress": [], "question_links": [], "relations": [], "chapters": []}
+              "progress": [], "new_progress": [], "question_links": [], "relations": [],
+              "chapters": [], "executions": [],
+              "rejection_overrides": rejection_overrides}
     progress_after = []
     changed_ids = members_seen | {p["id"] for p in plan.get("patches", [])}
     for card_id in sorted(changed_ids):
@@ -187,13 +242,20 @@ async def apply(session: AsyncSession, plan: dict) -> dict:
         })
     for result in plan["executions"]:
         key = plan["dataset_id"] + ":" + result["group_id"]
-        if await session.get(EditorialExecution, key) is not None:
-            raise ValueError("审核项已有执行结果，需明确修订而非覆盖记录")
-        session.add(EditorialExecution(
-            key=key, review_version=actual.get(key, {}).get("version", 0),
-            status=result["status"], description=result["description"],
-            affected_ids=result.get("card_ids", []), batch_id=batch_id,
-        ))
+        row = execution_rows.get(key)
+        if row is None:
+            session.add(EditorialExecution(
+                key=key, review_version=actual.get(key, {}).get("version", 0),
+                status=result["status"], description=result["description"],
+                affected_ids=result.get("card_ids", []), batch_id=batch_id,
+            ))
+        else:
+            before["executions"].append({"key": key, **_execution_data(row)})
+            row.review_version = actual.get(key, {}).get("version", 0)
+            row.status = result["status"]
+            row.description = result["description"]
+            row.affected_ids = result.get("card_ids", [])
+            row.batch_id = batch_id
     await session.flush()
     session.add(EditorialBatch(
         id=batch_id, plan_hash=plan_hash, status="applied", before=before,
@@ -267,11 +329,17 @@ async def rollback(session: AsyncSession, batch_id: str) -> dict:
             raise ValueError("章节在整理后又有修改，不能自动撤销")
         chapter.content_md, chapter.pages = saved["content_md"], saved["pages"]
     await session.execute(delete(CardMerge).where(CardMerge.batch_id == batch_id))
+    saved_executions = {row["key"]: row for row in batch.before.get("executions", [])}
     records = (await session.scalars(select(EditorialExecution).where(
         EditorialExecution.batch_id == batch_id
     ))).all()
     for record in records:
-        record.status = "rolled_back"
+        saved = saved_executions.get(record.key)
+        if saved is None:
+            record.status = "rolled_back"
+            continue
+        for field in ("status", "description", "affected_ids", "batch_id", "review_version"):
+            setattr(record, field, saved[field])
     batch.status = "rolled_back"
     await session.flush()
     return {"batch_id": batch_id, "rolled_back": True}

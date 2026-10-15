@@ -1,10 +1,12 @@
 ﻿import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
-import type { AdminQuestion, AdminQuestionPatch } from '@/api/types'
+import type { AdminQuestion, AdminQuestionPatch, ContentCitationInput } from '@/api/types'
 import { useAuth } from '@/app/auth'
 import { Button, ErrorState, Field, Input, Modal, Spinner, useToast } from '@/ui'
 import MarkdownEditor from './MarkdownEditor'
+import CitationEditor from './CitationEditor'
+import { citationInputs, sameCitations } from './citationHelpers'
 import s from './notes.module.css'
 
 interface Props { questionId: number; open: boolean; onClose: () => void; onSaved?: () => void }
@@ -17,6 +19,8 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
   const [system, setSystem] = useState(data.system)
   const [tags, setTags] = useState(data.tags.join(', '))
   const [analysis, setAnalysis] = useState(data.analysis)
+  const originalCitations = citationInputs(data.citations)
+  const [citations, setCitations] = useState<ContentCitationInput[]>(originalCitations)
   const [saving, setSaving] = useState(false)
 
   const patch: AdminQuestionPatch = {}
@@ -25,6 +29,7 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
   const newTags = splitTags(tags)
   if (newTags.join('\n') !== data.tags.join('\n')) patch.tags = newTags
   if (analysis !== data.analysis) patch.analysis = analysis
+  if (!sameCitations(citations, originalCitations)) patch.citations = citations
   const dirty = Object.keys(patch).length > 0
 
   const save = async () => {
@@ -45,6 +50,7 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
       <Field label="系统分类"><Input value={system} onChange={(e) => setSystem(e.target.value)} /></Field>
       <Field label="标签" hint="多个标签用逗号分隔"><Input value={tags} onChange={(e) => setTags(e.target.value)} /></Field>
       <MarkdownEditor label="解析（Markdown 原文）" value={analysis} onChange={setAnalysis} kind="markdown" />
+      <CitationEditor value={citations} onChange={setCitations} subject={data.subject_dir} />
       <div className={s.actions}>
         <Button onClick={onClose}>取消</Button>
         <Button variant="primary" disabled={!dirty || saving} onClick={save}>{saving ? '保存中…' : '保存'}</Button>

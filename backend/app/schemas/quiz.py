@@ -1,6 +1,9 @@
 from pydantic import BaseModel, Field
 
 
+from app.schemas.provenance import ContentCitationOut
+
+
 class QuestionOut(BaseModel):
     id: int
     qid: str
@@ -50,6 +53,7 @@ class QuestionFull(BaseModel):
     tags: list[str]
     state: str
     starred: bool
+    citations: list[ContentCitationOut] = Field(default_factory=list)
 
 
 class AiAnalysisOut(BaseModel):

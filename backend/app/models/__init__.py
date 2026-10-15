@@ -1,5 +1,8 @@
 from app.models.base import Base
-from app.models.content import Card, CardMerge, CardOriginal, CardQuestion, CardRelation, Chapter, PlanDay, PlanDayPart, Question
+from app.models.content import (
+    Card, CardMerge, CardOriginal, CardQuestion, CardRelation, Chapter, ContentCitation,
+    PlanDay, PlanDayPart, Question, TextbookSource,
+)
 from app.models.learning import (
     Attempt,
     CardProgress,
@@ -13,7 +16,8 @@ from app.models.user import AuthToken, Checkin, InviteCode, SiteConfig, User, Us
 __all__ = [
     "Base", "User", "AuthToken", "UserPrefs", "Checkin", "InviteCode", "SiteConfig",
     "UserPlan", "UserPlanItem",
-    "Chapter", "Question", "Card", "CardQuestion", "CardMerge", "CardOriginal", "CardRelation", "PlanDay", "PlanDayPart",
+    "Chapter", "Question", "Card", "CardQuestion", "CardMerge", "CardOriginal", "CardRelation",
+    "TextbookSource", "ContentCitation", "PlanDay", "PlanDayPart",
     "QuestionProgress", "CardProgress", "Exam", "Attempt", "ScheduleItem",
     "Note", "NoteLike", "ChatMessage", "QuestionEdit", "EditorialReview", "EditorialExecution", "EditorialBatch",
 ]

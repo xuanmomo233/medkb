@@ -3,6 +3,9 @@ from typing import Literal
 from pydantic import BaseModel, Field
 
 
+from app.schemas.provenance import ContentCitationIn, ContentCitationOut
+
+
 class MarkdownPreviewIn(BaseModel):
     text: str = Field(max_length=20000)
     kind: Literal["markdown", "card"] = "markdown"
@@ -14,10 +17,12 @@ class MarkdownPreviewOut(BaseModel):
 
 class AdminQuestion(BaseModel):
     id: int
+    subject_dir: str
     system: str
     stem: str
     analysis: str
     tags: list[str]
+    citations: list[ContentCitationOut] = Field(default_factory=list)
 
 
 class AdminQuestionPatch(BaseModel):
@@ -25,6 +30,7 @@ class AdminQuestionPatch(BaseModel):
     stem: str | None = None
     analysis: str | None = None
     tags: list[str] | None = None
+    citations: list[ContentCitationIn] | None = Field(default=None, max_length=12)
 
 
 class AdminCard(BaseModel):
@@ -35,6 +41,7 @@ class AdminCard(BaseModel):
     term: str
     hint: str
     body: str
+    citations: list[ContentCitationOut] = Field(default_factory=list)
 
 
 class AdminCardPatch(BaseModel):
@@ -42,6 +49,7 @@ class AdminCardPatch(BaseModel):
     term: str | None = None
     hint: str | None = None
     body: str | None = None
+    citations: list[ContentCitationIn] | None = Field(default=None, max_length=12)
 
 
 class ChangedOut(BaseModel):

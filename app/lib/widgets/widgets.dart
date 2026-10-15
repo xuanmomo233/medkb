@@ -4,6 +4,7 @@ export 'app_refresh.dart';
 export 'app_sheet.dart';
 export 'async_view.dart';
 export 'cache_banner.dart';
+export 'citation_list.dart';
 export 'empty_state.dart';
 export 'html_view.dart';
 export 'load_error.dart';

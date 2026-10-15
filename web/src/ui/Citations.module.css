@@ -1,0 +1,8 @@
+.box { margin-top: 16px; padding-top: 12px; border-top: 1px dashed var(--line); }
+.title { margin: 0 0 8px; font-size: 13px; font-weight: 600; color: var(--text-2); }
+.list { margin: 0; padding-left: 20px; color: var(--text-2); font-size: 13px; line-height: 1.65; }
+.status { display: inline-flex; margin-left: 6px; padding: 0 7px; border-radius: 10px; font-size: 11px; }
+.verified { background: var(--good-soft); color: var(--good); }
+.unverified { background: var(--warn-soft); color: var(--warn); }
+.disputed { background: var(--bad-soft); color: var(--bad); }
+.note { color: var(--text-3); }

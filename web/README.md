@@ -1,32 +1,26 @@
-# React + TypeScript + Vite
+# MedKB 网页端
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+React + TypeScript + Vite，使用与 Flutter App 相同的 FastAPI 接口。源码入口为 `src/main.tsx`，页面路由在 `src/app/router.tsx`。
 
-Currently, two official plugins are available:
+## 开发
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+在 `web/` 下使用 Node.js 22：
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the Oxlint configuration
-
-If you are developing a production application, we recommend enabling type-aware lint rules by installing `oxlint-tsgolint` and editing `.oxlintrc.json`:
-
-```json
-{
-  "$schema": "./node_modules/oxlint/configuration_schema.json",
-  "plugins": ["react", "typescript", "oxc"],
-  "options": {
-    "typeAware": true
-  },
-  "rules": {
-    "react/rules-of-hooks": "error",
-    "react/only-export-components": ["warn", { "allowConstantExport": true }]
-  }
-}
+```powershell
+npm ci
+npm run dev
 ```
 
-See the [Oxlint rules documentation](https://oxc.rs/docs/guide/usage/linter/rules) for the full list of rules and categories.
+Vite 将 `/api`、`/img`、`/uimg` 请求代理到 `http://127.0.0.1:8000`，需要同时运行本地后端。仅演示页面时，可在启动前设置 `$env:VITE_MOCK = '1'`；模拟数据不代表线上数据，生产构建不得开启该变量。
+
+## 检查与构建
+
+```powershell
+npm run lint
+npm test
+npm run build
+```
+
+`npm test` 使用 Node 内置测试运行器执行笔记 Markdown 编辑辅助函数测试；`build` 包含 TypeScript 检查及 Vite 构建。现有测试不等于浏览器端到端覆盖，登录、刷题和编辑发布等流程仍需集成验证。
+
+CI 自动执行上述检查。生产部署通过 `deploy/Dockerfile` 构建网页并复制到镜像内 `/app/web`，详细步骤见 [运维手册](../OPS.md)。

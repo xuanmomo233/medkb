@@ -1,5 +1,5 @@
 import type { Question, QuestionFull, QuestionStat } from '@/api/types'
-import { Badge, Button, HtmlView, ProgressBar, Spinner } from '@/ui'
+import { Badge, Button, Citations, HtmlView, ProgressBar, Spinner } from '@/ui'
 import QuestionExtras from './QuestionExtras'
 import s from './run.module.css'
 
@@ -62,6 +62,7 @@ export default function AnalysisPanel({ q, picked, judged, correct, full, failed
       {q.tags.length > 0 && (
         <div className={s.tags}>{q.tags.map((t) => <Badge key={t} tone="info">{t}</Badge>)}</div>
       )}
+      {full && <Citations items={full.citations} />}
       <QuestionExtras question={q} onEdited={onEdited} />
     </section>
   )

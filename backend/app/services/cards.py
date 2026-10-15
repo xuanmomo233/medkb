@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import card_md, md
 from app.models import Card, CardProgress
-from app.services import study
+from app.services import provenance, study
 from app.services.card_merges import canonical_id, canonical_ids, details, visible
 from app.services.progress import derive_state
 
@@ -53,12 +53,14 @@ async def list_cards(
     stmt = stmt.order_by(Card.id).limit(limit)
     rows = (await session.execute(stmt)).all()
     info = await details(session, [c.id for c, _ in rows])
+    citations = await provenance.citations_for_targets(session, "card", [c.id for c, _ in rows])
     out = []
     for c, p in rows:
         out.append({
             "id": c.id, "subject": c.subject, "part": c.part, "section": c.section or "",
             "term": c.term, "term_html": md(c.term), "hint": c.hint or "", "body_html": card_md(c.body),
             "state": derive_state(p), "starred": bool(p and p.starred),
+            "citations": citations.get(c.id, []),
             **info.get(c.id, {}),
         })
     return out
@@ -73,10 +75,11 @@ async def get_admin_card(session: AsyncSession, card_id: int):
     return AdminCard(
         id=c.id, subject=c.subject or "", part=c.part or "", section=c.section or "",
         term=c.term or "", hint=c.hint or "", body=c.body or "",
+        citations=await provenance.citations_for_target(session, "card", c.id),
     )
 
 
-async def update_admin_card(session: AsyncSession, card_id: int, patch) -> int:
+async def update_admin_card(session: AsyncSession, admin_id: int, card_id: int, patch) -> int:
     root = await canonical_id(session, card_id)
     if root != card_id:
         raise HTTPException(409, f"该原卡已合并到 #{root}，请编辑主卡")
@@ -112,6 +115,8 @@ async def update_admin_card(session: AsyncSession, card_id: int, patch) -> int:
         if patch.body != (c.body or ""):
             c.body = patch.body
             changed += 1
+    if patch.citations is not None:
+        changed += await provenance.replace_citations(session, "card", card_id, patch.citations, admin_id)
     await session.commit()
     return changed
 

@@ -1,4 +1,6 @@
-from sqlalchemy import CheckConstraint, ForeignKey, Index, Integer, String, Text
+from datetime import datetime
+
+from sqlalchemy import Boolean, CheckConstraint, DateTime, ForeignKey, Index, Integer, String, Text, UniqueConstraint, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, CreatedMixin, JsonType
@@ -57,6 +59,54 @@ class Card(Base):
     hint: Mapped[str] = mapped_column(Text, default="")
     body: Mapped[str] = mapped_column(Text)
     source_file: Mapped[str] = mapped_column(String(255), default="")
+
+
+class TextbookSource(Base, CreatedMixin):
+    """可引用的教材版本；书目与内容定位分开，避免每条出处重复填写版次。"""
+
+    __tablename__ = "textbook_sources"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    title: Mapped[str] = mapped_column(String(200))
+    subject: Mapped[str] = mapped_column(String(32), index=True)
+    publisher: Mapped[str] = mapped_column(String(100), default="人民卫生出版社")
+    edition: Mapped[str] = mapped_column(String(32), default="第十版")
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
+
+
+class ContentCitation(Base, CreatedMixin):
+    """章节、题目或背卡到教材具体位置的核验记录。"""
+
+    __tablename__ = "content_citations"
+    __table_args__ = (
+        CheckConstraint("target_type IN ('chapter', 'question', 'card')", name="ck_citation_target_type"),
+        CheckConstraint("status IN ('unverified', 'verified', 'disputed')", name="ck_citation_status"),
+        CheckConstraint("page_start IS NULL OR page_start > 0", name="ck_citation_page_start"),
+        CheckConstraint("page_end IS NULL OR page_end > 0", name="ck_citation_page_end"),
+        CheckConstraint("page_end IS NULL OR page_start IS NOT NULL", name="ck_citation_page_pair"),
+        CheckConstraint("page_end IS NULL OR page_end >= page_start", name="ck_citation_page_order"),
+        UniqueConstraint(
+            "target_type", "target_id", "source_key", "chapter", "section", "page_start", "page_end",
+            name="uq_content_citation_location",
+        ),
+        Index("ix_content_citation_target", "target_type", "target_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    target_type: Mapped[str] = mapped_column(String(16))
+    target_id: Mapped[int] = mapped_column(Integer)
+    source_key: Mapped[str] = mapped_column(ForeignKey("textbook_sources.key", ondelete="RESTRICT"), index=True)
+    chapter: Mapped[str] = mapped_column(String(200), default="")
+    section: Mapped[str] = mapped_column(String(200), default="")
+    page_start: Mapped[int | None] = mapped_column(Integer)
+    page_end: Mapped[int | None] = mapped_column(Integer)
+    note: Mapped[str] = mapped_column(Text, default="")
+    status: Mapped[str] = mapped_column(String(16), default="unverified", index=True)
+    verified_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
+    verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False
+    )
 
 
 class CardQuestion(Base):

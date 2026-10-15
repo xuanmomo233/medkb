@@ -1,6 +1,6 @@
 ﻿import { Link } from 'react-router-dom'
 import type { Card } from '@/api/types'
-import { Badge, HtmlView } from '@/ui'
+import { Badge, Citations, HtmlView } from '@/ui'
 import s from './run.module.css'
 
 interface Props { card: Card; flipped: boolean; onFlip: () => void }
@@ -30,6 +30,7 @@ export default function CardFace({ card, flipped, onFlip }: Props) {
         </span>
       </div>
       <HtmlView html={card.body_html} />
+      <Citations items={card.citations} />
       {!!card.related_cards?.length && <section className={s.srcBox} aria-label="关联知识">
         <h3>关联知识</h3>
         {card.related_cards.map((item) => <p key={item.id}>

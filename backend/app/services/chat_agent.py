@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import get_settings
 from app.core.render import md
 from app.models import ChatMessage, Question
-from app.services import chat_files, glm, kb
+from app.services import chat_files, glm, knowledge
 
 log = logging.getLogger("medkb.chat")
 
@@ -21,9 +21,9 @@ log = logging.getLogger("medkb.chat")
 SYS_PROMPT = '''你是用户的医学考研（西医综合）陪学助手「小医」。熟悉生理、生化、病理、内科、外科及医学人文考点。
 
 【工具】你有四个工具可以主动调用查证：
-- kb_toc()：知识库完整目录（学科→章节顺序、考频）
-- kb_search(query)：知识库全文检索
-- kb_read(文件名)：读某章完整内容
+- kb_toc()：数据库当前发布的知识目录
+- kb_search(query)：数据库当前章节与背卡检索（返回教材核验状态）
+- kb_read(章节名)：读取数据库当前章节内容
 - quiz_search(关键词)：题库搜题（题干/答案/分类/qid）
 涉及知识库结构/顺序/覆盖范围必须调 kb_toc；回答疾病知识建议先 kb_search；找真题/考法用 quiz_search。查不到再凭医学通识回答并标注"（知识库未收录，供参考）"。不许编造章节顺序或题号。
 
@@ -118,13 +118,13 @@ def _like(s: str) -> str:
 async def _tool_exec(name: str, args: dict, session: AsyncSession, found: list[str]) -> str:
     try:
         if name == "kb_toc":
-            return (await asyncio.to_thread(kb.toc))[:6000]
+            return (await knowledge.toc(session))[:6000]
         if name == "kb_search":
             q = str(args.get("query") or "")[:100]
-            r = await asyncio.to_thread(kb.snippets, q, 3)
+            r = await knowledge.search(session, q, 3)
             return "\n\n".join(r)[:4000] if r else "（未命中：换个关键词试试）"
         if name == "kb_read":
-            txt = await asyncio.to_thread(kb.read_file, str(args.get("name") or "").strip(), 4000)
+            txt = await knowledge.read(session, str(args.get("name") or "").strip(), 4000)
             return txt if txt else "（没有该文件，可先 kb_toc 看目录）"
         if name == "quiz_search":
             kw = str(args.get("kw") or "")[:50]
@@ -289,11 +289,11 @@ async def send_message(session: AsyncSession, uid: int, body) -> dict:
                 reply = "来试试这道（%s）：" % (quizzes[0]["system"] or "综合")
     if not quizzes:
         ctx = SYS_PROMPT
-        snips = await asyncio.to_thread(kb.snippets, msg)
+        snips = await knowledge.search(session, msg)
         if snips:
             ctx += "\n\n【知识库资料】（预检片段，可用 kb_read/kb_search 深挖）\n" + "\n\n".join(snips)
         if STRUCT_RE.search(msg):
-            toc = await asyncio.to_thread(kb.toc)
+            toc = await knowledge.toc(session)
             if toc:
                 ctx += "\n\n【知识库目录】（回答\"顺序/先学什么\"必须以此为准，不许凭记忆编造）\n" + toc
         user_msg = (("【用户发来的文件 %s】\n%s\n\n" % (fname, ftext) if ftext else "")
@@ -348,7 +348,7 @@ async def answer_quiz(session: AsyncSession, uid: int, qid: str, answer: str) ->
         extra = "【题库解析】%s\n" % (ana or "（无）")
         ctx = SYS_PROMPT
         if not limited:
-            kbs = await asyncio.to_thread(kb.snippets, stem_t + " " + (q.system or ""))
+            kbs = await knowledge.search(session, stem_t + " " + (q.system or ""))
             if kbs:
                 ctx += "\n\n【知识库资料】\n" + "\n\n".join(kbs)
     if limited:

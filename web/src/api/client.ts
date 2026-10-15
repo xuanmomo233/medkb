@@ -64,6 +64,33 @@ export async function request<T>(method: string, path: string, opts: { query?: Q
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T)
 }
 
+/** 读取需登录态的二进制资源（如教材页图），不把 token 暴露到 URL。 */
+export async function getBlob(path: string): Promise<Blob> {
+  const headers: Record<string, string> = {}
+  const token = tokenStore.get()
+  if (token) headers['X-Token'] = token
+  let res: Response
+  try {
+    res = await fetch(`/api${path}`, { headers })
+  } catch {
+    throw new ApiError(0, '网络连接失败，请检查网络后重试')
+  }
+  if (res.status === 401) {
+    tokenStore.clear()
+    onUnauthorized?.()
+    throw new ApiError(401, '登录已过期，请重新登录')
+  }
+  if (!res.ok) {
+    let msg = `请求失败（${res.status}）`
+    try {
+      const body = await res.json()
+      msg = body.detail ?? body.message ?? msg
+    } catch { /* 二进制或空响应 */ }
+    throw new ApiError(res.status, typeof msg === 'string' ? msg : JSON.stringify(msg))
+  }
+  return res.blob()
+}
+
 export const get = <T>(path: string, query?: Query) => request<T>('GET', path, { query })
 export const post = <T>(path: string, body?: unknown) => request<T>('POST', path, { body })
 export const put = <T>(path: string, body?: unknown) => request<T>('PUT', path, { body })

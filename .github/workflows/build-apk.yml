@@ -1,7 +1,7 @@
 name: build-apk
 
 permissions:
-  contents: write
+  contents: read
 
 on:
   push:
@@ -9,8 +9,15 @@ on:
   workflow_dispatch:
 
 jobs:
+  quality:
+    uses: ./.github/workflows/quality.yml
+
   apk:
+    needs: quality
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
     defaults:
       run:
         working-directory: app

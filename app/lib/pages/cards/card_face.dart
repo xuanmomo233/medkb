@@ -88,6 +88,7 @@ class CardBack extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           HtmlView(card.bodyHtml),
+          CitationList(card.citations),
           if (card.relatedCards.isNotEmpty) ...<Widget>[
             const Divider(height: 24),
             Text('关联知识', style: t.textTheme.titleMedium),

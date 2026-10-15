@@ -14,8 +14,8 @@ class Settings(BaseSettings):
     glm_vision_models: str = "glm-5.3-flash"
 
     token_ttl_days: int = 90
-    kb_dir: str = "/data/kb"
     img_dir: str = "/data/img"
+    textbook_img_dir: str = "/data/textbooks"
     upload_dir: str = "/data/uimg"
     img_cache_dir: str = "/data/imgcache"
     web_dist_dir: str = "/app/web"

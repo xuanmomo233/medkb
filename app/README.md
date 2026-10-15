@@ -4,6 +4,16 @@ Flutter 客户端，连接云端 `https://luck.021209.xyz`（PostgreSQL + FastAP
 
 ## 本地构建
 
+在 `app/` 下使用 Flutter stable，与 CI 保持一致。先执行检查：
+
+```powershell
+flutter pub get
+flutter analyze --no-fatal-infos
+flutter test
+```
+
+分析错误和警告会阻断 CI，提示级建议不阻断。现有测试主要覆盖笔记解析与编辑，尚不能代替设备上的登录、离线及覆盖升级验证。
+
 ```
 flutter pub get
 flutter build apk --release
@@ -12,7 +22,7 @@ flutter build apk --release
 
 ## CI 构建与发版
 
-push 到 main 后 GitHub Actions 自动构建并发布 Release（`build-<run_number>` tag，asset `app-release.apk`）。
+push 到 main 后 GitHub Actions 先执行后端、网页和 Flutter 检查，全部通过后自动构建并发布 Release（`build-<run_number>` tag，asset `app-release.apk`）。CI 不自动上传 VPS。
 
 **每次更新必须同步版本号**（约定）：
 
@@ -22,8 +32,9 @@ push 到 main 后 GitHub Actions 自动构建并发布 Release（`build-<run_num
    - `versionName` = pubspec 语义版本（用户所见版本）
    - `appBuild` = run_number（APP 内更新检查用，CI 自动注入）
 3. 下载新 APK → `/opt/medkb/app-release.apk`
-4. `echo '<run_number>|v<语义版本> <变更说明>' > /opt/medkb/VERSION`
-5. `curl http://127.0.0.1:8899/api/version` 验证
+4. 修改 VPS `/opt/medkb-v2/src/deploy/.env` 中的 `MEDKB_VERSION='<run_number>|v<语义版本> <变更说明>'`。
+5. 运行 `docker compose --project-directory /opt/medkb-v2/src/deploy up -d --force-recreate api`，重新加载环境变量与 APK 单文件挂载。
+6. 验证 `/api/version` 的构建号和 SHA256，以及旧版本设备上的覆盖升级。详细步骤见 [运维手册](../OPS.md)。
 
 ## 功能
 
