@@ -132,11 +132,28 @@ class _GalleryViewer extends StatefulWidget {
 
 class _GalleryViewerState extends State<_GalleryViewer> {
   late final PageController _pc = PageController(initialPage: widget.initial);
+  late final List<TransformationController> _transforms =
+      List<TransformationController>.generate(
+    widget.pages.length,
+    (_) => TransformationController(),
+  );
   late int _cur = widget.initial;
+  double _scale = 1;
+
+  TransformationController get _transform => _transforms[_cur];
+
+  void _setScale(double scale) {
+    final double next = scale.clamp(1, 6).toDouble();
+    setState(() => _scale = next);
+    _transform.value = Matrix4.identity()..scale(next, next, 1);
+  }
 
   @override
   void dispose() {
     _pc.dispose();
+    for (final TransformationController transform in _transforms) {
+      transform.dispose();
+    }
     super.dispose();
   }
 
@@ -149,20 +166,77 @@ class _GalleryViewerState extends State<_GalleryViewer> {
         foregroundColor: Colors.white,
         title: Text('${_cur + 1} / ${widget.pages.length}'),
       ),
-      body: PageView.builder(
-        controller: _pc,
-        itemCount: widget.pages.length,
-        onPageChanged: (int i) => setState(() => _cur = i),
-        itemBuilder: (BuildContext c, int i) => InteractiveViewer(
-          maxScale: 6,
-          child: Center(
-            child: _NetImage(
-              _src(widget.pages[i], widget.sourceKey),
-              fit: BoxFit.contain,
-              authenticated: widget.sourceKey != null,
+      body: Column(
+        children: <Widget>[
+          SafeArea(
+            bottom: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+              child: Row(
+                children: <Widget>[
+                  IconButton(
+                    tooltip: '缩小',
+                    onPressed: _scale <= 1 ? null : () => _setScale(_scale - 0.1),
+                    icon: const Icon(Icons.remove),
+                  ),
+                  Expanded(
+                    child: Slider(
+                      value: _scale,
+                      min: 1,
+                      max: 6,
+                      divisions: 50,
+                      label: '${(_scale * 100).round()}%',
+                      onChanged: _setScale,
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: '放大',
+                    onPressed: _scale >= 6 ? null : () => _setScale(_scale + 0.1),
+                    icon: const Icon(Icons.add),
+                  ),
+                  TextButton(
+                    onPressed: _scale == 1 ? null : () => _setScale(1),
+                    child: const Text('适屏'),
+                  ),
+                ],
+              ),
             ),
           ),
-        ),
+          Expanded(
+            child: PageView.builder(
+              controller: _pc,
+              itemCount: widget.pages.length,
+              onPageChanged: (int i) {
+                setState(() {
+                  _cur = i;
+                  _scale = 1;
+                });
+                _transforms[i].value = Matrix4.identity();
+              },
+              itemBuilder: (BuildContext c, int i) => InteractiveViewer(
+                transformationController: _transforms[i],
+                minScale: 1,
+                maxScale: 6,
+                alignment: Alignment.center,
+                onInteractionUpdate: (_) {
+                  final double next = _transforms[i]
+                      .value
+                      .getMaxScaleOnAxis()
+                      .clamp(1, 6)
+                      .toDouble();
+                  if ((next - _scale).abs() > 0.02) setState(() => _scale = next);
+                },
+                child: Center(
+                  child: _NetImage(
+                    _src(widget.pages[i], widget.sourceKey),
+                    fit: BoxFit.contain,
+                    authenticated: widget.sourceKey != null,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
