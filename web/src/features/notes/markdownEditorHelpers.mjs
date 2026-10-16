@@ -75,6 +75,26 @@ export function unhighlightSelection(text, start, end) {
   return { text: plain, start: mapped(from), end: mapped(to), changed: true }
 }
 
+export function wrapMarkdownSelection(text, start, end, prefix, suffix = prefix, placeholder = '文本', content) {
+  const selection = normalizeSelection(text, start, end)
+  if (!selection || !prefix) return unchanged(text, selection)
+  const selected = text.slice(selection.start, selection.end)
+  const inner = (content ?? selected) || placeholder
+  return replaceRange(text, selection.start, selection.end, `${prefix}${inner}${suffix}`,
+    selection.start + prefix.length, selection.start + prefix.length + inner.length)
+}
+
+export function prefixMarkdownLines(text, start, end, prefix, placeholder = '内容') {
+  const selection = normalizeSelection(text, start, end)
+  if (!selection || !prefix) return unchanged(text, selection)
+  const lineStart = text.lastIndexOf('\n', Math.max(0, selection.start - 1)) + 1
+  const nextBreak = text.indexOf('\n', selection.end)
+  const lineEnd = nextBreak === -1 ? text.length : nextBreak
+  const source = text.slice(lineStart, lineEnd) || placeholder
+  const rewritten = source.split('\n').map((line) => `${prefix}${line || placeholder}`).join('\n')
+  return replaceRange(text, lineStart, lineEnd, rewritten, lineStart, lineStart + rewritten.length)
+}
+
 export function escapeTableCell(value) {
   // Entities avoid even/odd backslash problems before literal pipes in tables.
   return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')

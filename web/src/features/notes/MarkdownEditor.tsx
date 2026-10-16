@@ -1,8 +1,8 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import type { KeyboardEvent, SyntheticEvent } from 'react'
 import { api } from '@/api/endpoints'
-import { Button, HtmlView, Spinner } from '@/ui'
-import { buildMarkdownTable, highlightSelection, insertTableAtSelection, unhighlightSelection } from './markdownEditorHelpers.mjs'
+import { Button, Field, HtmlView, Input, Modal, Spinner } from '@/ui'
+import { buildMarkdownTable, highlightSelection, insertTableAtSelection, prefixMarkdownLines, unhighlightSelection, wrapMarkdownSelection } from './markdownEditorHelpers.mjs'
 import type { TextEdit, TextSelection } from './markdownEditorHelpers.mjs'
 import s from './MarkdownEditor.module.css'
 
@@ -14,6 +14,7 @@ interface Props {
 }
 interface TableDraft { headers: string[]; rows: string[][] }
 interface Preview { text: string; kind: Props['kind']; busy: boolean; html?: string; error?: string }
+type ResourceKind = 'link' | 'image'
 const PREVIEW_LIMIT = 20_000
 
 export default function MarkdownEditor({ label, value, onChange, kind }: Props) {
@@ -28,6 +29,9 @@ export default function MarkdownEditor({ label, value, onChange, kind }: Props) 
   const [tableOpen, setTableOpen] = useState(false)
   const [table, setTable] = useState<TableDraft>({ headers: ['列 1', '列 2'], rows: [['', ''], ['', '']] })
   const [preview, setPreview] = useState<Preview | null>(null)
+  const [resource, setResource] = useState<ResourceKind | null>(null)
+  const [resourceText, setResourceText] = useState('')
+  const [resourceUrl, setResourceUrl] = useState('')
   const shownPreview = preview?.text === value && preview.kind === kind ? preview : null
   const characterCount = Array.from(value).length
   const overLimit = characterCount > PREVIEW_LIMIT
@@ -78,6 +82,29 @@ export default function MarkdownEditor({ label, value, onChange, kind }: Props) 
   const unhighlight = () => {
     const { start, end } = selection.current
     applyEdit(unhighlightSelection(value, start, end), '请选择完整高亮内容（可包含 == 或 <mark> 标签），不支持局部取消。')
+  }
+  const inline = (prefix: string, suffix = prefix, placeholder = '文本') => {
+    const { start, end } = selection.current
+    applyEdit(wrapMarkdownSelection(value, start, end, prefix, suffix, placeholder), '插入位置已失效，请在原文中重新放置光标。')
+  }
+  const lines = (prefix: string, placeholder = '内容') => {
+    const { start, end } = selection.current
+    applyEdit(prefixMarkdownLines(value, start, end, prefix, placeholder), '插入位置已失效，请在原文中重新放置光标。')
+  }
+  const openResource = (next: ResourceKind) => {
+    const { start, end } = selection.current
+    const selected = value.slice(start, end)
+    setResourceText(selected || (next === 'image' ? '图片说明' : '链接文字'))
+    setResourceUrl('')
+    setResource(next)
+  }
+  const insertResource = () => {
+    if (!resource || !resourceUrl.trim()) return
+    const { start, end } = selection.current
+    const label = resourceText.trim() || (resource === 'image' ? '图片说明' : '链接文字')
+    const prefix = resource === 'image' ? '![' : '['
+    applyEdit(wrapMarkdownSelection(value, start, end, prefix, `](${resourceUrl.trim()})`, label, label), '插入位置已失效，请在原文中重新放置光标。')
+    setResource(null)
   }
 
   const addColumn = () => setTable((draft) => draft.headers.length >= 6 ? draft : {
@@ -130,6 +157,15 @@ export default function MarkdownEditor({ label, value, onChange, kind }: Props) 
     <div className={s.editor} onKeyDown={handleEscape}>
       <label className={s.label} htmlFor={`${id}-source`}>{label}</label>
       <div className={s.toolbar} role="group" aria-label={`${label}工具`}>
+        <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => lines('## ', '二级标题')}>标题</Button>
+        <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => inline('**')}>加粗</Button>
+        <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => inline('*')}>斜体</Button>
+        <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => inline('`', '`', '代码')}>代码</Button>
+        <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => lines('> ', '引用内容')}>引用</Button>
+        <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => lines('- ', '列表项')}>列表</Button>
+        <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => lines('1. ', '列表项')}>编号</Button>
+        <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => openResource('link')}>链接</Button>
+        <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={() => openResource('image')}>图片</Button>
         <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={highlight}>高亮选区</Button>
         <Button size="sm" onMouseDown={(event) => event.preventDefault()} onClick={unhighlight}>取消高亮</Button>
         <Button size="sm" aria-expanded={tableOpen} aria-controls={`${id}-table`} onClick={() => setTableOpen((open) => !open)}>插入表格</Button>
@@ -184,6 +220,22 @@ export default function MarkdownEditor({ label, value, onChange, kind }: Props) 
           <h3 className={s.builderTitle} id={`${id}-preview-title`}>预览（尚未保存）</h3>
           <HtmlView html={shownPreview.html} />
         </section>
+      )}
+      {resource && (
+        <Modal title={resource === 'image' ? '插入图片' : '插入链接'} onClose={() => setResource(null)}>
+          <div className={s.resourceForm}>
+            <Field label={resource === 'image' ? '图片说明' : '显示文字'}>
+              <Input autoFocus value={resourceText} onChange={(event) => setResourceText(event.target.value)} />
+            </Field>
+            <Field label={resource === 'image' ? '图片地址' : '链接地址'}>
+              <Input type="url" placeholder="https://…" value={resourceUrl} onChange={(event) => setResourceUrl(event.target.value)} />
+            </Field>
+            <div className={s.toolbar}>
+              <Button onClick={() => setResource(null)}>取消</Button>
+              <Button variant="primary" disabled={!resourceUrl.trim()} onClick={insertResource}>插入</Button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   )

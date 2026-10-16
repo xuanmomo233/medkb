@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildMarkdownTable, escapeTableCell, highlightSelection, insertTableAtSelection, normalizeSelection, unhighlightSelection } from './markdownEditorHelpers.mjs'
+import { buildMarkdownTable, escapeTableCell, highlightSelection, insertTableAtSelection, normalizeSelection, prefixMarkdownLines, unhighlightSelection, wrapMarkdownSelection } from './markdownEditorHelpers.mjs'
 
 test('highlight preserves Unicode, outside text, and the selected caret range', () => {
   const text = '前😀重点e\u0301后'
@@ -89,4 +89,15 @@ test('table insertion respects beginning/end, existing blank lines, and Unicode 
   assert.equal(insertTableAtSelection('a', 1, 1, 'table').text, 'a\n\ntable\n')
   assert.equal(insertTableAtSelection('😀a', 1, 1, 'table').text, '😀\n\ntable\n\na')
   assert.equal(insertTableAtSelection('a', 0, 0, '').changed, false)
+})
+
+test('inline wrappers and line prefixes preserve selections and Unicode text', () => {
+  assert.deepEqual(wrapMarkdownSelection('前😀后', 1, 3, '**'), {
+    text: '前**😀**后', start: 3, end: 5, changed: true,
+  })
+  assert.equal(wrapMarkdownSelection('', 0, 0, '`', '`', '代码').text, '`代码`')
+  assert.deepEqual(prefixMarkdownLines('甲\n乙', 0, 3, '> '), {
+    text: '> 甲\n> 乙', start: 0, end: 7, changed: true,
+  })
+  assert.equal(prefixMarkdownLines('', 0, 0, '- ', '项目').text, '- 项目')
 })
