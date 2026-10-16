@@ -12,11 +12,14 @@ import s from './notes.module.css'
 interface Props { questionId: number; open: boolean; onClose: () => void; onSaved?: () => void }
 
 const splitTags = (v: string) => v.split(/[,，]/).map((t) => t.trim()).filter(Boolean)
+const splitOptions = (v: string) => v.split(/\r?\n/).map((option) => option.replace(/^[A-J][.、．]\s*/i, '').trim())
 
 function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: number; onClose: () => void; onSaved?: () => void }) {
   const toast = useToast()
   const [stem, setStem] = useState(data.stem)
   const [system, setSystem] = useState(data.system)
+  const [options, setOptions] = useState(data.options.join('\n'))
+  const [answer, setAnswer] = useState(data.answer)
   const [tags, setTags] = useState(data.tags.join(', '))
   const [analysis, setAnalysis] = useState(data.analysis)
   const originalCitations = citationInputs(data.citations)
@@ -26,6 +29,9 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
   const patch: AdminQuestionPatch = {}
   if (stem !== data.stem) patch.stem = stem
   if (system !== data.system) patch.system = system
+  const newOptions = splitOptions(options)
+  if (newOptions.join('\n') !== data.options.join('\n')) patch.options = newOptions
+  if (answer !== data.answer) patch.answer = answer
   const newTags = splitTags(tags)
   if (newTags.join('\n') !== data.tags.join('\n')) patch.tags = newTags
   if (analysis !== data.analysis) patch.analysis = analysis
@@ -47,6 +53,8 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
   return (
     <div className={s.form}>
       <MarkdownEditor label="题干（Markdown 原文）" value={stem} onChange={setStem} kind="markdown" />
+      <Field label="选项" hint="每行一个选项；可粘贴 A. / B. 前缀，保存时会自动去除"><textarea className={s.textarea} value={options} onChange={(e) => setOptions(e.target.value)} rows={Math.max(4, data.options.length)} /></Field>
+      <Field label="正确答案" hint="单选填 A；多选连续填写字母，例如 AC"><Input value={answer} onChange={(e) => setAnswer(e.target.value.toUpperCase())} /></Field>
       <Field label="系统分类"><Input value={system} onChange={(e) => setSystem(e.target.value)} /></Field>
       <Field label="标签" hint="多个标签用逗号分隔"><Input value={tags} onChange={(e) => setTags(e.target.value)} /></Field>
       <MarkdownEditor label="解析（Markdown 原文）" value={analysis} onChange={setAnalysis} kind="markdown" />

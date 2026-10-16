@@ -20,6 +20,8 @@ class AdminQuestion(BaseModel):
     subject_dir: str
     system: str
     stem: str
+    options: list[str]
+    answer: str
     analysis: str
     tags: list[str]
     citations: list[ContentCitationOut] = Field(default_factory=list)
@@ -28,6 +30,8 @@ class AdminQuestion(BaseModel):
 class AdminQuestionPatch(BaseModel):
     system: str | None = None
     stem: str | None = None
+    options: list[str] | None = Field(default=None, max_length=10)
+    answer: str | None = Field(default=None, max_length=32)
     analysis: str | None = None
     tags: list[str] | None = None
     citations: list[ContentCitationIn] | None = Field(default=None, max_length=12)

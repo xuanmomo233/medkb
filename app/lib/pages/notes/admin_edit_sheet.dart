@@ -28,6 +28,8 @@ class _AdminEditBody extends StatefulWidget {
 class _AdminEditBodyState extends State<_AdminEditBody> {
   final TextEditingController _stem = TextEditingController();
   final TextEditingController _system = TextEditingController();
+  final TextEditingController _options = TextEditingController();
+  final TextEditingController _answer = TextEditingController();
   final TextEditingController _tags = TextEditingController();
   final TextEditingController _analysis = TextEditingController();
   AdminQuestion? _orig;
@@ -44,6 +46,8 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
   void dispose() {
     _stem.dispose();
     _system.dispose();
+    _options.dispose();
+    _answer.dispose();
     _tags.dispose();
     _analysis.dispose();
     super.dispose();
@@ -58,6 +62,8 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
         _err = null;
         _stem.text = q.stem;
         _system.text = q.system;
+        _options.text = q.options.join('\n');
+        _answer.text = q.answer;
         _tags.text = q.tags.join(', ');
         _analysis.text = q.analysis;
       });
@@ -73,6 +79,11 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
       .where((String t) => t.isNotEmpty)
       .toList();
 
+  List<String> _parseOptions(String s) => s
+      .split('\n')
+      .map((String option) => option.replaceFirst(RegExp(r'^[A-J][.、．]\s*', caseSensitive: false), '').trim())
+      .toList();
+
   bool _sameList(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
     for (int i = 0; i < a.length; i++) {
@@ -86,20 +97,24 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
     if (o == null || _saving) return;
     final String stem = _stem.text;
     final String sys = _system.text.trim();
+    final List<String> options = _parseOptions(_options.text);
+    final String answer = _answer.text.toUpperCase();
     final List<String> tags = _parseTags(_tags.text);
     final String ana = _analysis.text;
     final String? pStem = stem != o.stem ? stem : null;
     final String? pSys = sys != o.system ? sys : null;
+    final List<String>? pOptions = _sameList(options, o.options) ? null : options;
+    final String? pAnswer = answer != o.answer ? answer : null;
     final List<String>? pTags = _sameList(tags, o.tags) ? null : tags;
     final String? pAna = ana != o.analysis ? ana : null;
-    if (pStem == null && pSys == null && pTags == null && pAna == null) {
+    if (pStem == null && pSys == null && pOptions == null && pAnswer == null && pTags == null && pAna == null) {
       toast(context, '没有修改');
       return;
     }
     setState(() => _saving = true);
     try {
       await Endpoints.adminSaveQuestion(widget.questionId,
-          AdminQuestionPatch(stem: pStem, system: pSys, tags: pTags, analysis: pAna));
+          AdminQuestionPatch(stem: pStem, system: pSys, options: pOptions, answer: pAnswer, tags: pTags, analysis: pAna));
       if (!mounted) return;
       toast(context, '已保存');
       Navigator.of(context).pop(true);
@@ -144,6 +159,23 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
                   enabled: !_saving,
                   minLines: 4,
                   maxLines: 10,
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _options,
+                  enabled: !_saving,
+                  minLines: 4,
+                  maxLines: 10,
+                  decoration: const InputDecoration(
+                      labelText: '选项', helperText: '每行一个；可粘贴 A. / B. 前缀'),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: _answer,
+                  enabled: !_saving,
+                  textCapitalization: TextCapitalization.characters,
+                  decoration: const InputDecoration(
+                      labelText: '正确答案', helperText: '单选填 A；多选连续填写字母，例如 AC'),
                 ),
                 const SizedBox(height: 12),
                 TextField(

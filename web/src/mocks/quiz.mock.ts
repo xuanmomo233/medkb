@@ -39,13 +39,15 @@ const find = (id: number) => bank.find((q) => q.id === id)
 const mark = (id: number): Mark => marks.get(id) ?? { state: '', starred: false }
 export function mockQuestionAdmin(id: number) {
   const q = find(id)
-  return q ? { stem: q.plain, system: q.system } : null
+  return q ? { stem: q.plain, system: q.system, options: q.options_html, answer: q.answer } : null
 }
-export function updateMockQuestion(id: number, patch: { stem?: string; system?: string; analysis?: string; tags?: string[] }) {
+export function updateMockQuestion(id: number, patch: { stem?: string; system?: string; options?: string[]; answer?: string; analysis?: string; tags?: string[] }) {
   const q = find(id)
   if (!q) return
   if (patch.stem !== undefined) { q.plain = patch.stem; q.stem_html = `<p>${patch.stem}</p>` }
   if (patch.system !== undefined) q.system = patch.system
+  if (patch.options !== undefined) q.options_html = patch.options
+  if (patch.answer !== undefined) q.answer = patch.answer
   if (patch.analysis !== undefined) { q.analysis_html = `<p>${patch.analysis}</p>`; q.analysis_empty = !patch.analysis }
   if (patch.tags !== undefined) q.tags = patch.tags
 }

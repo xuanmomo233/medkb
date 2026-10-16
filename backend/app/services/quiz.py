@@ -488,7 +488,8 @@ async def get_question(session: AsyncSession, qid: int):
     if q is None:
         raise HTTPException(404, "题目不存在")
     return AdminQuestion(
-        id=q.id, subject_dir=q.subject_dir or "", system=q.system or "", stem=q.stem or "", analysis=q.analysis or "", tags=_tags(q),
+        id=q.id, subject_dir=q.subject_dir or "", system=q.system or "", stem=q.stem or "",
+        options=[str(option) for option in _opts(q)], answer=q.answer or "", analysis=q.analysis or "", tags=_tags(q),
         citations=await provenance.citations_for_target(session, "question", q.id),
     )
 
@@ -517,6 +518,31 @@ async def update_question(session: AsyncSession, admin_id: int, qid: int, patch)
         if patch.stem != (q.stem or ""):
             changes.append(("stem", q.stem or "", patch.stem))
             q.stem = patch.stem
+    next_options = [str(option) for option in _opts(q)]
+    if patch.options is not None:
+        next_options = [option.strip() for option in patch.options]
+        if len(next_options) < 2:
+            raise HTTPException(400, "至少需要 2 个选项")
+        if any(not option for option in next_options):
+            raise HTTPException(400, "选项不能为空")
+        if any(len(option) > 5000 for option in next_options):
+            raise HTTPException(400, "单个选项过长（最多 5000 字）")
+        if next_options != [str(option) for option in _opts(q)]:
+            changes.append(("options", json.dumps(_opts(q), ensure_ascii=False), json.dumps(next_options, ensure_ascii=False)))
+            q.options = next_options
+    if patch.answer is not None:
+        next_answer = "".join(sorted(ans_set(patch.answer)))
+        if not next_answer:
+            raise HTTPException(400, "正确答案必须填写选项字母")
+        if any(letter not in LETTERS[:len(next_options)] for letter in next_answer):
+            raise HTTPException(400, "正确答案超出当前选项范围")
+        if next_answer != (q.answer or ""):
+            changes.append(("answer", q.answer or "", next_answer))
+            q.answer = next_answer
+    elif patch.options is not None:
+        current_answer = "".join(sorted(ans_set(q.answer)))
+        if not current_answer or any(letter not in LETTERS[:len(next_options)] for letter in current_answer):
+            raise HTTPException(400, "修改选项后，请同时填写有效的正确答案")
     if patch.analysis is not None:
         if len(patch.analysis) > 20000:
             raise HTTPException(400, "解析内容过长（最多 20000 字）")

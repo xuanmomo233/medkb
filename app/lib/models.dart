@@ -1445,12 +1445,16 @@ class AdminQuestion {
   final int id;
   final String stem;
   final String system;
+  final List<String> options;
+  final String answer;
   final String analysis;
   final List<String> tags;
   const AdminQuestion({
     required this.id,
     required this.stem,
     required this.system,
+    required this.options,
+    required this.answer,
     required this.analysis,
     required this.tags,
   });
@@ -1458,6 +1462,8 @@ class AdminQuestion {
         id: _i(j['id']),
         stem: _s(j['stem']),
         system: _s(j['system']),
+        options: _ls(j['options']),
+        answer: _s(j['answer']),
         analysis: _s(j['analysis']),
         tags: _ls(j['tags']),
       );
@@ -1466,13 +1472,17 @@ class AdminQuestion {
 class AdminQuestionPatch {
   final String? stem;
   final String? system;
+  final List<String>? options;
+  final String? answer;
   final String? analysis;
   final List<String>? tags;
-  const AdminQuestionPatch({this.stem, this.system, this.analysis, this.tags});
+  const AdminQuestionPatch({this.stem, this.system, this.options, this.answer, this.analysis, this.tags});
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> m = <String, dynamic>{};
     if (stem != null) m['stem'] = stem;
     if (system != null) m['system'] = system;
+    if (options != null) m['options'] = options;
+    if (answer != null) m['answer'] = answer;
     if (analysis != null) m['analysis'] = analysis;
     if (tags != null) m['tags'] = tags;
     return m;

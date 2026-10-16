@@ -37,10 +37,10 @@ registerMock('DELETE', '/notes/{id}', ({ params }) => {
   if (i >= 0) store.splice(i, 1)
 })
 
-const admin = new Map<number, { id: number; stem: string; system: string; analysis: string; tags: string[] }>()
+const admin = new Map<number, { id: number; stem: string; system: string; options: string[]; answer: string; analysis: string; tags: string[] }>()
 registerMock('GET', '/admin/questions/{id}', ({ params }) => {
   const id = Number(params.id)
-  if (!admin.has(id)) admin.set(id, { id, stem: mockQuestionAdmin(id)?.stem ?? '', system: mockQuestionAdmin(id)?.system ?? '循环系统', analysis: '## 解析\n\nβ 受体阻滞剂可改善 **HFrEF** 预后。\n\n- 从小剂量开始\n- 逐渐加量', tags: ['心衰', '药物治疗'] })
+  if (!admin.has(id)) admin.set(id, { id, stem: mockQuestionAdmin(id)?.stem ?? '', system: mockQuestionAdmin(id)?.system ?? '循环系统', options: mockQuestionAdmin(id)?.options ?? [], answer: mockQuestionAdmin(id)?.answer ?? '', analysis: '## 解析\n\nβ 受体阻滞剂可改善 **HFrEF** 预后。\n\n- 从小剂量开始\n- 逐渐加量', tags: ['心衰', '药物治疗'] })
   return admin.get(id)
 })
 registerMock('PUT', '/admin/questions/{id}', ({ params, body }) => {
