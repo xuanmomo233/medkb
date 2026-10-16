@@ -4,7 +4,6 @@ import '../../endpoints.dart';
 import '../../models.dart' show ScheduleItem, ScheduleToday, TargetType;
 import '../../nav.dart';
 import '../../widgets/widgets.dart';
-import 'today_common.dart';
 
 class ScheduleList extends StatefulWidget {
   final ScheduleToday data;

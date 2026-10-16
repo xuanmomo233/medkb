@@ -58,7 +58,6 @@ class _SourceQuestionsPageState extends State<SourceQuestionsPage> {
 
   @override
   Widget build(BuildContext context) {
-    final ColorScheme cs = Theme.of(context).colorScheme;
     return Scaffold(
       appBar: AppBar(
         title: Text('源题 ${_idx + 1} / ${widget.list.length}'),
