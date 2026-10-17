@@ -25,11 +25,11 @@
 后端（`backend/`，建议使用虚拟环境）：
 
 ```powershell
-python -m pip install '.[dev]'
+python -m pip install '.[dev,sync]'
 python -m pytest -q -p no:cacheprovider
 ```
 
-测试使用隔离的内存 SQLite，不需要生产数据库凭据。生产 PostgreSQL 的行为仍需单独进行集成验证。
+全套后端测试包含题库同步与登录材料编解码测试，需要同时安装 `dev` 和 `sync` 可选依赖。测试使用隔离的内存 SQLite，不需要生产数据库凭据。生产 PostgreSQL 的行为仍需单独进行集成验证。
 
 网页（`web/`）：
 
