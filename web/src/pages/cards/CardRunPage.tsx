@@ -16,7 +16,7 @@ export default function CardRunPage() {
   if (error) return <ErrorState error={error} onRetry={reload} />
   if (!cards) return <Spinner />
   if (cards.length === 0) {
-    return <EmptyState icon="cards" text="这里暂时没有可背的卡片" action={<Link to="/cards"><Button variant="primary">返回挑选</Button></Link>} />
+    return <EmptyState icon="cards" text={query.plan_day === undefined ? '这里暂时没有可背的卡片' : '本批计划卡片已完成'} action={<Link to={query.plan_day === undefined ? '/cards' : '/'}><Button variant="primary">返回</Button></Link>} />
   }
   return <CardRunner key={qs} cards={cards} query={query} storeKey={qs} onRestart={() => { sessionStorage.removeItem(`cards.pos:${qs}`); reload() }} />
 }

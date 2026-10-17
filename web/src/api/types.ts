@@ -96,7 +96,7 @@ export type FacetProgress = Record<FacetLevel, Record<string, [number, number]>>
 export interface QuizQuery extends QuizFilter {
   ids?: number[]; plan_day?: number
   starred?: boolean; wrong?: boolean; due?: boolean
-  random?: boolean; shuffle?: boolean; limit?: number
+  random?: boolean; shuffle?: boolean; fresh?: boolean; limit?: number
 }
 export interface Question {
   id: number
@@ -122,6 +122,10 @@ export interface Question {
 }
 export interface QuestionStat { total: number; correct: number; dist: Record<string, number> }
 export interface RelatedCard { id: number; term: string; term_html: string; hint: string; body_html: string }
+export interface RelatedQuestion {
+  id: number; qid: string; chapter: string; qtype: string; stem: string
+  kind: 'variant' | 'same_concept' | 'contrast'; label: string; reason: string; in_plan: boolean
+}
 export interface QuestionFull {
   id: number
   system: string
@@ -184,6 +188,8 @@ export interface PlanToday {
   configured: boolean
   start: string | null; total_days: number; day_no: number; days_left: number
   remaining: number; finished: boolean
+  today_questions: number; today_cards: number
+  pending_questions: number; pending_cards: number; scheduled_days: number[]
   today_items: PlanItem[]; items: PlanItem[]
 }
 export interface PlanOptionPart { part: string; cards: number; questions: number }

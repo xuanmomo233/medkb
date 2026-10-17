@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { invalidateStudy } from '../../today/invalidateStudy'
 import { api } from '@/api/endpoints'
 import type { ProgressState, Question, QuestionFull, QuestionStat } from '@/api/types'
 import { useToast } from '@/ui'
@@ -15,12 +17,13 @@ export const hasOptions = (q: Question) => q.options_html.length > 0 && /^[A-H]+
 
 export function useQuizSession(search: string, p: RunParams) {
   const nav = useNavigate()
+  const queryClient = useQueryClient()
   const toast = useToast()
   const { query, mode, mins, title } = p
   const hash = hashStr(search)
   const testKey = `quiz.test.${hash}`
   const posKey = `quiz.pos.${hash}`
-  const trackPos = mode !== 'test' && !query.random && !query.shuffle
+  const trackPos = mode !== 'test' && !query.random && !query.shuffle && query.plan_day === undefined && !query.fresh
 
   const [questions, setQuestions] = useState<Question[]>([])
   const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading')
@@ -136,12 +139,12 @@ export function useQuizSession(search: string, p: RunParams) {
     const correct = sortLetters(picked) === sortLetters(question.answer)
     setAns((m) => ({ ...m, [question.id]: { picked, judged: true, correct } }))
     api.attempt({ question_id: question.id, picked: [...picked].map((c) => LETTERS.indexOf(c)) })
-      .then((r) => setStats((m) => ({ ...m, [question.id]: r.stat })), () => toast('作答记录保存失败', true))
+      .then((r) => { setStats((m) => ({ ...m, [question.id]: r.stat })); void invalidateStudy(queryClient) }, () => toast('作答记录保存失败', true))
     if (mode === 'quick' && correct) {
       const at = idx
       quickTimer.current = window.setTimeout(() => setIdx((i) => (i === at ? Math.min(i + 1, questions.length - 1) : i)), 600)
     }
-  }, [mode, idx, questions.length, toast])
+  }, [mode, idx, questions.length, toast, queryClient])
 
   const pick = useCallback((letter: string) => {
     if (!q || !hasOptions(q) || mode === 'recite' || cur?.judged) return
@@ -169,11 +172,11 @@ export function useQuizSession(search: string, p: RunParams) {
     const next: Patch = kind === 'star' ? { starred: !isOn }
       : { state: isOn ? '' : ({ wrong: 'again', master: 'mastered', plan: 'plan' } as const)[kind] }
     setPatch((m) => ({ ...m, [q.id]: { ...m[q.id], ...next } }))
-    api.mark({ target_type: 'question', target_id: q.id, action }).catch(() => {
+    api.mark({ target_type: 'question', target_id: q.id, action }).then(() => invalidateStudy(queryClient)).catch(() => {
       setPatch((m) => ({ ...m, [q.id]: { ...m[q.id], ...prev } }))
       toast('操作失败，已恢复', true)
     })
-  }, [q, toast])
+  }, [q, toast, queryClient])
 
   const genAnalysis = useCallback(async () => {
     if (!q || aiBusy) return
@@ -198,6 +201,7 @@ export function useQuizSession(search: string, p: RunParams) {
       const items = questions.map((x) => ({ question_id: x.id, picked: [...(ans[x.id]?.picked ?? '')].map((c) => LETTERS.indexOf(c)) }))
       const name = title || '测试'
       const report = await api.submitExam({ title: name, items })
+      void invalidateStudy(queryClient)
       sessionStorage.removeItem(testKey)
       nav('/quiz/report', { state: { report, title: name }, replace: true })
     } catch (e) {
@@ -205,7 +209,7 @@ export function useQuizSession(search: string, p: RunParams) {
       setSubmitting(false)
       toast(e instanceof Error ? e.message : '交卷失败，请重试', true)
     }
-  }, [questions, ans, title, testKey, nav, toast])
+  }, [questions, ans, title, testKey, nav, toast, queryClient])
 
   useEffect(() => {
     if (!deadline || status !== 'ready') return

@@ -8,6 +8,8 @@ import { RAW } from './quiz-data/bank'
 const LEVELS: FacetLevel[] = ['bank_group', 'bank', 'subject_dir', 'system', 'chapter', 'qtype']
 const LETTERS = 'ABCDEFGH'
 
+registerMock('GET', '/quiz/questions/{id}/related', () => [])
+
 interface Rec extends Question { bank_group: string; bank: string; subject_dir: string; plain: string }
 interface Attempt { picked: string; correct: boolean; count: number; wrong: number; lastWrongAt: string | null }
 interface Mark { state: ProgressState; starred: boolean }

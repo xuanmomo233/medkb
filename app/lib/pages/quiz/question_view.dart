@@ -110,6 +110,8 @@ class QuestionPageView extends StatelessWidget {
         if (showAnalysis) ...<Widget>[
           const SizedBox(height: 8),
           AnalysisPanel(
+            allowRelated: !s.isTest,
+            onPracticed: s.args.planDay != null || s.args.fresh ? s.load : null,
             q: q,
             picked: cur?.picked ?? '',
             judged: judged,

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 
@@ -65,6 +66,7 @@ class Api {
   static const String _kAdmin = 'kb_admin';
   static double fontSize = 15;
   static bool admin = false;
+  static final ValueNotifier<int> studyRevision = ValueNotifier<int>(0);
 
   /// 全局 401 回调：main.dart 注入，负责跳回登录页并提示「登录已过期」
   static void Function()? onUnauthorized;
@@ -314,7 +316,11 @@ class Api {
   }
 
   static Future<dynamic> post(String path, [Object? body, int secs = 60]) async {
-    return _decode(await _send('POST', path, body: body, secs: secs));
+    final dynamic result = _decode(await _send('POST', path, body: body, secs: secs));
+    if (path == '/quiz/attempts' || path == '/quiz/submit' || path == '/progress/mark') {
+      studyRevision.value++;
+    }
+    return result;
   }
 
   static Future<dynamic> put(String path, [Object? body]) async {

@@ -74,16 +74,9 @@ class _PlanBodyState extends State<PlanBody> {
             )),
       );
     }
-    final List<int> days = p.items
-        .where((PlanItem i) => i.day != null)
-        .map((PlanItem i) => i.day!)
-        .toSet()
-        .toList()
-      ..sort();
-    final int todayCards =
-        p.todayItems.fold(0, (int n, PlanItem i) => n + i.cards);
-    final int todayQ =
-        p.todayItems.fold(0, (int n, PlanItem i) => n + i.questions);
+    final List<int> days = p.scheduledDays;
+    final int todayCards = p.todayCards;
+    final int todayQ = p.todayQuestions;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -117,21 +110,21 @@ class _PlanBodyState extends State<PlanBody> {
             children: <Widget>[
               Expanded(
                 child: FilledButton(
-                  onPressed: p.todayItems.isEmpty
+                  onPressed: todayCards == 0
                       ? null
                       : () => _go(
                           openCardRun(context, const CardRunArgs(planDay: 1))),
-                  child: Text('背卡 $todayCards'),
+                  child: Text('继续背卡 $todayCards'),
                 ),
               ),
               const SizedBox(width: 8),
               Expanded(
                 child: FilledButton.tonal(
-                  onPressed: p.todayItems.isEmpty
+                  onPressed: todayQ == 0
                       ? null
                       : () => _go(
                           openQuizRun(context, const QuizRunArgs(planDay: 1))),
-                  child: Text('刷题 $todayQ'),
+                  child: Text('继续刷题 $todayQ'),
                 ),
               ),
             ],
@@ -185,9 +178,7 @@ class _PlanBodyState extends State<PlanBody> {
   Widget _dayRow(BuildContext context, PlanToday p, int day) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final bool open = _open == day;
-    final List<PlanItem> items =
-        p.items.where((PlanItem i) => i.day == day).toList();
-    final String title = items.map((PlanItem i) => i.part).join('、');
+    final String title = day == 1 ? '今日待完成' : '待完成任务';
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -212,8 +203,6 @@ class _PlanBodyState extends State<PlanBody> {
                           fontWeight:
                               day == 1 ? FontWeight.w700 : FontWeight.w400)),
                 ),
-                Text('${items.length} 章',
-                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                 Icon(open ? Icons.expand_less : Icons.expand_more,
                     color: cs.onSurfaceVariant),
               ],
@@ -267,7 +256,7 @@ class _PlanSetupSheetState extends State<PlanSetupSheet> {
                     .titleMedium
                     ?.copyWith(fontWeight: FontWeight.w700)),
             const SizedBox(height: 4),
-            Text('勾选要学的章节，设定完成天数；当天没完成的自动顺延并重新均分',
+            Text('已做内容沿用进度，同一题只安排一次；未完成任务自动顺延',
                 style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             const SizedBox(height: 8),
             Expanded(
@@ -407,7 +396,7 @@ class _PlanDayDetailView extends StatelessWidget {
                             label: Text(c.term),
                             visualDensity: VisualDensity.compact,
                             onPressed: () => onGo(openCardRun(
-                                context, CardRunArgs(ids: <int>[c.id]))),
+                                context, CardRunArgs(ids: <int>[c.id], planDay: no))),
                           ))
                       .toList(),
                 ),
@@ -418,7 +407,7 @@ class _PlanDayDetailView extends StatelessWidget {
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                 ...d.questionGroups.map((PlanQuestionGroup g) => InkWell(
                       onTap: () => onGo(openQuizRun(
-                          context, QuizRunArgs(ids: g.ids, title: g.chapter))),
+                          context, QuizRunArgs(ids: g.ids, planDay: no, title: g.chapter))),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(minHeight: 44),
                         child: Row(

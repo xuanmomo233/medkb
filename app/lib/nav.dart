@@ -22,6 +22,7 @@ class QuizRunArgs {
   final bool due;
   final bool random;
   final bool shuffle;
+  final bool fresh;
   /// QuizMode 常量：practice / recite / quick / test
   final String mode;
   final String? title;
@@ -38,6 +39,7 @@ class QuizRunArgs {
     this.due = false,
     this.random = false,
     this.shuffle = false,
+    this.fresh = false,
     this.mode = QuizMode.practice,
     this.title,
     this.mins,
@@ -53,6 +55,7 @@ class QuizRunArgs {
         due: due,
         random: random,
         shuffle: shuffle,
+        fresh: fresh,
         limit: limit,
       );
 }

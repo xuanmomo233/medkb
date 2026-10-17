@@ -27,6 +27,7 @@ class QuizParams:
     due: bool = False
     random: bool = False
     shuffle: bool = False
+    fresh: bool = False
     limit: int | None = None
     extra: dict = field(default_factory=dict)
 

@@ -1,12 +1,12 @@
 ﻿from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import and_, func, or_, select
+from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import card_md, md
 from app.models import Card, CardProgress
-from app.services import provenance, study
+from app.services import plan_queue, provenance
 from app.services.card_merges import canonical_id, canonical_ids, details, visible
 from app.services.progress import derive_state
 
@@ -41,11 +41,11 @@ async def list_cards(
     if ids:
         stmt = stmt.where(Card.id.in_(await canonical_ids(session, ids[:LIMIT])))
     if plan_day is not None:
-        limit = PLAN_LIMIT
-        parts = await study.plan_day_parts(session, user_id, plan_day)
-        if not parts:
+        plan_ids = await plan_queue.targets(session, user_id, plan_day, "card")
+        if not plan_ids:
             return []
-        stmt = stmt.where(or_(*[and_(Card.subject == s, Card.part == p) for s, p in parts]))
+        limit = max(PLAN_LIMIT, len(plan_ids))
+        stmt = stmt.where(Card.id.in_(plan_ids))
     if starred:
         stmt = stmt.where(CardProgress.starred.is_(True))
     if due:

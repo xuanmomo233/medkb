@@ -29,9 +29,9 @@ function ItemRow({ it }: { it: PlanItem }) {
 function Body({ p, onEdit, onRestart }: { p: PlanToday; onEdit: () => void; onRestart: () => void }) {
   const nav = useNavigate()
   const [open, setOpen] = useState<number | null>(null)
-  const todayCards = p.today_items.reduce((n, i) => n + i.cards, 0)
-  const todayQ = p.today_items.reduce((n, i) => n + i.questions, 0)
-  const days = [...new Set(p.items.filter((i) => i.day).map((i) => i.day!))].sort((a, b) => a - b)
+  const todayCards = p.today_cards
+  const todayQ = p.today_questions
+  const days = p.scheduled_days
   return (
     <div className={s.stack}>
       {p.finished ? (
@@ -52,8 +52,8 @@ function Body({ p, onEdit, onRestart }: { p: PlanToday; onEdit: () => void; onRe
                 {p.today_items.map((i) => <ItemRow key={i.key} it={i} />)}
               </ul>
               <div className={s.actions}>
-                <Button variant="primary" onClick={() => nav('/cards/run?plan_day=1')}>开始背卡（{todayCards}）</Button>
-                <Button onClick={() => nav('/quiz/run?plan_day=1')}>开始刷题（{todayQ}）</Button>
+                <Button variant="primary" disabled={!todayCards} onClick={() => nav('/cards/run?plan_day=1')}>继续背卡（{todayCards}）</Button>
+                <Button disabled={!todayQ} onClick={() => nav('/quiz/run?plan_day=1')}>继续刷题（{todayQ}）</Button>
                 <Button variant="ghost" onClick={onEdit}>修改计划</Button>
               </div>
             </>
@@ -70,8 +70,7 @@ function Body({ p, onEdit, onRestart }: { p: PlanToday; onEdit: () => void; onRe
               <button type="button" className={`${s.planRow} ${d === 1 ? s.planNow : ''}`} aria-expanded={open === d}
                 onClick={() => setOpen(open === d ? null : d)}>
                 <span className={s.planNo}>{d === 1 ? '今' : `D${d}`}</span>
-                <span className={s.itemTitle}>{p.items.filter((i) => i.day === d).map((i) => i.part).join('、')}</span>
-                <span className={s.meta}>{p.items.filter((i) => i.day === d).length} 章</span>
+                <span className={s.itemTitle}>{d === 1 ? '今日待完成' : '待完成任务'}</span>
                 <span aria-hidden="true"><Icon name="chevDown" size={13} /></span>
               </button>
               {open === d && <PlanDay n={d} />}

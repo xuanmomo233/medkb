@@ -45,7 +45,7 @@ class _CardRunPageState extends State<CardRunPage> {
     try {
       final SharedPreferences p = await SharedPreferences.getInstance();
       final String? raw = p.getString(_key);
-      if (raw != null) {
+      if (raw != null && widget.args.planDay == null) {
         final Map<String, dynamic> j = asMap(jsonDecode(raw));
         final Object? i = j['idx'];
         if (i is num && i >= 0 && i <= cards.length) idx = i.toInt();

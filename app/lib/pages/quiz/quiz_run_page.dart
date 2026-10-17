@@ -196,7 +196,7 @@ class _QuizRunPageState extends State<QuizRunPage> {
           onRetry: _s.load);
     }
     if (!ready) {
-      return EmptyState('没有符合条件的题目',
+      return EmptyState(widget.args.planDay != null ? '本批计划题目已完成' : '没有符合条件的题目',
           action: OutlinedButton(
               onPressed: () => Navigator.of(context).maybePop(),
               child: const Text('返回')));

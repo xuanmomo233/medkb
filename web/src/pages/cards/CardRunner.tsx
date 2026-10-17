@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { TouchEvent } from 'react'
 import { Link } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
+import { invalidateStudy } from '../today/invalidateStudy'
 import { api } from '@/api/endpoints'
 import type { Card, CardQuery } from '@/api/types'
 import { useAuth } from '@/app/auth'
@@ -31,9 +33,10 @@ function restore(key: string, total: number): Saved {
 
 export default function CardRunner({ cards: initial, query, storeKey, onRestart }: Props) {
   const toast = useToast()
+  const queryClient = useQueryClient()
   const { user } = useAuth()
   const [cards, setCards] = useState(initial)
-  const [saved] = useState(() => restore(storeKey, initial.length))
+  const [saved] = useState(() => query.plan_day === undefined ? restore(storeKey, initial.length) : { idx: 0, ratings: {} })
   const [idx, setIdx] = useState(saved.idx)
   const [ratings, setRatings] = useState(saved.ratings)
   const [flipped, setFlipped] = useState(false)
@@ -64,11 +67,11 @@ export default function CardRunner({ cards: initial, query, storeKey, onRestart 
     }
   }
   const send = useCallback(async (id: number, action: Parameters<typeof api.mark>[0]['action']) => {
-    try { await api.mark({ target_type: 'card', target_id: id, action }); return true } catch (e) {
+    try { await api.mark({ target_type: 'card', target_id: id, action }); void invalidateStudy(queryClient); return true } catch (e) {
       toast(e instanceof Error ? e.message : '操作失败', true)
       return false
     }
-  }, [toast])
+  }, [toast, queryClient])
 
   const rate = useCallback((action: Rating) => {
     if (!card) return

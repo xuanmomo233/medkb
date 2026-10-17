@@ -88,6 +88,11 @@ registerMock('GET', '/plan', (): PlanToday => {
   return {
     configured: true, start: fmt(daysAgo(2)), total_days: planDays, day_no: 3, days_left: daysLeft,
     remaining: remaining.length, finished: remaining.length === 0,
+    today_questions: items.filter((i) => i.day === 1).reduce((n, i) => n + Math.max(0, i.questions - i.question_done), 0),
+    today_cards: items.filter((i) => i.day === 1).reduce((n, i) => n + Math.max(0, i.cards - i.card_done), 0),
+    pending_questions: items.reduce((n, i) => n + Math.max(0, i.questions - i.question_done), 0),
+    pending_cards: items.reduce((n, i) => n + Math.max(0, i.cards - i.card_done), 0),
+    scheduled_days: [...new Set(items.flatMap((i) => i.day === null ? [] : [i.day]))].sort((a, b) => a - b),
     today_items: items.filter((i) => i.day === 1), items,
   }
 })

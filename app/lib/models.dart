@@ -528,6 +528,7 @@ class QuizQuery {
   final bool due;
   final bool random;
   final bool shuffle;
+  final bool fresh;
   final int? limit;
   const QuizQuery({
     this.filter = const QuizFilter(),
@@ -538,6 +539,7 @@ class QuizQuery {
     this.due = false,
     this.random = false,
     this.shuffle = false,
+    this.fresh = false,
     this.limit,
   });
   Map<String, Object?> toQuery() => <String, Object?>{
@@ -549,6 +551,7 @@ class QuizQuery {
         'due': due,
         'random': random,
         'shuffle': shuffle,
+        'fresh': fresh,
         'limit': limit,
       };
 }
@@ -656,6 +659,20 @@ class RelatedCard {
         hint: _s(j['hint']),
         bodyHtml: _s(j['body_html']),
       );
+}
+
+class RelatedQuestion {
+  final int id;
+  final String stem;
+  final String label;
+  final String reason;
+  final bool inPlan;
+  const RelatedQuestion({required this.id, required this.stem,
+    required this.label, required this.reason, required this.inPlan});
+  factory RelatedQuestion.fromJson(Map<String, dynamic> j) => RelatedQuestion(
+    id: _i(j['id']), stem: _s(j['stem']), label: _s(j['label']),
+    reason: _s(j['reason']), inPlan: _b(j['in_plan']),
+  );
 }
 
 class QuestionFull {
@@ -1037,6 +1054,11 @@ class PlanToday {
   final int daysLeft;
   final int remaining;
   final bool finished;
+  final int todayQuestions;
+  final int todayCards;
+  final int pendingQuestions;
+  final int pendingCards;
+  final List<int> scheduledDays;
   final List<PlanItem> todayItems;
   final List<PlanItem> items;
   const PlanToday({
@@ -1047,6 +1069,11 @@ class PlanToday {
     required this.daysLeft,
     required this.remaining,
     required this.finished,
+    this.todayQuestions = 0,
+    this.todayCards = 0,
+    this.pendingQuestions = 0,
+    this.pendingCards = 0,
+    this.scheduledDays = const <int>[],
     required this.todayItems,
     required this.items,
   });
@@ -1058,6 +1085,11 @@ class PlanToday {
         daysLeft: _i(j['days_left']),
         remaining: _i(j['remaining']),
         finished: _b(j['finished']),
+        todayQuestions: _i(j['today_questions']),
+        todayCards: _i(j['today_cards']),
+        pendingQuestions: _i(j['pending_questions']),
+        pendingCards: _i(j['pending_cards']),
+        scheduledDays: _li(j['scheduled_days']),
         todayItems: asMapList(j['today_items']).map(PlanItem.fromJson).toList(),
         items: asMapList(j['items']).map(PlanItem.fromJson).toList(),
       );

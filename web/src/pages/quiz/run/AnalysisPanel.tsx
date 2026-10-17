@@ -1,6 +1,7 @@
 import type { Question, QuestionFull, QuestionStat } from '@/api/types'
 import { Badge, Button, Citations, HtmlView, ProgressBar, Spinner } from '@/ui'
 import QuestionExtras from './QuestionExtras'
+import RelatedQuestions from './RelatedQuestions'
 import s from './run.module.css'
 
 interface Props {
@@ -15,9 +16,10 @@ interface Props {
   onRetry: () => void
   onAi: () => void
   onEdited: () => void
+  allowRelated?: boolean
 }
 
-export default function AnalysisPanel({ q, picked, judged, correct, full, failed, stat, aiBusy, onRetry, onAi, onEdited }: Props) {
+export default function AnalysisPanel({ q, picked, judged, correct, full, failed, stat, aiBusy, onRetry, onAi, onEdited, allowRelated = true }: Props) {
   const st = stat ?? full?.stat
   const rate = st && st.total ? Math.round((st.correct / st.total) * 100) : null
   return (
@@ -63,6 +65,7 @@ export default function AnalysisPanel({ q, picked, judged, correct, full, failed
         <div className={s.tags}>{q.tags.map((t) => <Badge key={t} tone="info">{t}</Badge>)}</div>
       )}
       {full && <Citations items={full.citations} />}
+      {full && allowRelated && <RelatedQuestions id={q.id} />}
       <QuestionExtras question={q} onEdited={onEdited} />
     </section>
   )

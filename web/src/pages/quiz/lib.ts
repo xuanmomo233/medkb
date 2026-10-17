@@ -18,7 +18,7 @@ export const MODES: { value: QuizMode; label: string; desc: string }[] = [
   { value: 'test', label: '测试', desc: '全部答完统一交卷' },
 ]
 
-const FLAGS = ['starred', 'wrong', 'due', 'random', 'shuffle'] as const
+const FLAGS = ['starred', 'wrong', 'due', 'random', 'shuffle', 'fresh'] as const
 
 export interface RunParams { query: QuizQuery; mode: QuizMode; title: string; mins: number }
 

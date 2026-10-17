@@ -76,7 +76,7 @@ class QuizSession extends ChangeNotifier {
 
   bool get isTest => args.mode == QuizMode.test;
   bool get isRecite => args.mode == QuizMode.recite;
-  bool get trackPos => !isTest && !args.random && !args.shuffle;
+  bool get trackPos => !isTest && !args.random && !args.shuffle && args.planDay == null && !args.fresh;
   int? get _limit => (args.random && args.ids == null) ? 120 : null;
   String get title => (args.title ?? '').isEmpty ? '测试' : args.title!;
 

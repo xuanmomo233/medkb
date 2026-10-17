@@ -24,6 +24,7 @@ from app.models import (
     UserPrefs,
 )
 from app.services.card_merges import original_ids, redirects, resolve, visible
+from app.services import plan_queue
 
 DEFAULT_EXAM_DATE = date(2026, 12, 19)
 
@@ -255,37 +256,6 @@ async def _item_content(session: AsyncSession, items: list[UserPlanItem]) -> dic
     return out
 
 
-async def _item_done_counts(
-    session: AsyncSession, user_id: int, card_ids: list[int], q_ids: list[int], since: datetime
-) -> tuple[int, int]:
-    cdone = qdone = 0
-    if card_ids:
-        cdone = int(
-            (
-                await session.execute(
-                    select(func.count()).select_from(CardProgress).where(
-                        CardProgress.user_id == user_id,
-                        CardProgress.card_id.in_(card_ids),
-                        CardProgress.last_seen_at >= since,
-                    )
-                )
-            ).scalar_one()
-        )
-    if q_ids:
-        qdone = int(
-            (
-                await session.execute(
-                    select(func.count()).select_from(QuestionProgress).where(
-                        QuestionProgress.user_id == user_id,
-                        QuestionProgress.question_id.in_(q_ids),
-                        QuestionProgress.last_seen_at >= since,
-                    )
-                )
-            ).scalar_one()
-        )
-    return cdone, qdone
-
-
 async def _plan_state(session: AsyncSession, user_id: int) -> dict | None:
     plan = await session.get(UserPlan, user_id)
     items = await _plan_items(session, user_id)
@@ -294,30 +264,34 @@ async def _plan_state(session: AsyncSession, user_id: int) -> dict | None:
     today = local_today()
     elapsed = (today - plan.start_day).days
     days_left = max(1, plan.total_days - elapsed)
-    since = day_start_utc(plan.start_day)
-    content = await _item_content(session, items)
+    tasks, links = await plan_queue.read(session, user_id)
+    by_id = {task.id: task for task in tasks}
+    by_section = defaultdict(list)
+    for link in links:
+        by_section[(link.subject, link.part)].append(by_id[link.task_id])
     out_items = []
     for it in items:
         key = _item_key(it.subject, it.part)
-        cids, qids = content.get(key, ([], []))
-        cdone, qdone = await _item_done_counts(session, user_id, cids, qids, since)
-        done = cdone >= len(cids) and qdone >= len(qids)
+        members = by_section[(it.subject, it.part)]
+        cards = [task for task in members if task.kind == "card"]
+        questions = [task for task in members if task.kind == "question"]
+        pending = [task for task in members if task.completed_at is None]
         out_items.append({
             "key": key,
             "subject": it.subject,
             "part": it.part,
             "label": f"{it.subject} · {it.part}",
-            "cards": len(cids),
-            "card_done": cdone,
-            "questions": len(qids),
-            "question_done": qdone,
-            "done": done,
-            "day": None,
+            "cards": len(cards),
+            "card_done": sum(task.completed_at is not None for task in cards),
+            "questions": len(questions),
+            "question_done": sum(task.completed_at is not None for task in questions),
+            "done": not pending,
+            "day": min((plan_queue.relative_day(task, today) for task in pending), default=None),
         })
     remaining = [i for i in out_items if not i["done"]]
-    batch = -(-len(remaining) // days_left) if remaining else 0
-    for idx, i in enumerate(remaining):
-        i["day"] = idx // batch + 1
+    pending = [task for task in tasks if task.completed_at is None]
+    due = [task for task in pending if plan_queue.relative_day(task, today) == 1]
+    await session.commit()
     return {
         "plan": plan,
         "elapsed": elapsed,
@@ -325,7 +299,12 @@ async def _plan_state(session: AsyncSession, user_id: int) -> dict | None:
         "items": out_items,
         "today_items": [i for i in remaining if i["day"] == 1],
         "remaining": len(remaining),
-        "finished": not remaining or elapsed >= plan.total_days,
+        "finished": not pending,
+        "today_questions": sum(task.kind == "question" for task in due),
+        "today_cards": sum(task.kind == "card" for task in due),
+        "pending_questions": sum(task.kind == "question" for task in pending),
+        "pending_cards": sum(task.kind == "card" for task in pending),
+        "scheduled_days": sorted({plan_queue.relative_day(task, today) for task in pending}),
     }
 
 
@@ -344,6 +323,7 @@ async def plan_today(session: AsyncSession, user_id: int) -> dict:
         "finished": st["finished"],
         "today_items": st["today_items"],
         "items": st["items"],
+        **{key: st[key] for key in ("today_questions", "today_cards", "pending_questions", "pending_cards", "scheduled_days")},
     }
 
 
@@ -373,6 +353,9 @@ async def plan_options(session: AsyncSession) -> list[dict]:
 
 
 async def set_plan(session: AsyncSession, user_id: int, items: list[tuple[str, str]], total_days: int) -> None:
+    await session.execute(select(User.id).where(User.id == user_id).with_for_update())
+    await session.execute(select(UserPlan).where(UserPlan.user_id == user_id).with_for_update())
+    await plan_queue.clear(session, user_id)
     await session.execute(delete(UserPlanItem).where(UserPlanItem.user_id == user_id))
     for i, (subject, part) in enumerate(items):
         session.add(UserPlanItem(user_id=user_id, subject=subject, part=part, ord=i))
@@ -382,76 +365,50 @@ async def set_plan(session: AsyncSession, user_id: int, items: list[tuple[str, s
     else:
         plan.start_day = local_today()
         plan.total_days = total_days
+    await session.flush()
+    await plan_queue.read(session, user_id)
     await session.commit()
 
 
 async def clear_plan(session: AsyncSession, user_id: int) -> None:
+    await session.execute(select(UserPlan).where(UserPlan.user_id == user_id).with_for_update())
+    await plan_queue.clear(session, user_id)
     await session.execute(delete(UserPlanItem).where(UserPlanItem.user_id == user_id))
     await session.execute(delete(UserPlan).where(UserPlan.user_id == user_id))
     await session.commit()
 
 
-async def plan_day_parts(session: AsyncSession, user_id: int, day_no: int) -> list[tuple[str, str]]:
-    """相对第 day_no 天（1=今天批次）应学的 (subject,part)。"""
-    st = await _plan_state(session, user_id)
-    if st is None:
-        return []
-    return [
-        (i["subject"], i["part"])
-        for i in st["items"]
-        if i["day"] == day_no
-    ]
-
-
-async def _parts_card_rows(session: AsyncSession, parts: list[tuple[str, str]]) -> list[tuple[int, str, str]]:
-    if not parts:
-        return []
-    rows = await session.execute(
-        select(Card.id, Card.term, Card.part)
-        .where(visible(), tuple_(Card.subject, Card.part).in_(parts))
-        .order_by(Card.id)
-    )
-    return [tuple(r) for r in rows]
-
-
-async def _parts_question_rows(session: AsyncSession, parts: list[tuple[str, str]]) -> list[tuple[int, str]]:
-    if not parts:
-        return []
-    dirs = {SUBJECT_DIR[s] for s, _ in parts if s in SUBJECT_DIR}
-    if not dirs:
-        return []
-    rows = await session.execute(
-        select(Question.id, Question.chapter)
-        .join(CardQuestion, CardQuestion.question_id == Question.id)
-        .join(Card, Card.id == CardQuestion.card_id)
-        .where(tuple_(Card.subject, Card.part).in_(parts), Question.subject_dir.in_(dirs), visible())
-        .distinct()
-        .order_by(Question.id)
-    )
-    return [tuple(r) for r in rows]
-
-
 async def plan_day_detail(session: AsyncSession, user_id: int, n: int) -> dict:
-    parts = await plan_day_parts(session, user_id, n)
-    if not parts:
-        raise HTTPException(404, "这一天没有计划内容")
-    cards = [{"id": i, "term": t, "part": p} for i, t, p in await _parts_card_rows(session, parts)]
+    from app.services.question_groups import batches
+
+    if await session.get(UserPlan, user_id) is None:
+        raise HTTPException(404, "尚未设置学习计划")
+    cids = await plan_queue.targets(session, user_id, n, "card")
+    qids = await plan_queue.targets(session, user_id, n, "question")
+    cards_by_id, questions_by_id = {}, {}
+    for chunk in batches(cids):
+        cards_by_id.update((c.id, c) for c in (await session.scalars(select(Card).where(Card.id.in_(chunk)))).all())
+    for chunk in batches(qids):
+        questions_by_id.update((q.id, q) for q in (await session.scalars(select(Question).where(Question.id.in_(chunk)))).all())
+    cards = [{"id": cid, "term": cards_by_id[cid].term, "part": cards_by_id[cid].part} for cid in cids if cid in cards_by_id]
     groups: dict[str, list[int]] = defaultdict(list)
-    for qid, ch in await _parts_question_rows(session, parts):
-        groups[ch].append(qid)
+    for qid in qids:
+        if qid in questions_by_id:
+            groups[questions_by_id[qid].chapter].append(qid)
     return {
         "no": n,
-        "title": "、".join(p for _, p in parts),
+        "title": "待完成任务",
         "cards": cards,
         "question_groups": [{"chapter": ch, "ids": ids} for ch, ids in groups.items()],
     }
 
 
 async def plan_restart(session: AsyncSession, user_id: int) -> None:
-    plan = await session.get(UserPlan, user_id)
+    plan = await session.scalar(select(UserPlan).where(UserPlan.user_id == user_id).with_for_update())
     if plan is None:
         return
     plan.start_day = local_today()
+    await plan_queue.restart(session, plan)
     await session.commit()
 
 

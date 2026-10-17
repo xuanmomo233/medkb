@@ -42,7 +42,7 @@ export default function PlanSetup({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal title="设置学习计划" onClose={onClose}>
-      <p className={s.sub}>勾选要学的章节（含背卡与关联题目），设定完成天数；当天没完成的会自动顺延并重新均分。</p>
+      <p className={s.sub}>勾选章节并设定天数，已做内容沿用进度；同一题只安排一次，未完成任务自动顺延。</p>
       <Async q={q} height={200}>
         {(opts: PlanOption[]) => (
           <div className={s.planPick}>

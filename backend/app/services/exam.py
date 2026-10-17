@@ -9,6 +9,7 @@ from app.models import Exam, Question
 from app.schemas import quiz as S
 from app.services.quiz import Recorder, iso
 from app.services.question_groups import batches, ordered_groups
+from app.services import plan_queue
 
 # Up to 5,000 explicit seeds may each expand to four case children.
 SUBMIT_MAX = 20_000
@@ -57,6 +58,7 @@ async def submit(session: AsyncSession, uid: int, title: str, items: list[S.Subm
             wrong_ids.append(q.id)
     if exam:
         exam.total, exam.correct = total, correct
+    await plan_queue.complete_questions(session, uid, [r.question_id for r in results if r.judged])
     await session.commit()
     return S.ExamReport(
         total=total, correct=correct,

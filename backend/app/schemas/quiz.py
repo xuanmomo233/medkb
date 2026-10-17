@@ -41,6 +41,18 @@ class RelatedCard(BaseModel):
     body_html: str
 
 
+class RelatedQuestion(BaseModel):
+    id: int
+    qid: str
+    chapter: str
+    qtype: str
+    stem: str
+    kind: str
+    label: str
+    reason: str
+    in_plan: bool
+
+
 class QuestionFull(BaseModel):
     id: int
     system: str

@@ -65,6 +65,11 @@ class PlanToday(BaseModel):
     days_left: int = 0
     remaining: int = 0
     finished: bool = False
+    today_questions: int = 0
+    today_cards: int = 0
+    pending_questions: int = 0
+    pending_cards: int = 0
+    scheduled_days: list[int] = Field(default_factory=list)
     today_items: list[PlanItemOut] = []
     items: list[PlanItemOut] = []
 

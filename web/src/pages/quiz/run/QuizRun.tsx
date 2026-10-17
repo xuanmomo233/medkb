@@ -44,7 +44,7 @@ function Session({ search }: { search: string }) {
 
   if (S.status === 'loading') return <Spinner />
   if (S.status === 'error') return <ErrorState error={S.error} onRetry={S.reload} />
-  if (!q) return <EmptyState text="没有符合条件的题目" action={<Button onClick={() => nav('/quiz')}>返回刷题</Button>} />
+  if (!q) return <EmptyState text={p.query.plan_day !== undefined ? '本批计划题目已完成' : '没有符合条件的题目'} action={<Button onClick={() => nav(p.query.plan_day !== undefined ? '/' : '/quiz')}>返回</Button>} />
 
   const reveal = judged || (mode === 'recite' && S.revealed) || !hasOptions(q)
   const showAnalysis = S.showFull && (mode !== 'recite' || S.revealed)
@@ -105,6 +105,7 @@ function Session({ search }: { search: string }) {
 
       {showAnalysis && (
         <AnalysisPanel q={q} picked={cur?.picked ?? ''} judged={judged} correct={cur?.correct ?? null} full={S.full[q.id]}
+          allowRelated={!test}
           failed={!!S.fullErr[q.id]} stat={S.stats[q.id]} aiBusy={S.aiBusy} onRetry={() => S.loadFull(q.id)} onAi={S.genAnalysis}
           onEdited={() => { void S.refreshFull(q.id) }} />
       )}

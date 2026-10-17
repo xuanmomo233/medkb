@@ -6,6 +6,7 @@ from app.api.deps import CurrentUser, Session
 from app.schemas import quiz as S
 from app.services import exam as exam_svc
 from app.services import quiz as svc
+from app.services import question_links
 from app.services.quiz_filters import QuizParams, parse_ids
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
@@ -15,12 +16,13 @@ def quiz_params(
     bank_group: str = "", bank: str = "", subject_dir: str = "", system: str = "", chapter: str = "", qtype: str = "",
     ids: str | None = None, plan_day: int | None = None,
     starred: bool = False, wrong: bool = False, due: bool = False,
-    random: bool = False, shuffle: bool = False, limit: int | None = None,
+    random: bool = False, shuffle: bool = False, fresh: bool = False, limit: int | None = None,
 ) -> QuizParams:
     return QuizParams(
         bank_group=bank_group, bank=bank, subject_dir=subject_dir, system=system, chapter=chapter, qtype=qtype,
         ids=parse_ids(ids), plan_day=plan_day, starred=starred, wrong=wrong, due=due,
         random=random, shuffle=shuffle, limit=limit if limit and limit > 0 else None,
+        fresh=fresh,
     )
 
 
@@ -49,6 +51,11 @@ async def question_full(qid: int, session: Session, user: CurrentUser):
 @router.post("/questions/{qid}/ai-analysis", response_model=S.AiAnalysisOut)
 async def ai_analysis(qid: int, session: Session, user: CurrentUser):
     return S.AiAnalysisOut(analysis_html=await svc.ai_analysis(session, user.id, qid))
+
+
+@router.get("/questions/{qid}/related", response_model=list[S.RelatedQuestion])
+async def related_questions(qid: int, session: Session, user: CurrentUser):
+    return await question_links.related(session, user.id, qid)
 
 
 @router.post("/attempts", response_model=S.AttemptResult)

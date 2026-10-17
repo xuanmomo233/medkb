@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models.dart' hide Card;
 import '../../theme.dart';
 import '../../widgets/widgets.dart';
+import 'related_questions.dart';
 
 class AnalysisPanel extends StatelessWidget {
   final Question q;
@@ -14,6 +15,8 @@ class AnalysisPanel extends StatelessWidget {
   final bool aiBusy;
   final VoidCallback onRetry;
   final VoidCallback onAi;
+  final bool allowRelated;
+  final Future<void> Function()? onPracticed;
   const AnalysisPanel({
     super.key,
     required this.q,
@@ -26,6 +29,8 @@ class AnalysisPanel extends StatelessWidget {
     required this.aiBusy,
     required this.onRetry,
     required this.onAi,
+    this.allowRelated = true,
+    this.onPracticed,
   });
 
   @override
@@ -135,6 +140,9 @@ class AnalysisPanel extends StatelessWidget {
     }
 
     if (f != null) body.add(CitationList(f.citations));
+    if (f != null && allowRelated) {
+      body.add(RelatedQuestions(questionId: q.id, onPracticed: onPracticed));
+    }
 
     return AppCard(
       padding: const EdgeInsets.all(14),

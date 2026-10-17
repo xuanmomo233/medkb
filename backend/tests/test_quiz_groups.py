@@ -96,7 +96,7 @@ async def test_randomized_selection_always_adjacent_and_soft_limited(session, fl
 
 
 @pytest.mark.asyncio
-async def test_plan_and_qtype_seeds_do_not_hide_siblings(session, monkeypatch):
+async def test_regular_seeds_complete_cases_but_plan_never_reintroduces_completed_children(session, monkeypatch):
     session.add_all([question(1, "case", qtype="单选"), question(2, "case", qtype="多选", answer="AB")])
     await session.flush()
     out = await quiz.list_questions(session, 1, QuizParams(qtype="单选"), True)
@@ -105,7 +105,8 @@ async def test_plan_and_qtype_seeds_do_not_hide_siblings(session, monkeypatch):
         return [2]
     monkeypatch.setattr(quiz, "plan_day_qids", plan_ids)
     out = await quiz.list_questions(session, 1, QuizParams(plan_day=1), True)
-    assert [q.id for q in out] == [1, 2]
+    assert [q.id for q in out] == [2]
+    assert out[0].parent_html
 
 
 @pytest.mark.asyncio

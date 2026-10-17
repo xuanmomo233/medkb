@@ -32,7 +32,7 @@ class Endpoints {
   static Future<List<CardPartIndex>> cardIndex() async =>
       _list(await Api.get('/cards/index'), CardPartIndex.fromJson);
   static Future<List<Card>> cards(CardQuery q, {bool cache = true}) async =>
-      _list(await Api.get('/cards', query: q.toQuery(), cache: cache), Card.fromJson);
+      _list(await Api.get('/cards', query: q.toQuery(), cache: cache && q.planDay == null), Card.fromJson);
   static Future<AdminCard> adminCard(int id) async =>
       AdminCard.fromJson(asMap(await Api.get('/admin/cards/$id', cache: false)));
   static Future<int> adminSaveCard(int id, AdminCardPatch p) async {
@@ -49,11 +49,13 @@ class Endpoints {
   static Future<List<Question>> questions(QuizQuery q, {bool lite = false}) async {
     final Map<String, Object?> query = q.toQuery();
     query['lite'] = lite;
-    return _list(await Api.get('/quiz/questions', query: query), Question.fromJson);
+    return _list(await Api.get('/quiz/questions', query: query, cache: q.planDay == null && !q.fresh), Question.fromJson);
   }
 
   static Future<QuestionFull> questionFull(int id, {bool cache = true}) async =>
       QuestionFull.fromJson(asMap(await Api.get('/quiz/questions/$id', cache: cache)));
+  static Future<List<RelatedQuestion>> relatedQuestions(int id) async =>
+      _list(await Api.get('/quiz/questions/$id/related', cache: false), RelatedQuestion.fromJson);
   static Future<String> aiAnalysis(int id) async {
     final Map<String, dynamic> j =
         asMap(await Api.post('/quiz/questions/$id/ai-analysis', null, 120));
@@ -136,9 +138,9 @@ class Endpoints {
   }
 
   static Future<PlanToday> plan() async =>
-      PlanToday.fromJson(asMap(await Api.get('/plan')));
+      PlanToday.fromJson(asMap(await Api.get('/plan', cache: false)));
   static Future<PlanDayDetail> planDay(int n) async =>
-      PlanDayDetail.fromJson(asMap(await Api.get('/plan/days/$n')));
+      PlanDayDetail.fromJson(asMap(await Api.get('/plan/days/$n', cache: false)));
   static Future<void> planRestart() async {
     await Api.post('/plan/restart');
   }

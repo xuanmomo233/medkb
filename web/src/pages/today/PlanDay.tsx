@@ -13,13 +13,13 @@ export default function PlanDay({ n }: { n: number }) {
           <>
             <div className={s.meta}>卡片清单</div>
             <div className={s.chips}>
-              {d.cards.map((c) => <Link key={c.id} className={s.chip} to={`/cards/run?ids=${c.id}`}>{c.term}</Link>)}
+              {d.cards.map((c) => <Link key={c.id} className={s.chip} to={`/cards/run?ids=${c.id}&plan_day=${n}`}>{c.term}</Link>)}
               {d.cards.length === 0 && <span className={s.meta}>暂无卡片</span>}
             </div>
             <div className={s.meta}>题目分组</div>
             <div className={s.chips}>
               {d.question_groups.map((g) => (
-                <Link key={g.chapter} className={s.chip} to={`/quiz/run?ids=${g.ids.join(',')}`}>{g.chapter} · {g.ids.length} 题</Link>
+                <Link key={g.chapter} className={s.chip} to={`/quiz/run?ids=${g.ids.join(',')}&plan_day=${n}`}>{g.chapter} · {g.ids.length} 题</Link>
               ))}
               {d.question_groups.length === 0 && <span className={s.meta}>暂无题目</span>}
             </div>

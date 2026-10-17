@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.render import card_md, md
 from app.models import Attempt, Card, CardQuestion, Question, QuestionProgress as QP
 from app.schemas import quiz as S
-from app.services import provenance, study
+from app.services import plan_queue, provenance, question_links
 from app.services.glm import glm_call
 from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, level_conditions, pool_flt_condition
 from app.services.question_groups import batches, complete_question_ids, group_key, legacy_case_parts
@@ -107,22 +107,7 @@ async def facets(session: AsyncSession, uid: int, p: QuizParams) -> dict:
 
 # ---------------- questions ----------------
 async def plan_day_qids(session: AsyncSession, user_id: int, day_no: int) -> list[int]:
-    parts = await study.plan_day_parts(session, user_id, day_no)
-    if not parts:
-        return []
-    ids: set[int] = set()
-    for subject, part in parts:
-        sd = SUBJECT_DIR.get(subject)
-        if not sd:
-            continue
-        stmt = (
-            select(CardQuestion.question_id)
-            .join(Card, Card.id == CardQuestion.card_id)
-            .join(Question, Question.id == CardQuestion.question_id)
-            .where(Card.subject == subject, Card.part == part, Question.subject_dir == sd)
-        )
-        ids.update((await session.execute(stmt)).scalars().all())
-    return sorted(ids)
+    return await plan_queue.targets(session, user_id, day_no, "question")
 
 
 async def _latest_attempts(session: AsyncSession, uid: int, qids: list[int]) -> dict[int, Attempt]:
@@ -173,6 +158,22 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
         eligible = set(seed_ids)
         seed_ids = [qid for qid in p.ids if qid in eligible]
     qids = await complete_question_ids(session, seed_ids, limit)
+    if plan_ids is not None:
+        # The persisted queue already contains the full case. Never bring a
+        # completed child back merely to expand its unfinished sibling.
+        selected = set(qids)
+        qids = [qid for qid in plan_ids if qid in selected]
+    elif p.fresh:
+        mapping = await question_links.redirects(session)
+        done = await question_links.answered(session, uid, mapping)
+        used = set(done)
+        fresh_ids = []
+        for qid in qids:
+            root = question_links.resolve(mapping, qid)
+            if root not in used:
+                used.add(root)
+                fresh_ids.append(qid)
+        qids = fresh_ids
     rows_by_id = {}
     for chunk in batches(qids):
         rows = (await session.execute(
@@ -381,6 +382,8 @@ async def attempt(session: AsyncSession, uid: int, qid: int, picked: list[int]) 
     rec = await Recorder.create(session, uid, [qid])
     ok = rec.judge(q, picked)
     await session.flush()
+    if ok is not None:
+        await plan_queue.complete_questions(session, uid, [qid])
     stat = await question_stat(session, qid)
     await session.commit()
     return S.AttemptResult(correct=ok, answer=q.answer or "", stat=stat)

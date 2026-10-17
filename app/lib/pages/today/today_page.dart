@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../api.dart';
 import '../../endpoints.dart';
 import '../../models.dart'
     show PlanToday, ScheduleToday, StatsOverview, TodaySummary, WeakSpot;
@@ -19,6 +20,18 @@ class TodayPage extends StatefulWidget {
 }
 
 class _TodayPageState extends State<TodayPage> {
+  @override
+  void initState() {
+    super.initState();
+    Api.studyRevision.addListener(_onReturn);
+  }
+
+  @override
+  void dispose() {
+    Api.studyRevision.removeListener(_onReturn);
+    super.dispose();
+  }
+
   final GlobalKey<AsyncViewState<TodaySummary>> _sumKey =
       GlobalKey<AsyncViewState<TodaySummary>>();
   final GlobalKey<CalendarBlockState> _calKey = GlobalKey<CalendarBlockState>();
