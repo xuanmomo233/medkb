@@ -23,7 +23,7 @@ SYS_PROMPT = '''你是用户的医学考研（西医综合）陪学助手「小�
 【工具】你有四个工具可以主动调用查证：
 - kb_toc()：数据库当前发布的知识目录
 - kb_search(query)：数据库当前章节与背卡检索（返回教材核验状态）
-- kb_read(章节名)：读取数据库当前章节内容
+- kb_read(name, query?, offset?)：按章节名或 #编号定位读取；长章节用 query 找命中段落，按返回的 offset 续读
 - quiz_search(关键词)：题库搜题（题干/答案/分类/qid）
 涉及知识库结构/顺序/覆盖范围必须调 kb_toc；回答疾病知识建议先 kb_search；找真题/考法用 quiz_search。查不到再凭医学通识回答并标注"（知识库未收录，供参考）"。不许编造章节顺序或题号。
 
@@ -87,15 +87,17 @@ TOOLS = [
         "parameters": {"type": "object", "properties": {}}}},
     {"type": "function", "function": {
         "name": "kb_search",
-        "description": "知识库全文检索（BM25），返回最相关的章节内容片段（带出处）。回答具体疾病/生理/生化知识前建议调用。",
+        "description": "数据库章节与背卡关键词检索，返回命中附近片段、原文范围与教材核验出处；章节可用 kb_read 按 #编号继续读取。回答具体疾病/生理/生化知识前建议调用。",
         "parameters": {"type": "object", "properties": {
             "query": {"type": "string", "description": "检索词，用核心医学名词"}},
             "required": ["query"]}}},
     {"type": "function", "function": {
         "name": "kb_read",
-        "description": "按文件名读取知识库某章的完整内容（文件名不带.md，如\"冠心病\"、\"20-收缩性心衰\"均可）",
+        "description": "按章节名或 #编号分段读取当前知识库，默认最多4000字；query 定位正文关键词，offset 按返回的字符位置续读（传 offset 时优先续读）。勿把片段当作完整章节。",
         "parameters": {"type": "object", "properties": {
-            "name": {"type": "string"}}, "required": ["name"]}}},
+            "name": {"type": "string", "description": "章节标题或检索结果的 #编号，如 #6"},
+            "query": {"type": "string", "description": "可选，首次读取时定位核心医学名词"},
+            "offset": {"type": "integer", "minimum": 0, "description": "可选，使用上次结果的续读 offset"}}, "required": ["name"]}}},
     {"type": "function", "function": {
         "name": "quiz_search",
         "description": "在7万题库中按关键词搜索题目，返回题干/选项/答案/分类/qid。用于查找原题、统计数量、看真题怎么考。",
@@ -122,10 +124,21 @@ async def _tool_exec(name: str, args: dict, session: AsyncSession, found: list[s
         if name == "kb_search":
             q = str(args.get("query") or "")[:100]
             r = await knowledge.search(session, q, 3)
-            return "\n\n".join(r)[:4000] if r else "（未命中：换个关键词试试）"
+            # Each result already has a bounded excerpt; slicing the combined
+            # string would silently drop the last result's citations/navigation.
+            return "\n\n".join(r) if r else "（未命中：换个关键词试试）"
         if name == "kb_read":
-            txt = await knowledge.read(session, str(args.get("name") or "").strip(), 4000)
-            return txt if txt else "（没有该文件，可先 kb_toc 看目录）"
+            offset = args.get("offset")
+            if offset is not None:
+                try:
+                    offset = max(0, int(offset))
+                except (TypeError, ValueError):
+                    return "（offset 必须是上次结果提供的非负整数）"
+            txt = await knowledge.read(
+                session, str(args.get("name") or "").strip(), 4000,
+                query=str(args.get("query") or "")[:100], offset=offset,
+            )
+            return txt if txt else "（没有该章节，可先 kb_toc 看目录）"
         if name == "quiz_search":
             kw = str(args.get("kw") or "")[:50]
             try:
