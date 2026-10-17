@@ -11,13 +11,13 @@ from app.models.learning import (
     ScheduleItem,
 )
 from app.models.social import ChatMessage, EditorialBatch, EditorialExecution, EditorialReview, Note, NoteLike, QuestionEdit
-from app.models.planning import PlanSnapshot, PlanTask, PlanTaskSection, QuestionMerge, QuestionRelation
+from app.models.planning import PlanSnapshot, PlanTask, PlanTaskSection, QuestionMerge, QuestionRelation, ScheduleDay
 from app.models.user import AuthToken, Checkin, InviteCode, SiteConfig, User, UserPlan, UserPlanItem, UserPrefs
 
 __all__ = [
     "Base", "User", "AuthToken", "UserPrefs", "Checkin", "InviteCode", "SiteConfig",
     "UserPlan", "UserPlanItem",
-    "PlanSnapshot", "PlanTask", "PlanTaskSection", "QuestionMerge", "QuestionRelation",
+    "PlanSnapshot", "PlanTask", "PlanTaskSection", "QuestionMerge", "QuestionRelation", "ScheduleDay",
     "Chapter", "Question", "Card", "CardQuestion", "CardMerge", "CardOriginal", "CardRelation",
     "TextbookSource", "ContentCitation", "PlanDay", "PlanDayPart",
     "QuestionProgress", "CardProgress", "Exam", "Attempt", "ScheduleItem",

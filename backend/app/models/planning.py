@@ -39,6 +39,12 @@ class PlanSnapshot(Base, CreatedMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("user_plans.user_id", ondelete="CASCADE"), primary_key=True)
 
 
+class ScheduleDay(Base, CreatedMixin):
+    __tablename__ = "schedule_days"
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    day: Mapped[date] = mapped_column(Date, primary_key=True)
+
+
 class PlanTask(Base):
     __tablename__ = "plan_tasks"
     __table_args__ = (

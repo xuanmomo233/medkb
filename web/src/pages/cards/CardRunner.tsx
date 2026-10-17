@@ -15,7 +15,7 @@ import Summary from './Summary'
 import s from './run.module.css'
 
 interface Saved { idx: number; ratings: Record<number, Rating> }
-interface Props { cards: Card[]; query: CardQuery; storeKey: string; onRestart: () => void }
+interface Props { cards: Card[]; query: CardQuery; storeKey: string; onRestart: () => void; sessionFresh?: boolean }
 
 const RATES: { action: Rating; label: string; key: string; cls: string }[] = [
   { action: 'rate_again', label: '忘了', key: '1', cls: s.rBad },
@@ -31,12 +31,12 @@ function restore(key: string, total: number): Saved {
   return { idx: 0, ratings: {} }
 }
 
-export default function CardRunner({ cards: initial, query, storeKey, onRestart }: Props) {
+export default function CardRunner({ cards: initial, query, storeKey, onRestart, sessionFresh = false }: Props) {
   const toast = useToast()
   const queryClient = useQueryClient()
   const { user } = useAuth()
   const [cards, setCards] = useState(initial)
-  const [saved] = useState(() => query.plan_day === undefined ? restore(storeKey, initial.length) : { idx: 0, ratings: {} })
+  const [saved] = useState(() => query.plan_day === undefined && !sessionFresh ? restore(storeKey, initial.length) : { idx: 0, ratings: {} })
   const [idx, setIdx] = useState(saved.idx)
   const [ratings, setRatings] = useState(saved.ratings)
   const [flipped, setFlipped] = useState(false)

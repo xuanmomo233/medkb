@@ -2,6 +2,7 @@
 import type { Card } from '@/api/types'
 import { Badge, Citations, HtmlView } from '@/ui'
 import s from './run.module.css'
+import CardSources from './CardSources'
 
 interface Props { card: Card; flipped: boolean; onFlip: () => void }
 
@@ -31,6 +32,7 @@ export default function CardFace({ card, flipped, onFlip }: Props) {
       </div>
       <HtmlView html={card.body_html} />
       <Citations items={card.citations} />
+      <CardSources key={card.id} id={card.id} />
       {!!card.related_cards?.length && <section className={s.srcBox} aria-label="关联知识">
         <h3>关联知识</h3>
         {card.related_cards.map((item) => <p key={item.id}>

@@ -17,6 +17,7 @@ from app.models import (
     Question,
     QuestionProgress,
     ScheduleItem,
+    ScheduleDay,
     SiteConfig,
     User,
     UserPlan,
@@ -504,11 +505,12 @@ async def _weak_question_ids(session: AsyncSession, user_id: int, prefs: UserPre
     pairs = {(s["system"], s["chapter"]) for s in spots}
     order = {(s["system"], s["chapter"]): i for i, s in enumerate(spots)}
     chapters = {c for _, c in pairs}
+    latest = select(func.max(Attempt.id)).where(Attempt.user_id == user_id).group_by(Attempt.question_id)
     wrong = (
         await session.execute(
             select(Question.id, Question.system, Question.chapter, func.max(Attempt.created_at))
             .join(Attempt, Attempt.question_id == Question.id)
-            .where(Attempt.user_id == user_id, Attempt.is_correct.is_(False), Question.chapter.in_(chapters))
+            .where(Attempt.id.in_(latest), Attempt.is_correct.is_(False), Question.chapter.in_(chapters))
             .group_by(Question.id, Question.system, Question.chapter)
         )
     ).all()
@@ -553,10 +555,14 @@ async def _generate_schedule(session: AsyncSession, user_id: int, day: date, pre
     now = utcnow()
     goal = prefs.daily_goal
     items: list[tuple[str, int, str]] = []
+    done_today = select(Attempt.question_id).where(
+        Attempt.user_id == user_id, Attempt.created_at >= day_start_utc(day), Attempt.picked != "",
+    )
     due_q = (
         await session.execute(
             select(QuestionProgress.question_id)
-            .where(QuestionProgress.user_id == user_id, QuestionProgress.in_plan.is_(True), QuestionProgress.due_at <= now)
+            .where(QuestionProgress.user_id == user_id, QuestionProgress.in_plan.is_(True), QuestionProgress.due_at <= now,
+                   QuestionProgress.question_id.not_in(done_today))
             .order_by(QuestionProgress.due_at)
             .limit(goal)
         )
@@ -574,7 +580,8 @@ async def _generate_schedule(session: AsyncSession, user_id: int, day: date, pre
         ).scalars().all()
         items += [("card", i, "due") for i in due_c]
     if len(items) < goal:
-        weak = await _weak_question_ids(session, user_id, prefs, set(due_q), goal - len(items))
+        seen_today = set((await session.scalars(done_today)).all())
+        weak = await _weak_question_ids(session, user_id, prefs, set(due_q) | seen_today, goal - len(items))
         items += [("question", i, "weak") for i in weak]
     for t, i, r in items:
         session.add(ScheduleItem(user_id=user_id, day=day, item_type=t, item_id=i, reason=r))
@@ -584,14 +591,19 @@ async def _generate_schedule(session: AsyncSession, user_id: int, day: date, pre
 async def schedule_today(session: AsyncSession, user_id: int) -> dict:
     prefs = await get_prefs(session, user_id)
     day = local_today()
+    # NO KEY UPDATE serializes day creation without blocking FK key-share locks
+    # taken when a concurrent attempt is inserted for the same user.
+    await session.execute(select(User.id).where(User.id == user_id).with_for_update(key_share=True))
     rows = (
         await session.execute(
             select(ScheduleItem).where(ScheduleItem.user_id == user_id, ScheduleItem.day == day).order_by(ScheduleItem.id)
         )
     ).scalars().all()
-    if not rows:
-        await _generate_schedule(session, user_id, day, prefs)
-        await session.commit()
+    if await session.get(ScheduleDay, (user_id, day)) is None:
+        if not rows:
+            await _generate_schedule(session, user_id, day, prefs)
+        session.add(ScheduleDay(user_id=user_id, day=day))
+        await session.flush()
         rows = (
             await session.execute(
                 select(ScheduleItem)
@@ -599,6 +611,14 @@ async def schedule_today(session: AsyncSession, user_id: int) -> dict:
                 .order_by(ScheduleItem.id)
             )
         ).scalars().all()
+    # Reconcile valid attempts from an older client or a previous server build.
+    from app.services import schedule_progress
+    latest = select(func.max(Attempt.id)).where(
+        Attempt.user_id == user_id, Attempt.created_at >= day_start_utc(day), Attempt.picked != "",
+    ).group_by(Attempt.question_id)
+    practiced = list((await session.scalars(select(Attempt.question_id).where(Attempt.id.in_(latest)))).all())
+    await schedule_progress.complete(session, user_id, "question", practiced)
+    await session.commit()
     qids = [r.item_id for r in rows if r.item_type == "question"]
     mapping = await redirects(session)
     cids = list(dict.fromkeys(resolve(mapping, r.item_id) for r in rows if r.item_type == "card"))

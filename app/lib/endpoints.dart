@@ -165,7 +165,7 @@ class Endpoints {
   static Future<List<WeakSpot>> weakSpots() async =>
       _list(await Api.get('/stats/weakspots'), WeakSpot.fromJson);
   static Future<ScheduleToday> scheduleToday() async =>
-      ScheduleToday.fromJson(asMap(await Api.get('/schedule/today')));
+      ScheduleToday.fromJson(asMap(await Api.get('/schedule/today', cache: false)));
   static Future<void> scheduleDone(int id) async {
     await Api.post('/schedule/items/$id/done');
   }

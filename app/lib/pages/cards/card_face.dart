@@ -3,6 +3,9 @@ import '../../models.dart';
 import '../../nav.dart';
 import '../../widgets/widgets.dart';
 import 'card_run_page.dart';
+import '../../api.dart';
+import '../../endpoints.dart';
+import 'source_questions_page.dart';
 
 class CardFront extends StatelessWidget {
   final Card card;
@@ -89,6 +92,7 @@ class CardBack extends StatelessWidget {
           const SizedBox(height: 10),
           HtmlView(card.bodyHtml),
           CitationList(card.citations),
+          _SourceQuestionsButton(cardId: card.id),
           if (card.relatedCards.isNotEmpty) ...<Widget>[
             const Divider(height: 24),
             Text('关联知识', style: t.textTheme.titleMedium),
@@ -108,4 +112,42 @@ class CardBack extends StatelessWidget {
       ),
     );
   }
+}
+
+class _SourceQuestionsButton extends StatefulWidget {
+  final int cardId;
+  const _SourceQuestionsButton({required this.cardId});
+
+  @override
+  State<_SourceQuestionsButton> createState() => _SourceQuestionsButtonState();
+}
+
+class _SourceQuestionsButtonState extends State<_SourceQuestionsButton> {
+  bool _busy = false;
+
+  Future<void> _open() async {
+    setState(() => _busy = true);
+    try {
+      final List<SourceQuestion> items = await Endpoints.cardSources(widget.cardId);
+      if (!mounted) return;
+      if (items.isEmpty) {
+        toast(context, '本卡暂无关联源题');
+      } else {
+        await Navigator.of(context).push<void>(MaterialPageRoute<void>(
+          builder: (_) => SourceQuestionsPage(list: items),
+        ));
+      }
+    } catch (e) {
+      if (mounted) toast(context, errText(e));
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => TextButton.icon(
+    onPressed: _busy ? null : _open,
+    icon: const Icon(Icons.menu_book, size: 18),
+    label: Text(_busy ? '正在加载源题…' : '源题详解'),
+  );
 }

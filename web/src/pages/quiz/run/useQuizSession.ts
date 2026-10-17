@@ -62,7 +62,6 @@ export function useQuizSession(search: string, p: RunParams) {
         i = ok ? Math.min(saved.idx, list.length - 1) : 0
         setDeadline(ok ? saved.deadline : mins ? Date.now() + mins * 60000 : null)
       } else {
-        for (const q of list) if (q.done && q.last_picked) next[q.id] = { picked: q.last_picked, judged: true, correct: q.last_correct }
         const pos = trackPos ? Number(localStorage.getItem(posKey)) : 0
         if (pos > 0 && pos < list.length) setResumeAt(pos)
       }
@@ -164,6 +163,15 @@ export function useQuizSession(search: string, p: RunParams) {
     setAns((m) => { const { [q.id]: _, ...rest } = m; void _; return rest })
   }, [q])
 
+  const resetSession = useCallback(() => {
+    window.clearTimeout(quickTimer.current)
+    setAns({})
+    setIdx(0)
+    setResumeAt(null)
+    localStorage.removeItem(posKey)
+    toast('已重置本次练习，历史记录保留')
+  }, [posKey, toast])
+
   const toggleMark = useCallback((kind: MarkKind) => {
     if (!q) return
     const prev: Patch = { state: q.state, starred: q.starred }
@@ -230,5 +238,6 @@ export function useQuizSession(search: string, p: RunParams) {
     questions, idx, q, cur, ans, full, fullErr, stats, showFull, revealed,
     toggleReveal: () => setRevealed((v) => !v), loadFull, refreshFull, go, pick, confirmMulti, redo, toggleMark, genAnalysis, aiBusy,
     answeredCount, remaining, submit, submitting, resumeAt, dismissResume, jumpResume,
+    resetSession,
   }
 }

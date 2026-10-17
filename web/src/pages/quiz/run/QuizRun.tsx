@@ -9,6 +9,7 @@ import QuestionToolbar from './QuestionToolbar'
 import { hasOptions, isMulti, useQuizSession } from './useQuizSession'
 import { useQuizKeys } from './useQuizKeys'
 import s from './run.module.css'
+import ScheduleNavigation from '../../today/ScheduleNavigation'
 
 function fmtRemain(sec: number) {
   const h = Math.floor(sec / 3600)
@@ -56,9 +57,11 @@ function Session({ search }: { search: string }) {
 
   return (
     <div className={s.wrap}>
+      <ScheduleNavigation />
       <header className={s.top}>
         <Button variant="ghost" size="sm" onClick={() => nav('/quiz')} aria-label="返回"><Icon name="chevLeft" size={14} /> 返回</Button>
         <span className={s.topTitle}>{p.title || modeLabel}</span>
+        {!test && <Button size="sm" variant="ghost" onClick={S.resetSession}>本次重练</Button>}
         {test && S.remaining !== null && (
           <span className={`${s.timer} ${S.remaining < 300 ? s.timerWarn : ''}`} role="timer" aria-label="剩余时间"><Icon name="clock" size={13} /> {fmtRemain(S.remaining)}</span>
         )}

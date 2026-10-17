@@ -24,6 +24,7 @@ export const api = {
   facets: (f: T.QuizFilter) => get<T.FacetProgress>('/quiz/facets', { ...f }),
   questions: (q: T.QuizQuery & { lite?: boolean }) => get<T.Question[]>('/quiz/questions', { ...q }),
   questionFull: (id: number) => get<T.QuestionFull>(`/quiz/questions/${id}`),
+  cardSources: (id: number) => get<T.Question[]>(`/cards/${id}/sources`),
   relatedQuestions: (id: number) => get<T.RelatedQuestion[]>(`/quiz/questions/${id}/related`),
   aiAnalysis: (id: number) => post<{ analysis_html: string }>(`/quiz/questions/${id}/ai-analysis`),
   attempt: (b: { question_id: number; picked: number[] }) => post<T.AttemptResult>('/quiz/attempts', b),

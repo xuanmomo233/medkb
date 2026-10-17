@@ -1,6 +1,8 @@
 import type { Card, CardPartIndex, CardQuery, MarkAction, ProgressState } from '@/api/types'
 import { NEXT, registerMock } from './registry'
 
+registerMock('GET', '/cards/{id}/sources', () => [])
+
 const fmt = (t: string) => t.replace(/\*\*(.+?)\*\*/g, '<mark class="kw">$1</mark>').replace(/\[\[(.+?)\]\]/g, '<span class="tag">$1</span>')
 const ul = (...li: string[]) => `<ul>${li.map((x) => `<li>${fmt(x)}</li>`).join('')}</ul>`
 const table = (head: string[], rows: string[][]) =>

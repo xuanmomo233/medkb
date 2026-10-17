@@ -2,10 +2,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { api } from '@/api/endpoints'
 import type { ScheduleToday } from '@/api/types'
-import { Badge, Card, EmptyState, Icon, ProgressBar, useToast } from '@/ui'
+import { Badge, Button, Card, EmptyState, Icon, ProgressBar, useToast } from '@/ui'
 import { Async } from './Async'
 import { keys } from './queries'
 import s from './today.module.css'
+import { schedulePath } from './schedulePath'
 
 export default function ScheduleCard() {
   const qc = useQueryClient()
@@ -41,10 +42,13 @@ export default function ScheduleCard() {
         {(d) => d.items.length === 0 ? <EmptyState icon="calendar" text="今天暂无日程，去刷几道题吧" /> : (
           <div className={s.stack}>
             <ProgressBar value={d.items.length ? (d.done_count / d.items.length) * 100 : 0} tone={d.done_count >= d.items.length ? 'good' : undefined} />
+            <Link to={schedulePath(d.items.find((item) => !item.done) ?? d.items[0])}>
+              <Button variant="primary">{d.done_count >= d.items.length ? '重新练习日程' : '继续今日日程'}</Button>
+            </Link>
             <ul className={s.list}>
               {d.items.map((it) => {
                 const isQ = it.item_type === 'question'
-                const to = `${isQ ? '/quiz/run' : '/cards/run'}?ids=${it.item_id}`
+                const to = schedulePath(it)
                 return (
                   <li key={it.id} className={`${s.item} ${it.done ? s.itemDone : ''}`}>
                     <input type="checkbox" className={s.check} checked={it.done} disabled={it.done || m.isPending}

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'models.dart';
+import 'endpoints.dart';
 import 'pages/browse/chapter_page.dart';
 import 'pages/browse/search_page.dart';
 import 'pages/cards/card_run_page.dart';
@@ -23,6 +24,8 @@ class QuizRunArgs {
   final bool random;
   final bool shuffle;
   final bool fresh;
+  final List<ScheduleItem> scheduleItems;
+  final int scheduleIndex;
   /// QuizMode 常量：practice / recite / quick / test
   final String mode;
   final String? title;
@@ -40,6 +43,8 @@ class QuizRunArgs {
     this.random = false,
     this.shuffle = false,
     this.fresh = false,
+    this.scheduleItems = const <ScheduleItem>[],
+    this.scheduleIndex = 0,
     this.mode = QuizMode.practice,
     this.title,
     this.mins,
@@ -67,6 +72,8 @@ class CardRunArgs {
   final int? planDay;
   final bool starred;
   final bool due;
+  final List<ScheduleItem> scheduleItems;
+  final int scheduleIndex;
   const CardRunArgs({
     this.subject,
     this.part,
@@ -74,6 +81,8 @@ class CardRunArgs {
     this.planDay,
     this.starred = false,
     this.due = false,
+    this.scheduleItems = const <ScheduleItem>[],
+    this.scheduleIndex = 0,
   });
 
   CardQuery toQuery() => CardQuery(
@@ -89,6 +98,28 @@ class CardRunArgs {
 Future<void> openQuizRun(BuildContext context, QuizRunArgs args) =>
     Navigator.of(context).push<void>(
         MaterialPageRoute<void>(builder: (_) => QuizRunPage(args)));
+
+Future<void> openScheduleItem(BuildContext context, List<ScheduleItem> items, int index, {bool replace = false}) {
+  final ScheduleItem item = items[index];
+  final Widget page = item.itemType == TargetType.question
+      ? QuizRunPage(QuizRunArgs(ids: <int>[item.itemId], title: '今日日程', scheduleItems: items, scheduleIndex: index))
+      : CardRunPage(CardRunArgs(ids: <int>[item.itemId], scheduleItems: items, scheduleIndex: index));
+  final MaterialPageRoute<void> route = MaterialPageRoute<void>(builder: (_) => page);
+  return replace ? Navigator.of(context).pushReplacement<void, void>(route) : Navigator.of(context).push<void>(route);
+}
+
+Future<void> nextScheduleItem(BuildContext context, List<ScheduleItem> items, int index) async {
+  final ScheduleToday today = await Endpoints.scheduleToday();
+  if (!context.mounted) return;
+  final int current = today.items.indexWhere((ScheduleItem item) => item.id == items[index].id);
+  for (int i = current + 1; current >= 0 && i < today.items.length; i++) {
+    if (!today.items[i].done) {
+      await openScheduleItem(context, today.items, i, replace: true);
+      return;
+    }
+  }
+  if (context.mounted) Navigator.of(context).maybePop();
+}
 
 Future<void> openCardRun(BuildContext context, CardRunArgs args) =>
     Navigator.of(context).push<void>(

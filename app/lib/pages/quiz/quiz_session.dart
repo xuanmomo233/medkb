@@ -146,13 +146,6 @@ class QuizSession extends ChangeNotifier {
           }
         }
       } else {
-        if (!isRecite) {
-          for (final Question q in list) {
-            if (q.done && q.lastPicked.isNotEmpty) {
-              ans[q.id] = Ans(q.lastPicked, true, q.lastCorrect);
-            }
-          }
-        }
         if (trackPos) {
           final int pos = p.getInt(_posKey) ?? 0;
           if (pos > 0 && pos < list.length) resume = pos;
@@ -342,6 +335,19 @@ class QuizSession extends ChangeNotifier {
     _quickTimer?.cancel();
     ans.remove(q.id);
     _emit();
+  }
+
+  Future<void> resetSession() async {
+    _quickTimer?.cancel();
+    ans.clear();
+    idx = 0;
+    resumeAt = null;
+    _emit();
+    try {
+      final SharedPreferences p = await SharedPreferences.getInstance();
+      await p.remove(_posKey);
+    } catch (_) {}
+    if (!_disposed) notify('已重置本次练习，历史记录保留');
   }
 
   void toggleReveal(Question q) {

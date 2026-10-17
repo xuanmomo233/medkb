@@ -5,13 +5,32 @@ from sqlalchemy import and_, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import card_md, md
-from app.models import Card, CardProgress
+from app.models import Card, CardProgress, CardQuestion, Question
 from app.services import plan_queue, provenance
-from app.services.card_merges import canonical_id, canonical_ids, details, visible
+from app.services.card_merges import canonical_id, canonical_ids, details, original_ids, visible
 from app.services.progress import derive_state
 
 LIMIT = 500
 PLAN_LIMIT = 2000
+
+
+async def sources(session: AsyncSession, uid: int, card_id: int):
+    """Read actual source links, including retained links on merged original cards."""
+    if await session.get(Card, card_id) is None:
+        raise HTTPException(404, "卡片不存在")
+    roots = await original_ids(session, card_id)
+    ids = list((await session.scalars(select(CardQuestion.question_id).join(
+        Question, Question.id == CardQuestion.question_id,
+    ).where(CardQuestion.card_id.in_(roots)).distinct().order_by(CardQuestion.question_id))).all())
+    if not ids:
+        return []
+    from app.schemas.quiz import QuestionOut
+    from app.services.quiz import list_questions
+    from app.services.quiz_filters import QuizParams
+
+    by_id = {q.id: q for q in await list_questions(session, uid, QuizParams(ids=ids), False)}
+    # Case expansion supplies context, but unrelated siblings are not card sources.
+    return [QuestionOut.model_validate(by_id[qid]) for qid in ids if qid in by_id]
 
 
 async def index(session: AsyncSession) -> list[dict]:

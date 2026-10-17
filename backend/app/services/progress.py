@@ -83,6 +83,9 @@ async def mark(session: AsyncSession, user_id: int, target_type: str, target_id:
             session.add(p)
         _apply(p, action, target_type, _now())
         try:
+            if target_type == "card" and (action == "seen" or action.startswith("rate_")):
+                from app.services import schedule_progress
+                await schedule_progress.complete(session, user_id, "card", [target_id])
             await session.commit()
             return True
         except IntegrityError:

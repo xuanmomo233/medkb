@@ -39,16 +39,18 @@ async def _sync(session: AsyncSession, uid: int, tasks: list[PlanTask]) -> None:
 
 
 def _assign(plan: UserPlan, units: list[list[PlanTask]], start=None) -> None:
-    """Distribute work by task count, keeping a case together. Existing days stay fixed."""
+    """Give cards and questions daily quotas; keep each case together."""
     pending = [[task for task in unit if task.completed_at is None] for unit in units]
-    total = sum(map(len, pending))
-    budget = max(1, ceil(total / plan.total_days))
-    cursor = 0
-    for unit in pending:
-        day = min(cursor // budget, plan.total_days - 1)
-        for task in unit:
-            task.due_day = (start or plan.start_day) + timedelta(days=day)
-        cursor += len(unit)
+    for kind in ("card", "question"):
+        track = [unit for unit in pending if unit and unit[0].kind == kind]
+        total = sum(map(len, track))
+        budget = max(1, ceil(total / plan.total_days))
+        cursor = 0
+        for unit in track:
+            day = min(cursor // budget, plan.total_days - 1)
+            for task in unit:
+                task.due_day = (start or plan.start_day) + timedelta(days=day)
+            cursor += len(unit)
 
 
 async def _build(session: AsyncSession, plan: UserPlan) -> None:

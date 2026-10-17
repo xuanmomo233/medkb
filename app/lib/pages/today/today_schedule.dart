@@ -67,9 +67,7 @@ class ScheduleListState extends State<ScheduleList> {
   }
 
   void _open(ScheduleItem it) {
-    final Future<void> f = it.itemType == TargetType.question
-        ? openQuizRun(context, QuizRunArgs(ids: <int>[it.itemId]))
-        : openCardRun(context, CardRunArgs(ids: <int>[it.itemId]));
+    final Future<void> f = openScheduleItem(context, _items, _items.indexWhere((ScheduleItem item) => item.id == it.id));
     f.then((_) => widget.onReturn());
   }
 
@@ -95,6 +93,10 @@ class ScheduleListState extends State<ScheduleList> {
           ],
         ),
         const SizedBox(height: 4),
+        FilledButton(onPressed: () {
+          final int next = _items.indexWhere((ScheduleItem item) => !item.done);
+          _open(_items[next < 0 ? 0 : next]);
+        }, child: Text(done == _items.length ? '重新练习日程' : '继续今日日程')),
         ..._items.map((ScheduleItem it) {
           final bool isQ = it.itemType == TargetType.question;
           final bool due = it.reason == 'due';

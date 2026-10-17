@@ -111,7 +111,10 @@ class QuestionPageView extends StatelessWidget {
           const SizedBox(height: 8),
           AnalysisPanel(
             allowRelated: !s.isTest,
-            onPracticed: s.args.planDay != null || s.args.fresh ? s.load : null,
+            onPracticed: s.args.planDay != null || s.args.fresh ? () async {
+              await s.load();
+              WidgetsBinding.instance.addPostFrameCallback((_) => s.pageTo?.call(s.idx));
+            } : null,
             q: q,
             picked: cur?.picked ?? '',
             judged: judged,

@@ -8,6 +8,7 @@ import 'exam_report_page.dart';
 import 'jump_grid.dart';
 import 'question_view.dart';
 import 'quiz_session.dart';
+import '../today/schedule_navigation.dart';
 
 class QuizRunPage extends StatefulWidget {
   final QuizRunArgs args;
@@ -181,10 +182,19 @@ class _QuizRunPageState extends State<QuizRunPage> {
               icon: const Icon(Icons.grid_view, size: 18),
               label: Text('${_s.idx + 1}/$total'),
             ),
+          if (ready && !_s.isTest)
+            TextButton(onPressed: () async {
+              await _s.resetSession();
+              if (mounted) _jumpTo(0);
+            }, child: const Text('本次重练')),
           const SizedBox(width: 4),
         ],
       ),
-      body: _content(context, ready, total),
+      body: Column(children: <Widget>[
+        if (widget.args.scheduleItems.isNotEmpty)
+          ScheduleNavigation(items: widget.args.scheduleItems, index: widget.args.scheduleIndex),
+        Expanded(child: _content(context, ready, total)),
+      ]),
     );
   }
 
@@ -310,9 +320,17 @@ class _QuizRunPageState extends State<QuizRunPage> {
               Expanded(
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(minimumSize: minSize),
-                  onPressed: last ? null : () => _animateTo(_s.idx + 1),
+                  onPressed: last
+                      ? (widget.args.scheduleItems.isEmpty ? null : () async {
+                          try {
+                            await nextScheduleItem(context, widget.args.scheduleItems, widget.args.scheduleIndex);
+                          } catch (e) {
+                            if (mounted) _msg(errText(e));
+                          }
+                        })
+                      : () => _animateTo(_s.idx + 1),
                   icon: const Icon(Icons.chevron_right),
-                  label: const Text('下一题'),
+                  label: Text(last && widget.args.scheduleItems.isNotEmpty ? '下一项日程' : '下一题'),
                 ),
               ),
             ],

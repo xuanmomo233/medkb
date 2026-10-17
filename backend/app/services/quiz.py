@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.render import card_md, md
 from app.models import Attempt, Card, CardQuestion, Question, QuestionProgress as QP
 from app.schemas import quiz as S
-from app.services import plan_queue, provenance, question_links
+from app.services import plan_queue, provenance, question_links, schedule_progress
 from app.services.glm import glm_call
 from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, level_conditions, pool_flt_condition
 from app.services.question_groups import batches, complete_question_ids, group_key, legacy_case_parts
@@ -384,6 +384,7 @@ async def attempt(session: AsyncSession, uid: int, qid: int, picked: list[int]) 
     await session.flush()
     if ok is not None:
         await plan_queue.complete_questions(session, uid, [qid])
+        await schedule_progress.questions(session, uid, [(qid, ok)])
     stat = await question_stat(session, qid)
     await session.commit()
     return S.AttemptResult(correct=ok, answer=q.answer or "", stat=stat)

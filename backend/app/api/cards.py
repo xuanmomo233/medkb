@@ -4,6 +4,7 @@ from fastapi import APIRouter, HTTPException, Query
 
 from app.api.deps import CurrentUser, Session
 from app.schemas.cards import CardOut, CardPartIndex
+from app.schemas.quiz import QuestionOut
 from app.services import cards as svc
 
 router = APIRouter(prefix="/cards", tags=["cards"])
@@ -12,6 +13,11 @@ router = APIRouter(prefix="/cards", tags=["cards"])
 @router.get("/index", response_model=list[CardPartIndex])
 async def index(session: Session, user: CurrentUser):
     return await svc.index(session)
+
+
+@router.get("/{card_id}/sources", response_model=list[QuestionOut])
+async def card_sources(card_id: int, session: Session, user: CurrentUser):
+    return await svc.sources(session, user.id, card_id)
 
 
 @router.get("", response_model=list[CardOut])

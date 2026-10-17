@@ -183,3 +183,13 @@ async def test_fresh_related_practice_never_expands_a_done_case_child(session):
     qs = await quiz.list_questions(session, 1, QuizParams(ids=[4], fresh=True), True)
     assert [q.id for q in qs] == [4]
     assert qs[0].parent_html
+
+
+@pytest.mark.asyncio
+async def test_cards_do_not_consume_the_daily_question_quota(session):
+    await seed(session)
+    session.add_all([Card(id=i, subject="内科学", part="甲", term=f"卡{i}", body="") for i in range(20, 40)])
+    await session.commit()
+    await configure(session, 4)
+    assert await quiz.plan_day_qids(session, 1, 1)
+    assert await plan_queue.targets(session, 1, 1, "card")
