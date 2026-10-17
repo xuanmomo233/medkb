@@ -10,11 +10,13 @@
 | `web/` | React + TypeScript 网页端，构建后由后端提供 |
 | `app/` | Flutter Android 客户端 |
 | `kb/` | Markdown 原始资料与校对材料，不作为线上 AI 的运行时内容源 |
-| `server/` | 上游题库同步和旧格式导入辅助工具，不是生产 Web 服务 |
+| `server/` | 旧格式同步/导入辅助工具；当前题库同步使用 `backend/scripts/sync_questions.py` |
 | `deploy/` | Docker 镜像及 Compose 配置 |
 | `docs/editorial-current/` | 2026-10-15 内容清理结果 |
 
 生产服务是 Docker 容器 `medkb-api`。网页、App 和 AI 陪学均读取 PostgreSQL 中的当前章节、题目、背卡和教材出处；管理员保存后立即成为三端共同使用的内容。Markdown 仅用于导入、比对和人工校对。
+
+新版同步流程保存上游原文与版本、逐次持久化扫描水位，生成 AI 分类和关联建议，经管理员复核清单发布到同一生产模型。运行方式和同步边界见 [题库同步说明](docs/question-sync.md)。
 
 ## 本地检查
 

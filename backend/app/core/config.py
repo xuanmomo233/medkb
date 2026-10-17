@@ -12,6 +12,7 @@ class Settings(BaseSettings):
     glm_api_key: SecretStr = SecretStr("")
     glm_models: str = "glm-4.7-flash,glm-4.5-air"
     glm_vision_models: str = "glm-5.3-flash"
+    wcyk_token: SecretStr = SecretStr("")
 
     token_ttl_days: int = 90
     img_dir: str = "/data/img"

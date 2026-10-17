@@ -9,7 +9,7 @@ FROM python:3.12-slim
 WORKDIR /srv
 COPY backend/pyproject.toml ./
 COPY backend/app ./app
-RUN pip install --no-cache-dir . \
+RUN pip install --no-cache-dir '.[sync]' \
     && useradd --system --uid 10001 --home /nonexistent --shell /usr/sbin/nologin medkb
 COPY backend/scripts ./scripts
 COPY backend/alembic.ini ./alembic.ini

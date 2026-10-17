@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """万川题库增量同步：
+旧格式数据库辅助工具；当前 v2 使用 backend/scripts/sync_questions.py，见 docs/question-sync.md。
 扫描 id>watermark 的新题目 → 转成行 → INSERT 进 PG + 存档原始 JSON。
 用法: python3 wcyk_sync.py [--batch 500] [--dry]
 """
