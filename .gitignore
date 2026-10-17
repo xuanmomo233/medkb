@@ -24,6 +24,9 @@ node_modules/
 .env
 deploy/.env
 .venv/
+/server/token.txt
+/server/upstream-request.txt
+/server/upstream-login.har
 backend/.pytest_cache/
 
 .devin-apk*/

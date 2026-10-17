@@ -16,7 +16,7 @@
 
 在 `backend` 目录运行，依赖安装为 `python -m pip install -e '.[sync,dev]'`；Docker 镜像已包含同步依赖。
 
-环境配置：`MEDKB_DATABASE_URL` 指向 v2 数据库，`MEDKB_WCYK_TOKEN` 为上游凭据，`MEDKB_GLM_API_KEY` 和 `MEDKB_GLM_MODELS` 沿用现有 AI 配置。分析固定使用配置中第一个模型，便于记录实际模型。凭据不进入记录、报告或错误日志。
+环境配置：`MEDKB_DATABASE_URL` 指向 v2 数据库，`MEDKB_WCYK_TOKEN` 为上游凭据，`MEDKB_GLM_API_KEY` 和 `MEDKB_GLM_MODELS` 沿用现有 AI 配置。分析依次尝试配置的模型，超时或返回无效候选时回退，并记录实际生成有效建议的模型。凭据不进入记录、报告或错误日志。
 
 ```text
 python -m alembic upgrade head
@@ -79,3 +79,15 @@ python scripts/sync_questions.py status
 同步可独立部署为 `deploy/Dockerfile.sync`，使用同一个 v2 数据库与 Docker 网络，不需要重启网页/API。`deploy/run-question-sync.sh` 安装到 `/opt/medkb-v2/question-sync/run.sh`，读取该目录 `.env`，使用 `medkb-question-sync:current` 镜像。凭据缺失时记录 `waiting_credentials`，不会误报同步成功；`status.json` 分别保留周期运行、登录探测和状态查询的结果。
 
 建议每日 03:00 运行 `run.sh cycle`，完整目录检查后分析最多 50 个变更版本。原题来源、版本和待审提案持久化在数据库中；运行日志按模式保留当前一份。首次需运行 `run.sh probe` 验证登录及章节分页，再开启正常接入。Docker `--env-file` 文件使用实际值 `KEY=value`，不要额外包引号。
+
+## 现场登录材料接入
+
+旧 `server/wcyk_api.py` 的 `encode_token()` 会现场生成带时间戳的请求 Token，其输入仍是已登录会话的基础令牌。项目没有替代用户重新登录微信小程序的流程。
+
+新版 `backend/scripts/configure_upstream.py` 接受基础令牌、登录后完整请求 URL、请求中的加密 Token、登录 JSON 或 HAR。它按同一协议提取基础令牌，并实际读取已知上游题目确认登录有效后，才原子更新 `MEDKB_WCYK_TOKEN`；失败保留原配置。HAR 只提取 `api.ixunke.cn/xizongcangqiong/api/` 的请求，材料和令牌不输出到日志。
+
+```text
+python scripts/configure_upstream.py --input-file /private/upstream-request.txt --env-file /config/.env
+```
+
+本地可把登录材料保存为 `server/token.txt`、`server/upstream-request.txt` 或 `server/upstream-login.har`；这三个路径已加入 Git 忽略。向服务器传输后，在同步镜像内执行该入口，再运行 `run.sh probe` 核对章节分页。令牌过期时重复此过程，无需修改同步业务代码。

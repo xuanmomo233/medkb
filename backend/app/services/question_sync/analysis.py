@@ -137,19 +137,26 @@ async def ask_ai(revision, context):
     models = get_settings().glm_model_list
     if not models:
         raise ValueError("未配置用于同步分析的 AI 模型")
-    model = models[0]
-    message = await glm_call([
+    messages = [
         {"role": "system", "content": PROMPT},
         {"role": "user", "content": request},
-    ], models=[model], temperature=0, max_tokens=3000, timeout=90)
-    if not message or not isinstance(message.get("content"), str):
-        raise ValueError("AI 不可用，原始记录已保留；可稍后重试分析")
-    content = message["content"].strip()
-    if content.startswith("```json") and content.endswith("```"):
-        content = content[7:-3].strip()
-    suggestion = Suggestion.model_validate_json(content)
-    suggestion._model = model
-    return suggestion
+    ]
+    for model in models:
+        message = await glm_call(messages, models=[model], temperature=0, max_tokens=3000,
+                                 think="disabled", timeout=60)
+        if not message or not isinstance(message.get("content"), str):
+            continue
+        content = message["content"].strip()
+        if content.startswith("```json") and content.endswith("```"):
+            content = content[7:-3].strip()
+        try:
+            suggestion = Suggestion.model_validate_json(content)
+            validate_suggestion(suggestion, context)
+        except ValueError:
+            continue
+        suggestion._model = model
+        return suggestion
+    raise ValueError("AI 不可用或未返回有效候选建议，原始记录已保留")
 
 
 async def analyze(session, *, limit=50, use_ai=False, ai=ask_ai, refresh_pending=False, errors=None):

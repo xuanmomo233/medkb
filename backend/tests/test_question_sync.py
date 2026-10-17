@@ -359,3 +359,20 @@ async def test_identical_existing_content_builds_a_baseline_without_ai_or_public
     assert revision.local_baseline["system"] == "呼吸系统"
     assert await analyze(session) == []
     assert question.stem == before["stem"] and question.analysis == before["analysis"]
+
+
+@pytest.mark.asyncio
+async def test_ai_fallback_records_the_model_that_produced_valid_suggestions(monkeypatch):
+    from types import SimpleNamespace
+    from app.services.question_sync.analysis import ask_ai
+    calls = []
+    async def fake_call(messages, **kwargs):
+        model = kwargs["models"][0]
+        calls.append(model)
+        return {"content": "not JSON" if model == "primary" else json.dumps(Suggestion().model_dump())}
+    monkeypatch.setattr("app.core.config.get_settings", lambda: SimpleNamespace(glm_model_list=["primary", "fallback"]))
+    monkeypatch.setattr("app.services.glm.glm_call", fake_call)
+    context = dict(exact_ids=[], answer_conflict_ids=[], similar_ids=[], questions=[], cards=[], chapters=[],
+                   citations=[], taxonomy={}, bank_groups=[])
+    suggestion = await ask_ai(SimpleNamespace(normalized={}, source_meta={}), context)
+    assert calls == ["primary", "fallback"] and suggestion._model == "fallback"
