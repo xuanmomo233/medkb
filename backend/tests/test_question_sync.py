@@ -345,3 +345,17 @@ async def test_empty_catalog_still_records_a_completed_run(session):
     assert (await catalog(session, EmptyCatalog()))["chapters"] == 0
     run = await session.scalar(select(SyncRun).where(SyncRun.scope == "catalog"))
     assert run.status == "completed" and run.counts["pages"] == 0
+
+
+@pytest.mark.asyncio
+async def test_identical_existing_content_builds_a_baseline_without_ai_or_publication(session):
+    question, _, _ = await seed(session)
+    before = dict(question.__dict__)
+    assert await ingest(session, raw(99), META) == "unchanged"
+    await session.commit()
+    document = await session.scalar(select(SyncDocument))
+    revision = await session.scalar(select(SyncRevision))
+    assert document.published_version == document.latest_version == 1
+    assert revision.local_baseline["system"] == "呼吸系统"
+    assert await analyze(session) == []
+    assert question.stem == before["stem"] and question.analysis == before["analysis"]

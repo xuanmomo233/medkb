@@ -37,6 +37,7 @@ def upgrade():
         sa.Column("version", sa.Integer(), nullable=False), sa.Column("digest", sa.String(64), nullable=False),
         sa.Column("raw", json_type, nullable=False), sa.Column("normalized", json_type, nullable=False),
         sa.Column("source_meta", json_type, nullable=False),
+        sa.Column("local_baseline", json_type, nullable=False),
         sa.Column("analysis_attempts", sa.Integer(), nullable=False), sa.Column("analysis_error", sa.Text(), nullable=False), created(),
         sa.UniqueConstraint("document_id", "version", name="uq_sync_revision"))
     op.create_index("ix_sync_revisions_document_id", "sync_revisions", ["document_id"])

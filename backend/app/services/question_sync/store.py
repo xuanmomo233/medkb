@@ -6,7 +6,7 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from app.models import Question, SyncCursor, SyncDocument, SyncRevision, SyncRun
-from .normalize import digest, normalize
+from .normalize import digest, normalize, snapshot
 
 
 def utcnow():
@@ -44,10 +44,19 @@ async def ingest(session, raw: dict, source_meta: dict) -> str:
     if doc.question_id is None:
         doc.question_id = await session.scalar(select(Question.id).where(Question.qid == external_id))
     result = "changed" if doc.latest_version or doc.question_id else "new"
+    first_version = doc.latest_version == 0
     doc.latest_version += 1
     doc.latest_hash = fingerprint
+    baseline = {}
+    if first_version and doc.question_id and not doc.validation_error:
+        existing = await session.get(Question, doc.question_id)
+        clinical_fields = ("bank", "qtype", "stem", "options", "answer", "analysis", "parent_stem")
+        if existing is not None and all(getattr(existing, field) == data[field] for field in clinical_fields):
+            baseline = snapshot(existing)
+            doc.published_version = doc.latest_version
+            result = "unchanged"
     session.add(SyncRevision(document_id=doc.id, version=doc.latest_version, digest=fingerprint,
-                             normalized=data, raw=raw, source_meta=source_meta))
+                             normalized=data, raw=raw, source_meta=source_meta, local_baseline=baseline))
     await session.flush()
     return "invalid" if doc.validation_error else result
 

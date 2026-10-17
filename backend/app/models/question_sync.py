@@ -52,6 +52,7 @@ class SyncRevision(Base, CreatedMixin):
     raw: Mapped[dict] = mapped_column(JsonType)
     normalized: Mapped[dict] = mapped_column(JsonType)
     source_meta: Mapped[dict] = mapped_column(JsonType)
+    local_baseline: Mapped[dict] = mapped_column(JsonType, default=dict)
     analysis_attempts: Mapped[int] = mapped_column(default=0)
     analysis_error: Mapped[str] = mapped_column(Text, default="")
 

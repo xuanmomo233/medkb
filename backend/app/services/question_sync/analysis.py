@@ -161,6 +161,7 @@ async def analyze(session, *, limit=50, use_ai=False, ai=ask_ai, refresh_pending
         SyncDocument, SyncDocument.id == SyncRevision.document_id,
     ).outerjoin(SyncProposal, SyncProposal.revision_id == SyncRevision.id).where(
         SyncDocument.latest_version == SyncRevision.version, SyncDocument.validation_error == "", eligible,
+        or_(SyncDocument.published_version.is_(None), SyncDocument.published_version != SyncDocument.latest_version),
     ).order_by(SyncRevision.analysis_attempts, SyncRevision.id).limit(limit))).all()
     if not rows:
         return []

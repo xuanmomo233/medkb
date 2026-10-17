@@ -27,6 +27,8 @@ def parser():
     scan.add_argument("--start", type=int, help="只在该水位首次建立时使用")
     scan.add_argument("--count", type=int, default=500)
     commands.add_parser("catalog", help="遍历题库与章节，发现低 ID 新题及旧题修订")
+    probe = commands.add_parser("probe", help="只读核对登录、题目及章节分页接口")
+    probe.add_argument("--qid", type=int, default=235290)
     load = commands.add_parser("import-json", help="离线上游原文导入，不发布")
     load.add_argument("file", type=Path)
     analyze = commands.add_parser("analyze", help="仅分析新增或变更版本")
@@ -48,9 +50,22 @@ def parser():
 async def run(args):
     try:
         async with AsyncSession(get_engine(), expire_on_commit=False) as session:
-            if args.command in ("scan", "catalog"):
+            if args.command in ("scan", "catalog", "probe"):
                 client = WcykClient(get_settings().wcyk_token.get_secret_value())
                 try:
+                    if args.command == "probe":
+                        records = await client.question(args.qid)
+                        raw, meta = records[0]
+                        bank = client._banks[meta["bank_id"]]
+                        chapter = client._chapters[(meta["bank_id"], meta["chapter_id"])]
+                        first, more = await client.chapter_page(bank, chapter, 1)
+                        second = []
+                        if more:
+                            second, _ = await client.chapter_page(bank, chapter, 2)
+                            if {str(r["id"]) for r, _ in first} & {str(r["id"]) for r, _ in second}:
+                                raise ValueError("上游章节分页重复，不能确认目录完整性")
+                        return dict(authenticated=True, qid=args.qid, records=len(records), bank_id=meta["bank_id"],
+                                    chapter_id=meta["chapter_id"], first_page=len(first), second_page=len(second), has_more=more)
                     if args.command == "catalog":
                         return await store.catalog(session, client)
                     start = args.start

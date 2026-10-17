@@ -23,6 +23,7 @@ python -m alembic upgrade head
 python scripts/sync_questions.py scan --lane frontier --count 500
 python scripts/sync_questions.py scan --lane backfill --start 1 --count 2000
 python scripts/sync_questions.py catalog
+python scripts/sync_questions.py probe --qid 235290
 python scripts/sync_questions.py analyze --limit 50
 python scripts/sync_questions.py report --output report-001.json --review-template review-001.json
 python scripts/sync_questions.py publish review-001.json --actor 1 --dry-run
@@ -63,6 +64,8 @@ python scripts/sync_questions.py status
 
 首次绑定现有题号时，系统无法推断上游原文和人工改题的历史关系，因此要求复核确认。后续使用上一次已发布的上游版本作三方比较：上游没有变化的字段保留人工编辑，双方同时改动的字段列入冲突。
 
+首次接入的题号若已存在，且题库名、题型、题干、选项、答案、解析、材料主干逐字段完全一致，只保存来源基线与原有题目快照，不修改题库、不调用 AI。首次接入存在内容差异时仍进入人工复核。
+
 复核哈希绑定上游版本、本地正文和分析证据。题目在复核期间有修改、候选发生变化或上游有新版时，旧清单被拒绝。使用 `analyze --refresh-pending` 重新生成待审提案；旧哈希失效。相同发布清单重试不会重复创建题目和关联。
 
 ## 定时任务接入
@@ -72,3 +75,7 @@ python scripts/sync_questions.py status
 线上现有旧 cron 使用旧数据库环境文件。本分支未修改线上 cron、数据库或已发布内容；切换时应替换旧命令并确认连接的是 v2 数据库。同一批数据的原文和发布前后快照属于持续审计数据，应保留；它们不是临时下载缓存。
 
 同日检查旧 cron 的依赖，`/opt/medkb/wcyk_sync.py` 存在，但 `/opt/medkb/wcyk_api.py` 和 `/opt/medkb/token.txt` 缺失；当前旧任务不能据 cron 记录认定为正常同步。新版接入应使用容器内此 CLI 和环境凭据。
+
+同步可独立部署为 `deploy/Dockerfile.sync`，使用同一个 v2 数据库与 Docker 网络，不需要重启网页/API。`deploy/run-question-sync.sh` 安装到 `/opt/medkb-v2/question-sync/run.sh`，读取该目录 `.env`，使用 `medkb-question-sync:current` 镜像。凭据缺失时记录 `waiting_credentials`，不会误报同步成功；`status.json` 分别保留周期运行、登录探测和状态查询的结果。
+
+建议每日 03:00 运行 `run.sh cycle`，完整目录检查后分析最多 50 个变更版本。原题来源、版本和待审提案持久化在数据库中；运行日志按模式保留当前一份。首次需运行 `run.sh probe` 验证登录及章节分页，再开启正常接入。Docker `--env-file` 文件使用实际值 `KEY=value`，不要额外包引号。
