@@ -98,7 +98,7 @@ export default function CardRunner({ cards: initial, query, storeKey, onRestart,
     if (jump || editOpen) return
     const h = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement
-      if (t.closest('input, textarea, select, [contenteditable="true"]') || e.ctrlKey || e.metaKey || e.altKey) return
+      if (document.querySelector('[role="dialog"]') || t.closest('input, textarea, select, [contenteditable="true"]') || e.ctrlKey || e.metaKey || e.altKey) return
       if (e.key === 'ArrowLeft') go(idx - 1)
       else if (e.key === 'ArrowRight') go(idx + 1)
       else if (!card) return

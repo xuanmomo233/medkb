@@ -179,6 +179,10 @@ async def _flag_counts(session: AsyncSession, model, user_id: int, now: datetime
 
 
 async def _count_seen_since(session: AsyncSession, model, user_id: int, since: datetime) -> int:
+    if model is QuestionProgress:
+        return int(await session.scalar(select(func.count(func.distinct(Attempt.question_id))).where(
+            Attempt.user_id == user_id, Attempt.created_at >= since, Attempt.picked != "",
+        )))
     return int(
         (
             await session.execute(

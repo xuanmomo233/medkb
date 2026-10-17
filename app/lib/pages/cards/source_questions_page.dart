@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import '../../api.dart';
 import '../../endpoints.dart';
 import '../../models.dart' hide Card;
-import '../../theme.dart';
 import '../../widgets/widgets.dart';
-import '../quiz/option_tile.dart';
+import '../../nav.dart';
 
 /// 背卡关联源题浏览页：左右滑动/按钮切换，返回时回到背卡原位置。
 class SourceQuestionsPage extends StatefulWidget {
@@ -76,7 +75,11 @@ class _SourceQuestionsPageState extends State<SourceQuestionsPage> {
                   itemBuilder: (BuildContext ctx, int i) {
                     final SourceQuestion src = widget.list[i];
                     final Question? q = _find(src.id);
-                    return _SourceBody(src: src, q: q);
+                    return _SourceBody(src: src, q: q, onPractice: (bool readOnly) async {
+                      await openQuizRun(context, QuizRunArgs(ids: <int>[src.id], initialQuestionId: src.id,
+                        title: '源题练习', mode: readOnly ? QuizMode.recite : QuizMode.practice));
+                      if (mounted) _load();
+                    });
                   },
                 ),
       bottomNavigationBar: widget.list.length > 1
@@ -126,15 +129,13 @@ class _SourceQuestionsPageState extends State<SourceQuestionsPage> {
 class _SourceBody extends StatelessWidget {
   final SourceQuestion src;
   final Question? q;
-  const _SourceBody({required this.src, required this.q});
+  final void Function(bool readOnly) onPractice;
+  const _SourceBody({required this.src, required this.q, required this.onPractice});
 
   @override
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final AppColors c = AppColors.of(context);
     final Question? qq = q;
-    final String analysis =
-        (qq != null && qq.analysisHtml.isNotEmpty) ? qq.analysisHtml : src.analysisHtml;
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
       children: <Widget>[
@@ -166,39 +167,13 @@ class _SourceBody extends StatelessWidget {
         HtmlView(qq != null && qq.stemHtml.isNotEmpty ? qq.stemHtml : src.stemHtml),
         if (qq != null && qq.optionsHtml.isNotEmpty) ...<Widget>[
           const SizedBox(height: 10),
-          OptionList(
-            q: qq,
-            picked: '',
-            judged: true,
-            reveal: true,
-            stat: null,
-            onPick: (_) {},
-          ),
+          for (int i = 0; i < qq.optionsHtml.length; i++)
+            ListTile(title: HtmlView(qq.optionsHtml[i]), leading: Text(String.fromCharCode(65 + i))),
         ],
         const SizedBox(height: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            color: c.goodSoft,
-            borderRadius: BorderRadius.circular(10),
-          ),
-          child: Text.rich(TextSpan(children: <InlineSpan>[
-            const TextSpan(text: '正确答案 '),
-            TextSpan(
-              text: qq != null && qq.answer.isNotEmpty ? qq.answer : src.answer,
-              style: TextStyle(
-                  fontWeight: FontWeight.w800, fontSize: 16, color: c.good),
-            ),
-          ])),
-        ),
-        const SizedBox(height: 12),
-        Text('解析',
-            style: TextStyle(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-                color: cs.onSurfaceVariant)),
-        const SizedBox(height: 4),
-        HtmlView(analysis.isEmpty ? '<p>本题暂无解析</p>' : analysis),
+        Text(qq?.done == true ? '已作答' : '未作答'),
+        FilledButton(onPressed: () => onPractice(false), child: const Text('开始作答')),
+        TextButton(onPressed: () => onPractice(true), child: const Text('只看解析')),
       ],
     );
   }

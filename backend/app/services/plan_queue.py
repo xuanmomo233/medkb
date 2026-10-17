@@ -36,6 +36,8 @@ async def _sync(session: AsyncSession, uid: int, tasks: list[PlanTask]) -> None:
                   else card_merges.resolve(cards, task.target_id))
         if task.completed_at is None and target in done:
             task.completed_at = done[target] or utcnow()
+        elif task.kind == "question" and target not in done:
+            task.completed_at = None
 
 
 def _assign(plan: UserPlan, units: list[list[PlanTask]], start=None) -> None:

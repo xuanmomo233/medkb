@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Attempt, PlanTask, Question, QuestionMerge, QuestionProgress, QuestionRelation
+from app.models import Attempt, PlanTask, Question, QuestionMerge, QuestionRelation
 from app.services.question_groups import batches
 
 
@@ -27,11 +27,6 @@ async def answered(session: AsyncSession, uid: int, mapping: dict[int, int]) -> 
         select(Attempt.question_id, func.max(Attempt.created_at))
         .where(Attempt.user_id == uid, Attempt.picked != "")
         .group_by(Attempt.question_id)
-    )).all()
-    # Explicitly marking a question mastered also satisfies a first-pass task.
-    rows += (await session.execute(
-        select(QuestionProgress.question_id, QuestionProgress.last_seen_at)
-        .where(QuestionProgress.user_id == uid, QuestionProgress.mastered.is_(True))
     )).all()
     out = {}
     for qid, at in rows:

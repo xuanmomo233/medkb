@@ -11,7 +11,7 @@ from test_plan_queue import seed
 
 
 @pytest.mark.asyncio
-async def test_sources_route_supports_legacy_client_and_preserves_study_history(session):
+async def test_sources_route_is_read_only_and_preserves_study_history(session):
     await seed(session)
     app = FastAPI()
     app.include_router(router, prefix="/api")
@@ -54,3 +54,45 @@ async def test_card_sources_requires_login():
     app.dependency_overrides[get_session] = db
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
         assert (await client.get("/api/cards/10/sources")).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_source_answer_updates_plan_and_pool_while_mastery_and_reading_do_not(session):
+    from app.api import quiz, today, progress
+
+    await seed(session)
+    app = FastAPI()
+    for routes in (router, quiz.router, today.router, progress.router):
+        app.include_router(routes, prefix="/api")
+
+    async def db():
+        yield session
+
+    app.dependency_overrides[get_session] = db
+    app.dependency_overrides[current_user] = lambda: User(id=1, username="learner", password_hash="x")
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+        await client.put("/api/plan/config", json={"total_days": 1, "items": [
+            {"subject": "内科学", "part": "甲"}, {"subject": "内科学", "part": "乙"},
+        ]})
+        await client.get("/api/cards/10/sources")
+        await client.get("/api/quiz/questions/1")  # Reading an explanation is not an answer.
+        await client.post("/api/progress/mark", json={"target_type": "question", "target_id": 1, "action": "master"})
+        state = (await client.get("/api/plan")).json()
+        assert state["pending_questions"] == 4
+        pool = (await client.get("/api/quiz/pool")).json()
+        assert pool["stats"]["done"] == 0 and pool["stats"]["mastered"] == 1
+        todo = (await client.get("/api/quiz/pool", params={"flt": "todo"})).json()
+        assert 1 in [item["id"] for item in todo["items"]]
+        assert (await client.get("/api/quiz/pool", params={"flt": "done"})).json()["items"] == []
+        assert (await client.get("/api/today")).json()["done_today"] == 0
+        assert (await client.post("/api/quiz/attempts", json={"question_id": 1, "picked": [1]})).json()["correct"] is False
+        state = (await client.get("/api/plan")).json()
+        assert state["pending_questions"] == 3
+        assert all(item["question_done"] == 1 for item in state["items"])
+        pending = (await client.get("/api/quiz/questions", params={"plan_day": 1})).json()
+        assert 1 not in [item["id"] for item in pending]
+        source = (await client.get("/api/cards/10/sources")).json()[0]
+        assert source["done"] is True
+        pool = (await client.get("/api/quiz/pool")).json()
+        assert pool["stats"]["done"] == 1
+        assert (await client.get("/api/today")).json()["done_today"] == 1

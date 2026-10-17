@@ -14,7 +14,7 @@ from app.models import Attempt, Card, CardQuestion, Question, QuestionProgress a
 from app.schemas import quiz as S
 from app.services import plan_queue, provenance, question_links, schedule_progress
 from app.services.glm import glm_call
-from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, level_conditions, pool_flt_condition
+from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, answered_condition, level_conditions, pool_flt_condition
 from app.services.question_groups import batches, complete_question_ids, group_key, legacy_case_parts
 from app.services.card_merges import visible
 
@@ -74,7 +74,7 @@ def _tags(q: Question) -> list[str]:
 # ---------------- facets ----------------
 async def facets(session: AsyncSession, uid: int, p: QuizParams) -> dict:
     out: dict[str, dict[str, list[int]]] = {}
-    done = func.coalesce(func.sum(case((QP.last_seen_at.isnot(None), 1), else_=0)), 0)
+    done = func.coalesce(func.sum(case((answered_condition(uid), 1), else_=0)), 0)
     for i, lv in enumerate(LEVELS):
         col = getattr(Question, lv)
         stmt = (
@@ -117,7 +117,7 @@ async def _latest_attempts(session: AsyncSession, uid: int, qids: list[int]) -> 
     for chunk in batches(qids):
         sub = (
             select(func.max(Attempt.id))
-            .where(Attempt.user_id == uid, Attempt.question_id.in_(chunk))
+            .where(Attempt.user_id == uid, Attempt.question_id.in_(chunk), Attempt.picked != "")
             .group_by(Attempt.question_id)
         )
         rows = (await session.execute(select(Attempt).where(Attempt.id.in_(sub)))).scalars().all()
@@ -212,7 +212,7 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
                 analysis_html="" if (lite or empty) else md(q.analysis),
                 analysis_empty=empty, tags=_tags(q),
                 state=derive_state(qp), starred=bool(qp and qp.starred),
-                done=bool(qp and qp.last_seen_at is not None),
+                done=a is not None,
                 last_picked=a.picked if a else "", last_correct=a.is_correct if a else None,
             )
         )
@@ -413,7 +413,7 @@ async def pool(session: AsyncSession, uid: int, p: QuizParams, flt: str | None, 
     st = (
         await session.execute(
             select(
-                func.count(Question.id), cnt(QP.last_seen_at.isnot(None)), cnt(QP.in_wrongbook.is_(True)),
+                func.count(Question.id), cnt(answered_condition(uid)), cnt(QP.in_wrongbook.is_(True)),
                 cnt(QP.starred.is_(True)), cnt(QP.in_plan.is_(True)), cnt(QP.mastered.is_(True)),
             ).select_from(Question).outerjoin(QP, join_qp).where(*conds)
         )
@@ -428,13 +428,13 @@ async def pool(session: AsyncSession, uid: int, p: QuizParams, flt: str | None, 
             func.sum(case((Attempt.is_correct.is_(False), 1), else_=0)).label("w"),
             func.max(case((Attempt.is_correct.is_(False), Attempt.created_at))).label("wts"),
         )
-        .where(Attempt.user_id == uid).group_by(Attempt.question_id).subquery()
+        .where(Attempt.user_id == uid, Attempt.picked != "").group_by(Attempt.question_id).subquery()
     )
     stmt = (
         select(Question, QP, att.c.n, att.c.w, att.c.wts)
         .outerjoin(QP, join_qp).outerjoin(att, att.c.qid == Question.id).where(*conds)
     )
-    fc = pool_flt_condition(flt)
+    fc = pool_flt_condition(flt, uid=uid)
     if fc is not None:
         stmt = stmt.where(fc)
     rows = (await session.execute(stmt.order_by(Question.id).offset(offset).limit(size))).all()
@@ -442,7 +442,7 @@ async def pool(session: AsyncSession, uid: int, p: QuizParams, flt: str | None, 
         S.PoolItem(
             id=q.id, qid=q.qid, stem=snippet(q.stem), answer=q.answer or "", source=q.source_file or "",
             tags=_tags(q), state=derive_state(qp), starred=bool(qp and qp.starred),
-            in_plan=bool(qp and qp.in_plan), done=bool(qp and qp.last_seen_at is not None),
+            in_plan=bool(qp and qp.in_plan), done=bool(n),
             attempts=int(n or 0), wrong_count=int(w or 0), last_wrong_at=iso(wts),
         )
         for q, qp, n, w, wts in rows

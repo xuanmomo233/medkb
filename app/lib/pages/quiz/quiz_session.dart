@@ -76,7 +76,7 @@ class QuizSession extends ChangeNotifier {
 
   bool get isTest => args.mode == QuizMode.test;
   bool get isRecite => args.mode == QuizMode.recite;
-  bool get trackPos => !isTest && !args.random && !args.shuffle && args.planDay == null && !args.fresh;
+  bool get trackPos => !isTest && !args.random && !args.shuffle && args.planDay == null && !args.fresh && args.initialQuestionId == null;
   int? get _limit => (args.random && args.ids == null) ? 120 : null;
   String get title => (args.title ?? '').isEmpty ? '测试' : args.title!;
 
@@ -113,7 +113,8 @@ class QuizSession extends ChangeNotifier {
       final SharedPreferences p = await SharedPreferences.getInstance();
       if (_disposed) return;
       ans.clear();
-      int start = 0;
+      int start = list.indexWhere((Question q) => q.id == args.initialQuestionId);
+      if (start < 0) start = 0;
       int? resume;
       _deadline = null;
       if (isTest) {

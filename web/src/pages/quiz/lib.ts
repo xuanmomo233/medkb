@@ -20,7 +20,7 @@ export const MODES: { value: QuizMode; label: string; desc: string }[] = [
 
 const FLAGS = ['starred', 'wrong', 'due', 'random', 'shuffle', 'fresh'] as const
 
-export interface RunParams { query: QuizQuery; mode: QuizMode; title: string; mins: number }
+export interface RunParams { query: QuizQuery; mode: QuizMode; title: string; mins: number; startId?: number }
 
 const truthy = (v: string | null) => v === '1' || v === 'true'
 
@@ -44,7 +44,7 @@ export function parseRun(sp: URLSearchParams): RunParams {
   for (const k of FLAGS) if (truthy(sp.get(k))) query[k] = true
   const m = sp.get('mode')
   const mode = MODES.some((x) => x.value === m) ? (m as QuizMode) : 'practice'
-  return { query, mode, title: sp.get('title') ?? '', mins: Math.max(0, Number(sp.get('mins')) || 0) }
+  return { query, mode, title: sp.get('title') ?? '', mins: Math.max(0, Number(sp.get('mins')) || 0), startId: Number(sp.get('start_id')) || undefined }
 }
 
 export function toSearch(o: object): string {

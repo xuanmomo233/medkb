@@ -23,7 +23,7 @@ export function useQuizSession(search: string, p: RunParams) {
   const hash = hashStr(search)
   const testKey = `quiz.test.${hash}`
   const posKey = `quiz.pos.${hash}`
-  const trackPos = mode !== 'test' && !query.random && !query.shuffle && query.plan_day === undefined && !query.fresh
+  const trackPos = mode !== 'test' && !query.random && !query.shuffle && query.plan_day === undefined && !query.fresh && !p.startId
 
   const [questions, setQuestions] = useState<Question[]>([])
   const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading')
@@ -50,7 +50,7 @@ export function useQuizSession(search: string, p: RunParams) {
     api.questions({ ...query, lite: true }).then((list) => {
       if (off) return
       const next: Record<number, Ans> = {}
-      let i = 0
+      let i = Math.max(0, list.findIndex((question) => question.id === p.startId))
       const sig = hashStr(list.map((q) => q.id).join(','))
       const saved = mode === 'test' ? readJson<TestSave>(sessionStorage, testKey) : null
       if (mode === 'test') {
@@ -71,7 +71,7 @@ export function useQuizSession(search: string, p: RunParams) {
       setStatus('ready')
     }, (e: unknown) => { if (!off) { setError(e); setStatus('error') } })
     return () => { off = true }
-  }, [query, mode, mins, testKey, posKey, trackPos, reloadKey])
+  }, [query, mode, mins, testKey, posKey, trackPos, reloadKey, p.startId])
 
   const q: Question | undefined = useMemo(() => {
     const base = questions[idx]

@@ -62,7 +62,7 @@ async def test_progress_filters_select_seed_not_sibling_progress(session, flag):
     out = await quiz.list_questions(session, 1, QuizParams(**{flag: True}), True)
     assert [q.id for q in out] == [2, 7, 9]
     assert out[0].state == "mastered"
-    assert out[1].starred and out[1].done
+    assert out[1].starred and not out[1].done  # Flags and last_seen are not an answer.
     assert not out[2].starred and not out[2].done
 
 

@@ -26,6 +26,7 @@ class QuizRunArgs {
   final bool fresh;
   final List<ScheduleItem> scheduleItems;
   final int scheduleIndex;
+  final int? initialQuestionId;
   /// QuizMode 常量：practice / recite / quick / test
   final String mode;
   final String? title;
@@ -45,6 +46,7 @@ class QuizRunArgs {
     this.fresh = false,
     this.scheduleItems = const <ScheduleItem>[],
     this.scheduleIndex = 0,
+    this.initialQuestionId,
     this.mode = QuizMode.practice,
     this.title,
     this.mins,

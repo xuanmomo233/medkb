@@ -148,6 +148,6 @@ class _SourceQuestionsButtonState extends State<_SourceQuestionsButton> {
   Widget build(BuildContext context) => TextButton.icon(
     onPressed: _busy ? null : _open,
     icon: const Icon(Icons.menu_book, size: 18),
-    label: Text(_busy ? '正在加载源题…' : '源题详解'),
+    label: Text(_busy ? '正在加载源题…' : '源题练习与解析'),
   );
 }

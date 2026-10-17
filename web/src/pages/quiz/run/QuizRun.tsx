@@ -21,10 +21,10 @@ function fmtRemain(sec: number) {
 export default function QuizRun() {
   const [sp] = useSearchParams()
   const search = sp.toString()
-  return <Session key={search} search={search} />
+  return <QuizExercise key={search} search={search} />
 }
 
-function Session({ search }: { search: string }) {
+export function QuizExercise({ search, onBack }: { search: string; onBack?: () => void }) {
   const nav = useNavigate()
   const p = useMemo(() => parseRun(new URLSearchParams(search)), [search])
   const S = useQuizSession(search, p)
@@ -57,9 +57,9 @@ function Session({ search }: { search: string }) {
 
   return (
     <div className={s.wrap}>
-      <ScheduleNavigation />
+      {!onBack && <ScheduleNavigation />}
       <header className={s.top}>
-        <Button variant="ghost" size="sm" onClick={() => nav('/quiz')} aria-label="返回"><Icon name="chevLeft" size={14} /> 返回</Button>
+        <Button variant="ghost" size="sm" onClick={onBack ?? (() => nav('/quiz'))} aria-label="返回"><Icon name="chevLeft" size={14} /> 返回</Button>
         <span className={s.topTitle}>{p.title || modeLabel}</span>
         {!test && <Button size="sm" variant="ghost" onClick={S.resetSession}>本次重练</Button>}
         {test && S.remaining !== null && (

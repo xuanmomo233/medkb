@@ -2,9 +2,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
-from sqlalchemy import and_, or_
+from sqlalchemy import and_, or_, select
 
-from app.models import Question, QuestionProgress
+from app.models import Attempt, Question, QuestionProgress
 
 LEVELS = ("bank_group", "bank", "subject_dir", "system", "chapter", "qtype")
 SEP = "·"
@@ -68,14 +68,20 @@ def progress_conditions(p: QuizParams, qp=QuestionProgress) -> list:
     return conds
 
 
-def pool_flt_condition(flt: str | None, qp=QuestionProgress):
+def answered_condition(uid: int):
+    return select(Attempt.id).where(
+        Attempt.user_id == uid, Attempt.question_id == Question.id, Attempt.picked != "",
+    ).exists()
+
+
+def pool_flt_condition(flt: str | None, qp=QuestionProgress, *, uid: int):
     if not flt:
         return None
     if flt not in POOL_FLTS:
         raise HTTPException(400, "flt 参数无效，可选：" + "/".join(POOL_FLTS))
     return {
-        "done": qp.last_seen_at.isnot(None),
-        "todo": qp.last_seen_at.is_(None),
+        "done": answered_condition(uid),
+        "todo": ~answered_condition(uid),
         "wrong": qp.in_wrongbook.is_(True),
         "starred": qp.starred.is_(True),
         "plan": qp.in_plan.is_(True),
