@@ -22,7 +22,7 @@ ALIAS = {
     "室速": "室性心动过速", "房早": "房性期前收缩", "高钾": "高钾血症",
     "低钾": "低钾血症", "呼衰": "呼吸衰竭", "肾综": "肾病综合征",
     "肾炎": "肾小球肾炎", "瓣膜": "心脏瓣膜病", "癌症": "肿瘤",
-    "癌肿": "肿瘤", "肿瘤分期": "肿瘤", "分期": "肿瘤",
+    "癌肿": "肿瘤", "肿瘤分期": "肿瘤",
 }
 KNOWN_NAMES = sorted(set(ALIAS.values()) | {
     "生理学", "生物化学", "病理学", "诊断学", "内科学", "外科学", "医学人文",
@@ -84,8 +84,11 @@ def _window(text: str, limit: int, terms: list[str], offset: int | None = None) 
         start = max(0, min(offset, len(text)))
     else:
         lower = text.lower()
+        # The first term is the literal query. An alias is a fallback, not a
+        # reason to jump away from an exact section title or quoted passage.
+        locator_terms = terms[:1] if terms and terms[0].lower() in lower else terms
         candidates = []
-        for term in terms:
+        for term in locator_terms:
             position = 0
             # Bound work even when a common term occurs thousands of times.
             for _ in range(16):
@@ -98,7 +101,7 @@ def _window(text: str, limit: int, terms: list[str], offset: int | None = None) 
             def score(position):
                 start = max(0, position - limit // 4)
                 fragment = lower[start:start + limit]
-                return (sum(term.lower() in fragment for term in terms), -position)
+                return (sum(term.lower() in fragment for term in locator_terms), -position)
             hit = max(candidates, key=score)
         start = max(0, hit - limit // 4) if hit is not None else 0
         if start and hit is not None:

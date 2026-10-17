@@ -208,6 +208,37 @@ def test_plain_removes_known_html_tags_without_swallowing_medical_text():
     assert "PaO 2 <60" in result
 
 
+@pytest.mark.parametrize("query", ["CKD分期", "教材校注·透析时机与历史分期", "心功能分期"])
+def test_generic_staging_does_not_expand_to_tumor(query):
+    assert "肿瘤" not in knowledge.expand_aliases(query)
+    assert knowledge.expand_aliases("肿瘤分期") == "肿瘤分期"
+
+
+@pytest.mark.parametrize("short_name", ["心衰", "高钾", "肾炎"])
+def test_window_prefers_literal_query_over_earlier_alias(short_name):
+    alias = knowledge.ALIAS[short_name]
+    query = "教材" + short_name + "定位小节"
+    body = (alias + "相关内容。\n") * 600 + "\n## 精确小节\n" + query + "原文定位。"
+    start, end, hit = knowledge._window(body, 500, knowledge._terms(query))
+    assert hit == body.index(query)
+    assert query + "原文定位。" in body[start:end]
+
+
+@pytest.mark.asyncio
+async def test_read_and_ai_tool_prefer_exact_heading_over_aliases(session):
+    query = "教材校注·透析时机与历史分期"
+    body = "## 肿瘤\n" + "肿瘤基础知识。\n" * 1200 + "## " + query + "\n精确校注内容。"
+    session.add(chapter(6, body))
+    await session.commit()
+    for result in [
+        await knowledge.read(session, "#6", query=query),
+        await chat_agent._tool_exec("kb_read", {"name": "#6", "query": query}, session, []),
+    ]:
+        assert query in result
+        assert "精确校注内容。" in result
+        assert extract_range(result)[0] > 4000
+
+
 @pytest.mark.asyncio
 async def test_search_preserves_real_respiratory_comparison_content(session):
     original = "AB>SB呼酸、AB<SB呼碱。ARDS：PAWP<12，心源性>18"
