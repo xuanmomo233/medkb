@@ -25,6 +25,10 @@ class UpstreamError(Exception):
     pass
 
 
+class AuthenticationRequired(UpstreamError):
+    pass
+
+
 def encode_token(token: str) -> str:
     # Same token protocol as server/wcyk_api.py; credentials stay in environment.
     from Crypto.Cipher import AES
@@ -81,6 +85,8 @@ class WcykClient:
                     "User-Agent": "Mozilla/5.0 MicroMessenger/7.0.20 MiniProgramEnv/Windows",
                     "x-platform": "mp", "x-systemType": "android",
                 })
+                if response.status_code == 401:
+                    raise AuthenticationRequired("上游登录会话已失效")
                 if response.status_code == 429 or response.status_code >= 500:
                     if attempt < 2:
                         await asyncio.sleep(2 ** attempt)
@@ -94,6 +100,8 @@ class WcykClient:
                 raise UpstreamError("上游网络或响应异常，未推进失败位置") from None
             if not isinstance(payload, dict):
                 raise UpstreamError("不支持的上游响应")
+            if payload.get("errno") == 100143:
+                raise AuthenticationRequired("上游要求重新登录")
             # Unknown error codes can be auth/rate-limit errors, never assume a hole.
             if (payload.get("errno") == 1001 and payload.get("errmsg") == "题目不存在"
                     and path == "/api/question" and "id" in query):

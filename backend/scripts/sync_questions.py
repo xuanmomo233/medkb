@@ -16,7 +16,7 @@ from app.models import Question, SyncCursor, SyncDocument, SyncRevision, SyncRun
 from app.services.question_sync import analysis, store  # noqa: E402
 from app.services.question_sync.publish import publish  # noqa: E402
 from app.services.question_sync.schemas import ReviewPlan  # noqa: E402
-from app.services.question_sync.upstream import WcykClient  # noqa: E402
+from app.services.question_sync.upstream import AuthenticationRequired, WcykClient  # noqa: E402
 
 
 def parser():
@@ -144,6 +144,9 @@ if __name__ == "__main__":
         print(json.dumps(result, ensure_ascii=False, indent=2))
         if isinstance(result, dict) and result.get("failures"):
             raise SystemExit(2)
+    except AuthenticationRequired:
+        print("上游会话失效，需要重新导入现场登录材料；原进度已保留。", file=sys.stderr)
+        raise SystemExit(78)
     except Exception as error:
         # Never emit HTTP exception URLs (upstream token is a query parameter).
         if isinstance(error, ValueError):

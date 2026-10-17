@@ -91,3 +91,5 @@ python scripts/configure_upstream.py --input-file /private/upstream-request.txt 
 ```
 
 本地可把登录材料保存为 `server/token.txt`、`server/upstream-request.txt` 或 `server/upstream-login.har`；这三个路径已加入 Git 忽略。向服务器传输后，在同步镜像内执行该入口，再运行 `run.sh probe` 核对章节分页。令牌过期时重复此过程，无需修改同步业务代码。
+
+上游返回实际登录错误 `100143` 或 HTTP 401 时，任务保留当前水位、返回退出码 78，并进入等待登录凭据状态。它不能用项目自己的登录凭据替代万川会话，也不能在没有用户登录的情况下生成基础令牌。

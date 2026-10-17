@@ -29,6 +29,19 @@ def test_rejects_other_sites_and_configuration_injection():
 
 
 @pytest.mark.asyncio
+async def test_real_login_error_requests_reauthentication_without_hiding_it_as_missing():
+    import httpx
+    from app.services.question_sync.upstream import AuthenticationRequired, WcykClient
+    client = WcykClient("test-session-value", client=httpx.AsyncClient(transport=httpx.MockTransport(
+        lambda _: httpx.Response(200, json={"errno": 100143, "errmsg": "需要登录", "data": None}))), delay=0)
+    try:
+        with pytest.raises(AuthenticationRequired):
+            await client.request("/api/question", {"id": 123}, auth=False)
+    finally:
+        await client.close()
+
+
+@pytest.mark.asyncio
 async def test_credential_install_requires_upstream_validation_and_preserves_other_settings(tmp_path):
     spec = importlib.util.spec_from_file_location("configure_upstream", Path(__file__).resolve().parents[1] / "scripts/configure_upstream.py")
     module = importlib.util.module_from_spec(spec)
