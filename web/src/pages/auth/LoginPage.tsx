@@ -3,7 +3,7 @@ import type { FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { api } from '@/api/endpoints'
 import { useAuth } from '@/app/auth'
-import { Button, Field, Icon, Input, Segmented, useToast } from '@/ui'
+import { Button, Field, Input, Segmented, useToast } from '@/ui'
 import s from './auth.module.css'
 
 type Mode = 'login' | 'register'
@@ -60,7 +60,7 @@ export default function LoginPage() {
   return (
     <div className={s.page}>
       <form className={s.card} onSubmit={submit} noValidate>
-        <div className={s.logo} aria-hidden="true"><Icon name="med" size={40} /></div>
+        <img className={s.logo} src="/brand-pulse-192.png" width={64} height={64} alt="" aria-hidden="true" />
         <h1 className={s.title}>医学知识库</h1>
         <p className={s.slogan}>刷题、背卡、AI 陪学，西综备考一站搞定</p>
         <Segmented<Mode> value={mode} onChange={(m) => { setMode(m); setErrors({}); setFormError('') }}

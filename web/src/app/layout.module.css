@@ -2,7 +2,7 @@
 
 .sidebar { position: sticky; top: 0; height: 100vh; width: var(--sidebar-w); flex: none; display: flex; flex-direction: column; padding: 18px 12px; background: var(--surface); border-right: 1px solid var(--line); }
 .brand { display: flex; align-items: center; gap: 10px; padding: 4px 10px 18px; font-size: 17px; font-weight: 700; color: var(--text); }
-.logo { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 9px; background: var(--brand); color: #fff; font-size: 17px; }
+.logo { display: block; flex-shrink: 0; width: 32px; height: 32px; border-radius: 9px; object-fit: cover; }
 .nav { display: flex; flex-direction: column; gap: 2px; }
 .navItem { display: flex; align-items: center; gap: 12px; height: 42px; padding: 0 12px; border-radius: var(--radius-sm); color: var(--text-2); font-size: 15px; text-decoration: none !important; }
 .navItem:hover { background: var(--surface-2); color: var(--text); }

@@ -24,7 +24,7 @@ export default function Layout() {
   return (
     <div className={s.shell}>
       <aside className={s.sidebar}>
-        <div className={s.brand}><span className={s.logo}><Icon name="med" size={22} /></span>医学知识库</div>
+        <div className={s.brand}><img className={s.logo} src="/brand-pulse-192.png" width={32} height={32} alt="" aria-hidden="true" />医学知识库</div>
         <nav className={s.nav} aria-label="主导航">
           {NAV.map((n) => (
             <NavLink key={n.to} to={n.to} end={n.end} className={({ isActive }) => `${s.navItem} ${isActive ? s.navActive : ''}`}>

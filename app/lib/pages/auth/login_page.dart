@@ -112,7 +112,8 @@ class _LoginPageState extends State<LoginPage> {
                     child: const Text('取消')),
                 FilledButton(
                   onPressed: () {
-                    final String v = c.text.trim().replaceAll(RegExp(r'/+$'), '');
+                    final String v =
+                        c.text.trim().replaceAll(RegExp(r'/+$'), '');
                     final String? e = Api.validateBase(v);
                     if (e != null) {
                       setSt(() => err = e);
@@ -167,16 +168,15 @@ class _LoginPageState extends State<LoginPage> {
                     GestureDetector(
                       onLongPress: _configServer,
                       child: Center(
-                        child: Container(
-                          width: 72,
-                          height: 72,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: cs.primary,
-                            borderRadius: BorderRadius.circular(20),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(20),
+                          child: Image.asset(
+                            'assets/branding/pulse-cards.png',
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                            excludeFromSemantics: true,
                           ),
-                          child: Icon(Icons.monitor_heart,
-                              size: 40, color: cs.onPrimary),
                         ),
                       ),
                     ),

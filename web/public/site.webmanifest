@@ -1,0 +1,15 @@
+{
+  "id": "/",
+  "name": "医学知识库",
+  "short_name": "医学知识库",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#0f766e",
+  "background_color": "#f7faf9",
+  "icons": [
+    { "src": "/icon-pulse-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-pulse-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icon-pulse-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

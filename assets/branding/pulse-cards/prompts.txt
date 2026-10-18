@@ -1,0 +1,18 @@
+生成方式：内置 image_gen；尺寸/格式导出：tools/export_pulse_icons.py。
+
+定稿提示词：
+Use case: logo-brand.
+Edit and refine the supplied medical flashcards-with-heartbeat icon into a more compelling, compact MOBILE APP ICON. Keep its core identity: ivory front flashcard, mint rear flashcard, a deep teal single heartbeat waveform, and rich ocean teal background. Preserve the beautiful warm ivory/mint/teal colour family.
+
+Crucial design changes:
+- Reshape the arrangement into ONE confident, nearly square compact emblem with clear hierarchy. The front card is the hero. Make it larger and squarer, approximately 1.08:1 width to height, with substantial graceful continuous rounded corners. Show it almost upright, rotated only 2 degrees clockwise, nearly frontal.
+- The mint rear card should be tightly tucked behind it, rotated just 7 degrees counterclockwise, revealing only a restrained broad mint edge at the top and upper left. It must read as a second study card but must not compete with the main card or look like a second floating object.
+- Together the two cards occupy approximately 74% of the canvas width and 70% of its height. Carefully optically centered. Increase the visual solidity and reduce excessive empty space compared with the reference.
+- Redraw the heartbeat as a clear, bold, beautifully balanced deep teal continuous stroke, horizontally centered on the front card. One tall peak and one deep trough between two short horizontal terminals. Rounded caps, rounded joins, constant stroke weight. Around 65% of the front card width and 40% of its height. The waveform must have immediate impact and remain legible at 48px and 32px. A clean dark teal mark on ivory with only the slightest subtle inset effect, not a deep hollow or tunnel.
+- Refine material and lighting: thin satin ceramic cards, gentle broad highlights, very shallow edge depth, short soft contact shadow. Reduce the pronounced cast shadow and strong beveling in the reference. The icon's clarity should come from its shapes and contrast.
+- Keep a saturated smooth emerald-to-ocean teal full-bleed square background, with a restrained lighter tone at the upper left. Quiet, even lighting, no dramatic spotlight.
+
+Aim for the concentrated shape and effortless clarity of an actual well-designed phone app icon, rather than an illustration of objects. Mature, warm, precise, tactile, minimal. No extra embellishments. No text, no cross or plus, no additional symbols, no heart shape, no book, no mascot, no sparkles. Do not show a phone, a presentation board, a surrounding frame or a rounded-square container inside the canvas. Only the refined single square app icon artwork.
+
+透明前景提取提示词：
+Extract the two cards and their existing soft contact shadow from this approved app icon onto a genuinely TRANSPARENT background, for Android adaptive icon foreground production. This is precise background extraction, not a redesign. Preserve both cards pixel-faithfully: the ivory rounded square front card, mint rear card, existing positions, contours, relative scale, tiny rotation, satin highlights and dark teal ECG waveform. Keep the waveform filled deep teal, NOT transparent; preserve its engraved appearance. Remove ONLY the surrounding teal/emerald square background. Do not crop or enlarge the cards; retain the same square canvas and positions as the source. Fade any outer soft shadow naturally into alpha. Do not add anything or change any geometry. Output PNG with alpha, no coloured or checkerboard background.

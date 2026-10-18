@@ -20,13 +20,10 @@
 }
 .logo {
   align-self: center;
-  width: 56px;
-  height: 56px;
-  display: grid;
-  place-items: center;
-  font-size: 30px;
-  color: var(--brand);
-  background: var(--brand-soft);
+  width: 64px;
+  height: 64px;
+  display: block;
+  object-fit: cover;
   border-radius: 16px;
 }
 .title { text-align: center; }
