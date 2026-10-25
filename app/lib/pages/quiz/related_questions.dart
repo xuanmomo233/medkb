@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../api.dart' show errText;
 import '../../endpoints.dart';
 import '../../models.dart' show RelatedQuestion;
 import '../../nav.dart';
@@ -48,7 +49,7 @@ class _RelatedQuestionsState extends State<RelatedQuestions> {
         builder: (BuildContext context, AsyncSnapshot<List<RelatedQuestion>> snapshot) {
           if (snapshot.hasError) {
             return Row(children: <Widget>[
-              const Expanded(child: Text('同类题加载失败')),
+              Expanded(child: Text('同类题加载失败：${errText(snapshot.error!)}')),
               TextButton(onPressed: () => setState(() => _future = Endpoints.relatedQuestions(widget.questionId)),
                 child: const Text('重试')),
             ]);

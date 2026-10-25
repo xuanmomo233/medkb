@@ -84,6 +84,24 @@ def test_table_keeps_cells_entities_and_inline_formatting():
     assert "<strong>" in html
 
 
+def test_markdown_inside_details_renders_images_and_source_text():
+    html = md(
+        "<details><summary>来源题解析（QID 103007，原答案 C）</summary>\n\n"
+        "原解析说明 **动脉血气分析** 最有诊断意义。\n\n"
+        "![图](https://static72.cdn.ixunke.com/images/2026-05-18/answer.png)\n\n"
+        "[查看资料](https://static72.cdn.ixunke.com/source)\n\n</details>"
+    )
+    capture = Capture(html)
+    image = next(attrs for tag, attrs in capture.attrs if tag == "img")
+    link = next(attrs for tag, attrs in capture.attrs if tag == "a")
+    assert "<details>" in html and "</details>" in html
+    assert "来源题解析（QID 103007，原答案 C）" in "".join(capture.data)
+    assert "![图]" not in html and "](https://" not in html
+    assert image["src"].startswith("/img_proxy?u=")
+    assert link["href"].startswith("https://static72.cdn.ixunke.com/")
+    assert "<strong>动脉血气分析</strong>" in html
+
+
 def test_empty_highlight_unmatched_markers_and_empty_content():
     assert "<mark" not in md("==   ==")
     assert "==未闭合" in md("==未闭合")

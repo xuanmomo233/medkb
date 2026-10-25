@@ -141,7 +141,7 @@ class AnalysisPanel extends StatelessWidget {
 
     if (f != null) body.add(CitationList(f.citations));
     if (f != null && allowRelated) {
-      body.add(RelatedQuestions(questionId: q.id, onPracticed: onPracticed));
+      body.add(RelatedQuestions(questionId: f.id, onPracticed: onPracticed));
     }
 
     return AppCard(
