@@ -1,7 +1,7 @@
 name: medkb
 description: 医学知识库学习工具
 publish_to: 'none'
-version: 2.2.1+1
+version: 2.2.2+1
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
