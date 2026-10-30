@@ -198,6 +198,48 @@ async def _latest_attempts(session: AsyncSession, uid: int, qids: list[int]) -> 
     return out
 
 
+async def _latest_attempts_by_root(
+    session: AsyncSession, uid: int, roots: list[int], mapping: dict[int, int], canonical_questions: dict[int, Question]
+) -> dict[int, tuple[str, bool | None]]:
+    members = question_links.identity_members(mapping, roots)
+    member_ids = sorted({qid for group in members.values() for qid in group})
+    latest = await _latest_attempts(session, uid, member_ids)
+
+    source_questions = dict(canonical_questions)
+    alias_ids = [qid for qid in member_ids if qid not in source_questions]
+    for chunk in batches(alias_ids):
+        rows = (await session.scalars(select(Question).where(Question.id.in_(chunk)))).all()
+        source_questions.update((q.id, q) for q in rows)
+
+    out = {}
+    for root, qids in members.items():
+        attempts = [latest[qid] for qid in qids if qid in latest]
+        if not attempts:
+            continue
+        attempt = max(attempts, key=lambda row: row.id)
+        source = source_questions.get(attempt.question_id)
+        target = source_questions.get(root)
+        picked = remap_picked_to_target(
+            attempt.picked, _opts(source), source.option_labels, _opts(target), target.option_labels,
+        ) if source is not None and target is not None else None
+        out[root] = (picked or "", attempt.is_correct)
+    return out
+
+
+async def _progress_by_root(session: AsyncSession, uid: int, roots: list[int], mapping: dict[int, int]) -> dict[int, dict[str, bool]]:
+    roots = {question_links.resolve(mapping, qid) for qid in roots}
+    out = {root: {"in_wrongbook": False, "starred": False, "in_plan": False, "mastered": False}
+           for root in roots}
+    rows = (await session.execute(select(QP).where(QP.user_id == uid))).scalars().all()
+    for qp in rows:
+        root = question_links.resolve(mapping, qp.question_id)
+        if root not in out:
+            continue
+        for field in out[root]:
+            out[root][field] = out[root][field] or bool(getattr(qp, field))
+    return out
+
+
 async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: bool) -> list[S.QuestionOut]:
     plan_ids = None
     if p.plan_day is not None:
@@ -279,9 +321,13 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
         rows_by_id.update((q.id, (q, qp)) for q, qp in rows)
     rows = [rows_by_id[qid] for qid in qids if qid in rows_by_id]
     legacy = await legacy_case_parts(session, [q.id for q, _ in rows if not (q.parent_stem or "").strip()])
-    last = await _latest_attempts(session, uid, [q.id for q, _ in rows])
     mapping = await question_links.redirects(session)
+    canonical_questions = {q.id: q for q, _ in rows}
+    last_by_root = await _latest_attempts_by_root(
+        session, uid, list(canonical_questions), mapping, canonical_questions,
+    )
     done = await question_links.answered(session, uid, mapping)
+    progress = await _progress_by_root(session, uid, [q.id for q, _ in rows], mapping)
     case_members = defaultdict(list)
     for q, _ in rows:
         parent = "\n".join((legacy[q.id][2], legacy[q.id][0])) if q.id in legacy else q.parent_stem
@@ -309,9 +355,10 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
                 answer=q.answer or "",
                 analysis_html="" if (lite or empty) else md(q.analysis),
                 analysis_empty=empty, tags=_tags(q),
-                state=derive_state(qp), starred=bool(qp and qp.starred),
+                state=("mastered" if progress[q.id]["mastered"] else "again" if progress[q.id]["in_wrongbook"] else "plan" if progress[q.id]["in_plan"] else ""),
+                starred=progress[q.id]["starred"],
                 done=question_links.resolve(mapping, q.id) in done,
-                last_picked=a.picked if a else "", last_correct=a.is_correct if a else None,
+                last_picked=last_picked, last_correct=last_correct,
             )
         )
     return out

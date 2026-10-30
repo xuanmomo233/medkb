@@ -131,7 +131,9 @@ async def test_no_automatic_classification_and_only_explicit_related_questions(s
     session.add(CardQuestion(card_id=10, question_id=5))
     await session.commit()
     await configure(session)
-    assert {1, 5}.issubset(set(await quiz.plan_day_qids(session, 1, 1)))
+    plan_ids = set(await quiz.plan_day_qids(session, 1, 1))
+    # Exact-display practice dedup may share work without creating identity links.
+    assert 1 in plan_ids and 5 not in plan_ids
     assert await question_links.related(session, 1, 1) == []
     assert await session.scalar(select(func.count()).select_from(QuestionMerge)) == 0
     assert await session.scalar(select(func.count()).select_from(QuestionRelation)) == 0

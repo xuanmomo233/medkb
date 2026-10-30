@@ -141,21 +141,9 @@ def _located_text(text: str, start: int, end: int, hit: int | None, *, chapter_i
 
 
 def _with_sources(label: str, text: str, citations: list[dict]) -> str:
-    refs = []
-    for citation in citations:
-        ref = provenance.citation_label(citation)
-        note = (citation.get("note") or "").strip()
-        if note:
-            ref += f"\n  出处范围说明：{note}"
-        refs.append(ref)
-    source_line = "\n".join(refs) if refs else "尚无结构化教材出处（内容待按人卫第十版核验）"
-    scope_warning = (
-        "检索引用边界：教材出处关联到章节，不自动证明正文中的每个命题。"
-        "‘已核验’仅支持该条出处备注明确列出的命题；‘待核验’只表示历史定位，不能作为教材证据。"
-        "若备注明确写明某命题未获支持/待追溯，应回答未找到直接教材出处，不得用同章其他页或其他章节替代。"
-    )
-    # Put provenance first so a model context limit cannot discard the evidence boundary.
-    return f"【{label}】\n【教材出处与核验边界】\n{scope_warning}\n教材出处：\n{source_line}\n【正文片段】\n{text}"
+    refs = "；".join(provenance.citation_label(c) for c in citations)
+    source_line = refs if refs else "尚无结构化教材出处（内容待按人卫第十版核验）"
+    return f"【{label}】\n{text}\n教材出处：{source_line}"
 
 
 async def toc(session: AsyncSession, limit: int = 6000) -> str:
@@ -209,15 +197,13 @@ async def search(session: AsyncSession, query: str, limit: int = 3) -> list[str]
     chosen = candidates[:max(1, min(limit, 8))]
     by_type: dict[str, list[int]] = {}
     for _, target_type, target_id, _, _ in chosen:
-        if target_type == "card":
-            by_type.setdefault(target_type, []).append(target_id)
+        by_type.setdefault(target_type, []).append(target_id)
     citations = {
         target_type: await provenance.citations_for_targets(session, target_type, ids)
         for target_type, ids in by_type.items()
     }
     return [
-        (_with_sources(label, text, citations.get(target_type, {}).get(target_id, []))
-         if target_type == "card" else f"【{label}】\n【正文片段】\n{text}")
+        _with_sources(label, text, citations.get(target_type, {}).get(target_id, []))
         for _, target_type, target_id, label, text in chosen
     ]
 
@@ -232,30 +218,20 @@ async def read(
     if chapter_id:
         row = await session.get(Chapter, int(chapter_id.group(1)))
     else:
-        exact = (await session.execute(
-            select(Chapter).where(Chapter.title == name).order_by(Chapter.id).limit(11)
-        )).scalars().all()
-        rows = exact
-        if not rows:
-            rows = (await session.execute(
-                select(Chapter).where(Chapter.title.contains(name, autoescape=True)).order_by(Chapter.id).limit(11)
-            )).scalars().all()
-        if len(rows) > 1:
-            options = [f"#{item.id} {item.subject or '未分类'} · {item.title}" for item in rows[:10]]
-            extra = "\n（匹配项超过10条，请缩小章节名或使用目录中的#编号。）" if len(rows) > 10 else ""
-            return (
-                f"章节名“{name}”匹配到多个章节，未自动选择，以免读取错学科或同名旧稿：\n"
-                + "\n".join(options)
-                + extra
-                + "\n请用 kb_read(name=\"#编号\") 明确读取目标章节。"
-            )
-        row = rows[0] if rows else None
+        row = (await session.execute(
+            select(Chapter).where(Chapter.title == name).order_by(Chapter.id).limit(1)
+        )).scalar_one_or_none()
+    if row is None and not chapter_id:
+        row = (await session.execute(
+            select(Chapter).where(Chapter.title.contains(name, autoescape=True)).order_by(Chapter.id).limit(1)
+        )).scalar_one_or_none()
     if row is None:
         return ""
+    citations = await provenance.citations_for_target(session, "chapter", row.id)
     body = _body(row.content_md)
     terms = _terms(query)
     start, end, hit = _window(body, limit, terms, offset)
     text = _located_text(body, start, end, hit, chapter_id=row.id, plain=False)
     if terms and offset is None and hit is None:
         text = f"正文未命中定位词 {json.dumps(query[:100], ensure_ascii=False)}，以下为开头片段。\n{text}"
-    return f"【章节 #{row.id} · {row.subject} · {row.title}】\n【正文片段】\n{text}"
+    return _with_sources(f"章节 #{row.id} · {row.subject} · {row.title}", text, citations)
