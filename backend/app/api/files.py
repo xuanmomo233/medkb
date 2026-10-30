@@ -7,11 +7,13 @@ from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
 import httpx
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, Response
 
 from app.core.config import get_settings
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, Session
+from app.models import TextbookSource
+from sqlalchemy import select
 
 router = APIRouter(tags=["files"])
 
@@ -54,6 +56,40 @@ async def textbook_image(source_key: str, page: int, user: CurrentUser):
         _safe_file(str(source_dir), f"page_{page:04d}.webp"),
         media_type="image/webp",
         headers=_PRIVATE_HEADERS,
+    )
+
+
+async def active_textbook_source(source_key: str, session: Session) -> str:
+    if not _TEXTBOOK_SOURCE.fullmatch(source_key):
+        raise HTTPException(404, "教材不存在")
+    active_key = await session.scalar(
+        select(TextbookSource.key).where(
+            TextbookSource.key == source_key,
+            TextbookSource.active.is_(True),
+        )
+    )
+    if active_key is None:
+        raise HTTPException(404, "教材不存在")
+    return active_key
+
+
+@router.get("/api/textbooks/{source_key}.pdf")
+async def textbook_pdf(
+    source_key: str,
+    user: CurrentUser,
+    active_key: str = Depends(active_textbook_source),
+):
+    """已登录用户按需分段读取已启用教材的PDF原书。"""
+    del user
+    path = _safe_file(get_settings().textbook_pdf_dir, f"{active_key}.pdf")
+    return FileResponse(
+        path,
+        media_type="application/pdf",
+        headers={
+            **_PRIVATE_HEADERS,
+            "Content-Disposition": "inline",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 

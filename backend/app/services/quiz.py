@@ -198,58 +198,14 @@ async def _latest_attempts(session: AsyncSession, uid: int, qids: list[int]) -> 
     return out
 
 
-async def _latest_attempts_by_root(
-    session: AsyncSession, uid: int, roots: list[int], mapping: dict[int, int], canonical_questions: dict[int, Question]
-) -> dict[int, tuple[str, bool | None]]:
-    members = question_links.identity_members(mapping, roots)
-    member_ids = sorted({qid for group in members.values() for qid in group})
-    latest = await _latest_attempts(session, uid, member_ids)
-
-    source_questions = dict(canonical_questions)
-    alias_ids = [qid for qid in member_ids if qid not in source_questions]
-    for chunk in batches(alias_ids):
-        rows = (await session.scalars(select(Question).where(Question.id.in_(chunk)))).all()
-        source_questions.update((q.id, q) for q in rows)
-
-    out = {}
-    for root, qids in members.items():
-        attempts = [latest[qid] for qid in qids if qid in latest]
-        if not attempts:
-            continue
-        attempt = max(attempts, key=lambda row: row.id)
-        source = source_questions.get(attempt.question_id)
-        target = source_questions.get(root)
-        picked = remap_picked_to_target(
-            attempt.picked, _opts(source), source.option_labels, _opts(target), target.option_labels,
-        ) if source is not None and target is not None else None
-        out[root] = (picked or "", attempt.is_correct)
-    return out
-
-
-async def _progress_by_root(session: AsyncSession, uid: int, roots: list[int], mapping: dict[int, int]) -> dict[int, dict[str, bool]]:
-    roots = {question_links.resolve(mapping, qid) for qid in roots}
-    out = {root: {"in_wrongbook": False, "starred": False, "in_plan": False, "mastered": False}
-           for root in roots}
-    rows = (await session.execute(select(QP).where(QP.user_id == uid))).scalars().all()
-    for qp in rows:
-        root = question_links.resolve(mapping, qp.question_id)
-        if root not in out:
-            continue
-        for field in out[root]:
-            out[root][field] = out[root][field] or bool(getattr(qp, field))
-    return out
-
-
 async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: bool) -> list[S.QuestionOut]:
     plan_ids = None
     if p.plan_day is not None:
         plan_ids = await plan_day_qids(session, uid, p.plan_day)
         if not plan_ids:
             return []
-        mapping = await question_links.redirects(session)
-        plan_ids = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in plan_ids))
         if p.ids is not None:
-            mapping = await question_links.redirects(session)
+            mapping = await plan_queue.question_mapping(session, uid, p.ids)
             p = replace(p, ids=list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in p.ids)))
     # Apply filters to lightweight seeds, then complete cases WITHOUT applying
     # progress/type filters to siblings. Only selected children load full content.
@@ -295,14 +251,13 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
         qids = flatten_groups(canonical_groups, limit)
     else:
         qids = await complete_question_ids(session, seed_ids, limit)
-    mapping = await question_links.redirects(session)
-    qids = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in qids))
     if plan_ids is not None:
         # The persisted queue already contains the full case. Never bring a
         # completed child back merely to expand its unfinished sibling.
         selected = set(qids)
         qids = [qid for qid in plan_ids if qid in selected]
     elif p.fresh:
+        mapping = await question_links.redirects(session)
         done = await question_links.answered(session, uid, mapping)
         used = set(done)
         fresh_ids = []
@@ -324,12 +279,9 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
         rows_by_id.update((q.id, (q, qp)) for q, qp in rows)
     rows = [rows_by_id[qid] for qid in qids if qid in rows_by_id]
     legacy = await legacy_case_parts(session, [q.id for q, _ in rows if not (q.parent_stem or "").strip()])
-    canonical_questions = {q.id: q for q, _ in rows}
-    last_by_root = await _latest_attempts_by_root(
-        session, uid, list(canonical_questions), mapping, canonical_questions,
-    )
+    last = await _latest_attempts(session, uid, [q.id for q, _ in rows])
+    mapping = await question_links.redirects(session)
     done = await question_links.answered(session, uid, mapping)
-    progress = await _progress_by_root(session, uid, [q.id for q, _ in rows], mapping)
     case_members = defaultdict(list)
     for q, _ in rows:
         parent = "\n".join((legacy[q.id][2], legacy[q.id][0])) if q.id in legacy else q.parent_stem
@@ -357,12 +309,9 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
                 answer=q.answer or "",
                 analysis_html="" if (lite or empty) else md(q.analysis),
                 analysis_empty=empty, tags=_tags(q),
-                state=("mastered" if progress[q.id]["mastered"] else
-                       "again" if progress[q.id]["in_wrongbook"] else
-                       "plan" if progress[q.id]["in_plan"] else ""),
-                starred=progress[q.id]["starred"],
+                state=derive_state(qp), starred=bool(qp and qp.starred),
                 done=question_links.resolve(mapping, q.id) in done,
-                last_picked=last_picked, last_correct=last_correct,
+                last_picked=a.picked if a else "", last_correct=a.is_correct if a else None,
             )
         )
     return out
@@ -416,12 +365,10 @@ async def _related_cards(session: AsyncSession, qid: int, limit: int) -> list[Ca
 
 
 async def question_full(session: AsyncSession, uid: int, qid: int) -> S.QuestionFull:
-    mapping = await question_links.redirects(session)
-    qid = question_links.resolve(mapping, qid)
     q = await session.get(Question, qid)
     if q is None:
         raise HTTPException(404, "题目不存在")
-    progress = (await _progress_by_root(session, uid, [qid], mapping))[qid]
+    qp = await session.get(QP, (uid, qid))
     empty = not (q.analysis or "").strip()
     cards = await _related_cards(session, qid, 4) if empty else []
     legacy = await legacy_case_parts(session, [qid]) if not (q.parent_stem or "").strip() else {}
@@ -431,8 +378,7 @@ async def question_full(session: AsyncSession, uid: int, qid: int) -> S.Question
         analysis_html="" if empty else md(q.analysis), analysis_empty=empty,
         related_cards=[S.RelatedCard(id=c.id, term=c.term, term_html=md(c.term), hint=c.hint or "", body_html=card_md(c.body)) for c in cards],
         stat=await question_stat(session, qid), tags=_tags(q),
-        state=("mastered" if progress["mastered"] else "again" if progress["in_wrongbook"] else
-               "plan" if progress["in_plan"] else ""), starred=progress["starred"],
+        state=derive_state(qp), starred=bool(qp and qp.starred),
         citations=await provenance.citations_for_target(session, "question", q.id),
     )
 
@@ -597,108 +543,82 @@ async def pool(session: AsyncSession, uid: int, p: QuizParams, flt: str | None, 
     plan_ids = None
     if p.plan_day is not None:
         plan_ids = await plan_day_qids(session, uid, p.plan_day)
-        mapping = await question_links.redirects(session)
-        plan_ids = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in plan_ids))
         if p.ids is not None:
-            mapping = await question_links.redirects(session)
+            mapping = await plan_queue.question_mapping(session, uid, p.ids)
             p = replace(p, ids=list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in p.ids)))
-    conds = all_conditions(p, plan_ids if plan_ids is not None else None, pool_filter=flt)
+    conds = all_conditions(p, plan_ids if plan_ids else None, pool_filter=flt)
     if p.plan_day is not None and not plan_ids:
         conds.append(Question.id.in_([]))
-    stmt = select(Question.id).outerjoin(QP, and_(QP.question_id == Question.id, QP.user_id == uid)).where(*conds)
+    join_qp = and_(QP.question_id == Question.id, QP.user_id == uid)
+
+    def cnt(cond):
+        return func.coalesce(func.sum(case((cond, 1), else_=0)), 0)
+
+    st = (
+        await session.execute(
+            select(
+                func.count(Question.id), cnt(answered_condition(uid)), cnt(QP.in_wrongbook.is_(True)),
+                cnt(QP.starred.is_(True)), cnt(QP.in_plan.is_(True)), cnt(QP.mastered.is_(True)),
+            ).select_from(Question).outerjoin(QP, join_qp).where(*conds)
+        )
+    ).one()
+    stats = S.PoolStats(
+        total=int(st[0]), done=int(st[1]), wrong=int(st[2]), starred=int(st[3]), plan=int(st[4]), mastered=int(st[5])
+    )
+    att = (
+        select(
+            Attempt.question_id.label("qid"),
+            func.count(Attempt.id).label("n"),
+            func.sum(case((Attempt.is_correct.is_(False), 1), else_=0)).label("w"),
+            func.max(case((Attempt.is_correct.is_(False), Attempt.created_at))).label("wts"),
+        )
+        .where(Attempt.user_id == uid, Attempt.picked != "").group_by(Attempt.question_id).subquery()
+    )
+    stmt = (
+        select(Question, QP, att.c.n, att.c.w, att.c.wts, answered_condition(uid))
+        .outerjoin(QP, join_qp).outerjoin(att, att.c.qid == Question.id).where(*conds)
+    )
     fc = pool_flt_condition(flt, uid=uid)
-    scope_ids = list((await session.scalars(stmt.order_by(Question.id))).all())
     if fc is not None:
         stmt = stmt.where(fc)
-        source_ids = list((await session.scalars(stmt.order_by(Question.id))).all())
-    else:
-        source_ids = scope_ids
-    mapping = await question_links.redirects(session)
-    roots = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in source_ids))
-    scope_roots = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in scope_ids))
-    root_state = await _progress_by_root(session, uid, scope_roots, mapping)
-    done = await question_links.answered(session, uid, mapping)
-    stats = S.PoolStats(
-        total=len(scope_roots), done=sum(root in done for root in scope_roots),
-        wrong=sum(root_state[root]["in_wrongbook"] for root in scope_roots),
-        starred=sum(root_state[root]["starred"] for root in scope_roots),
-        plan=sum(root_state[root]["in_plan"] for root in scope_roots),
-        mastered=sum(root_state[root]["mastered"] for root in scope_roots),
-    )
-    page_ids = roots[offset:offset + size]
-    members = question_links.identity_members(mapping, page_ids)
-    member_ids = {qid for root in page_ids for qid in members[root]}
-    attempt_stats: dict[int, list] = {root: [0, 0, None] for root in page_ids}
-    for chunk in batches(list(member_ids)):
-        rows = (await session.execute(
-            select(
-                Attempt.question_id, func.count(Attempt.id),
-                func.sum(case((Attempt.is_correct.is_(False), 1), else_=0)),
-                func.max(case((Attempt.is_correct.is_(False), Attempt.created_at))),
-            ).where(Attempt.user_id == uid, Attempt.question_id.in_(chunk), Attempt.picked != "")
-            .group_by(Attempt.question_id)
-        )).all()
-        for qid, n, wrong, wrong_at in rows:
-            root = question_links.resolve(mapping, qid)
-            state = attempt_stats[root]
-            state[0] += int(n or 0)
-            state[1] += int(wrong or 0)
-            if wrong_at is not None and (state[2] is None or iso(wrong_at) > iso(state[2])):
-                state[2] = wrong_at
-    by_id = {}
-    for chunk in batches(page_ids):
-        by_id.update((q.id, q) for q in (await session.scalars(
-            select(Question).where(Question.id.in_(chunk))
-        )).all())
-    items = []
-    for qid in page_ids:
-        q = by_id.get(qid)
-        if q is None:
-            continue
-        progress = root_state[qid]
-        n, wrong, wrong_at = attempt_stats[qid]
-        items.append(S.PoolItem(
+    rows = (await session.execute(stmt.order_by(Question.id).offset(offset).limit(size))).all()
+    items = [
+        S.PoolItem(
             id=q.id, qid=q.qid, stem=snippet(q.stem), answer=q.answer or "", source=q.source_file or "",
-            tags=_tags(q), state=("mastered" if progress["mastered"] else
-                                  "again" if progress["in_wrongbook"] else
-                                  "plan" if progress["in_plan"] else ""),
-            starred=progress["starred"], in_plan=progress["in_plan"], done=qid in done,
-            attempts=n, wrong_count=wrong, last_wrong_at=iso(wrong_at),
-        ))
+            tags=_tags(q), state=derive_state(qp), starred=bool(qp and qp.starred),
+            in_plan=bool(qp and qp.in_plan), done=bool(done),
+            attempts=int(n or 0), wrong_count=int(w or 0), last_wrong_at=iso(wts),
+        )
+        for q, qp, n, w, wts, done in rows
+    ]
     return S.PoolPage(stats=stats, items=items)
 
 
 async def wrongbook(session: AsyncSession, uid: int) -> list[S.WrongBookGroup]:
-    qps = (await session.scalars(select(QP).where(QP.user_id == uid, QP.in_wrongbook.is_(True)))).all()
-    if not qps:
+    qs = (
+        await session.execute(
+            select(Question.id, Question.chapter).join(QP, QP.question_id == Question.id)
+            .where(QP.user_id == uid, QP.in_wrongbook.is_(True))
+        )
+    ).all()
+    if not qs:
         return []
-    mapping = await question_links.redirects(session)
-    roots = list(dict.fromkeys(question_links.resolve(mapping, qp.question_id) for qp in qps))
-    aliases_in_wrongbook = {qp.question_id for qp in qps}
-    chapters = {}
-    for chunk in batches(roots):
-        chapters.update((q.id, q.chapter or "未分类") for q in (await session.scalars(
-            select(Question).where(Question.id.in_(chunk))
-        )).all())
-    att: dict[int, tuple[int, object]] = {}
-    attempt_ids = list(aliases_in_wrongbook)
-    for chunk in batches(attempt_ids):
-        rows = (await session.execute(
-            select(Attempt.question_id, func.count(Attempt.id), func.max(Attempt.created_at))
-            .where(Attempt.user_id == uid, Attempt.is_correct.is_(False), Attempt.question_id.in_(chunk))
-            .group_by(Attempt.question_id)
-        )).all()
-        for qid, n, ts in rows:
-            root = question_links.resolve(mapping, qid)
-            previous_n, previous_ts = att.get(root, (0, None))
-            if ts is not None and (previous_ts is None or iso(ts) > iso(previous_ts)):
-                previous_ts = ts
-            att[root] = (previous_n + int(n), previous_ts)
+    att = {
+        qid: (int(n), ts)
+        for qid, n, ts in (
+            await session.execute(
+                select(Attempt.question_id, func.count(Attempt.id), func.max(Attempt.created_at))
+                .join(QP, and_(QP.question_id == Attempt.question_id, QP.user_id == uid, QP.in_wrongbook.is_(True)))
+                .where(Attempt.user_id == uid, Attempt.is_correct.is_(False))
+                .group_by(Attempt.question_id)
+            )
+        ).all()
+    }
     groups: dict[str, list] = {}
-    for root in roots:
-        g = groups.setdefault(chapters.get(root, "未分类"), [0, 0, None])
+    for qid, ch in qs:
+        g = groups.setdefault(ch or "未分类", [0, 0, None])
         g[0] += 1
-        n, ts = att.get(root, (0, None))
+        n, ts = att.get(qid, (0, None))
         g[1] += n
         if ts is not None and (g[2] is None or iso(ts) > iso(g[2])):
             g[2] = ts

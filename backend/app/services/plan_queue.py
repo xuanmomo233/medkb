@@ -8,7 +8,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import CardProgress, PlanSnapshot, PlanTask, PlanTaskSection, UserPlan, UserPlanItem
-from app.services import card_merges, question_links
+from app.services import card_merges, practice_dedup, question_links
 from app.services.question_groups import ordered_groups
 
 
@@ -19,10 +19,11 @@ async def clear(session: AsyncSession, uid: int) -> None:
     await session.execute(delete(PlanSnapshot).where(PlanSnapshot.user_id == uid))
 
 
-async def _sync(session: AsyncSession, uid: int, tasks: list[PlanTask]) -> None:
+async def _sync(session: AsyncSession, uid: int, tasks: list[PlanTask], mapping=None) -> None:
     from app.services.study import utcnow
 
-    mapping = await question_links.redirects(session)
+    if mapping is None:
+        mapping = await practice_dedup.mapping_for(session, uid, [t.target_id for t in tasks if t.kind == "question"])
     done_q = await question_links.answered(session, uid, mapping)
     cards = await card_merges.redirects(session)
     done_c = {}
@@ -63,9 +64,9 @@ async def _build(session: AsyncSession, plan: UserPlan) -> None:
         UserPlanItem.user_id == uid,
     ).order_by(UserPlanItem.ord, UserPlanItem.id))).all())
     content = await study._item_content(session, sections)
-    mapping = await question_links.redirects(session)
     seeds = list(dict.fromkeys(qid for _, qids in content.values() for qid in qids))
     groups = await ordered_groups(session, seeds)
+    mapping = await practice_dedup.mapping_for(session, uid, [qid for group in groups for qid in group])
     group_by_seed = {qid: group for group in groups for qid in group}
     # A task may satisfy several sections, but there is only one assignment.
     memberships = defaultdict(set)
@@ -100,7 +101,7 @@ async def _build(session: AsyncSession, plan: UserPlan) -> None:
     for key, task in tasks.items():
         for subject, part in memberships[key]:
             session.add(PlanTaskSection(task_id=task.id, subject=subject, part=part))
-    await _sync(session, uid, list(tasks.values()))
+    await _sync(session, uid, list(tasks.values()), mapping)
     _assign(plan, units)
     session.add(PlanSnapshot(user_id=uid))
     await session.flush()
@@ -116,16 +117,98 @@ async def read(session: AsyncSession, uid: int) -> tuple[list[PlanTask], list[Pl
     tasks = list((await session.scalars(select(PlanTask).where(
         PlanTask.user_id == uid,
     ).order_by(PlanTask.position))).all())
-    await _sync(session, uid, tasks)
+    mapping = await practice_dedup.mapping_for(session, uid, [t.target_id for t in tasks if t.kind == "question"])
+    await _sync(session, uid, tasks, mapping)
     links = list((await session.scalars(select(PlanTaskSection).join(
         PlanTask, PlanTask.id == PlanTaskSection.task_id,
     ).where(PlanTask.user_id == uid))).all())
+    tasks, links = await _canonicalize_questions(session, tasks, links, mapping)
     await session.flush()
     return tasks, links
 
 
+async def _canonicalize_questions(session, tasks, links, mapping=None):
+    """Reconcile derived assignments; original questions and attempts are kept."""
+    if mapping is None:
+        mapping = await question_links.redirects(session)
+    groups = defaultdict(list)
+    for task in tasks:
+        if task.kind == "question":
+            groups[question_links.resolve(mapping, task.target_id)].append(task)
+    removed = set()
+    retained_links = list(links)
+    links_by_task = defaultdict(list)
+    for link in links:
+        links_by_task[link.task_id].append(link)
+    for root, members in groups.items():
+        # Keep an existing root row to avoid the unique target constraint. Its
+        # assignment takes the earliest position and due date of all aliases.
+        keep = min(members, key=lambda t: (t.target_id != root, t.position, t.id))
+        keep.position = min(t.position for t in members)
+        keep.due_day = min(t.due_day for t in members)
+        completed = [t.completed_at for t in members if t.completed_at is not None]
+        keep.completed_at = min(completed, key=lambda at: at.timestamp()) if completed else None
+        member_ids = {t.id for t in members}
+        existing_pairs = {(link.subject, link.part) for link in links_by_task[keep.id]}
+        all_pairs = {(link.subject, link.part) for task_id in member_ids for link in links_by_task[task_id]}
+        for subject, part in sorted(all_pairs - existing_pairs):
+            link = PlanTaskSection(task_id=keep.id, subject=subject, part=part)
+            session.add(link)
+            retained_links.append(link)
+        duplicate_ids = member_ids - {keep.id}
+        if duplicate_ids:
+            removed.update(duplicate_ids)
+        keep.target_id = root
+    if removed:
+        # One bulk reconciliation, rather than autoflushing and scanning a large
+        # identity map for every duplicate group. The retained root row wins
+        # above, so no target rename can conflict with a row being removed.
+        from app.services.question_groups import batches
+
+        await session.flush()
+        for chunk in batches(sorted(removed)):
+            await session.execute(delete(PlanTaskSection).where(
+                PlanTaskSection.task_id.in_(chunk),
+            ).execution_options(synchronize_session="fetch"))
+            await session.execute(delete(PlanTask).where(
+                PlanTask.id.in_(chunk),
+            ).execution_options(synchronize_session="fetch"))
+    return (sorted((t for t in tasks if t.id not in removed), key=lambda t: (t.position, t.id)),
+            [link for link in retained_links if link.task_id not in removed])
+
+
 def relative_day(task: PlanTask, today) -> int:
     return max(1, (task.due_day - today).days + 1)
+
+
+async def question_mapping(session, uid, extra_ids=()):
+    ids = list((await session.scalars(select(PlanTask.target_id).where(
+        PlanTask.user_id == uid, PlanTask.kind == "question",
+    ))).all())
+    return await practice_dedup.mapping_for(session, uid, [*ids, *extra_ids])
+
+
+async def preview(session, uid, items, total_days):
+    """Calculate a proposed workload without creating or restarting a plan."""
+    from app.services import study
+
+    sections = [UserPlanItem(user_id=uid, subject=s, part=p, ord=i) for i, (s, p) in enumerate(items)]
+    content = await study._item_content(session, sections)
+    cids = {cid for cards, _ in content.values() for cid in cards}
+    seeds = list(dict.fromkeys(qid for _, questions in content.values() for qid in questions))
+    groups = await ordered_groups(session, seeds)
+    expanded = {qid for group in groups for qid in group}
+    mapping = await practice_dedup.mapping_for(session, uid, list(expanded))
+    roots = {question_links.resolve(mapping, qid) for qid in expanded}
+    answered = await question_links.answered(session, uid, mapping)
+    cmapping = await card_merges.redirects(session)
+    seen_cards = {card_merges.resolve(cmapping, cid) for cid in (await session.scalars(
+        select(CardProgress.card_id).where(CardProgress.user_id == uid, CardProgress.last_seen_at.isnot(None))
+    )).all()}
+    pending_q, pending_c = len(roots - answered.keys()), len(cids - seen_cards)
+    return dict(cards=len(cids), questions=len(roots), pending_cards=pending_c, pending_questions=pending_q,
+                daily_cards=ceil(pending_c / total_days), daily_questions=ceil(pending_q / total_days),
+                duplicate_questions_skipped=len(expanded) - len(roots))
 
 
 async def targets(session: AsyncSession, uid: int, day: int, kind: str) -> list[int]:

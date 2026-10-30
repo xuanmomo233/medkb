@@ -25,7 +25,7 @@ from app.models import (
     UserPrefs,
 )
 from app.services.card_merges import original_ids, redirects, resolve, visible
-from app.services import plan_queue
+from app.services import plan_queue, question_links
 
 DEFAULT_EXAM_DATE = date(2026, 12, 19)
 
@@ -180,9 +180,11 @@ async def _flag_counts(session: AsyncSession, model, user_id: int, now: datetime
 
 async def _count_seen_since(session: AsyncSession, model, user_id: int, since: datetime) -> int:
     if model is QuestionProgress:
-        return int(await session.scalar(select(func.count(func.distinct(Attempt.question_id))).where(
+        ids = (await session.scalars(select(Attempt.question_id).distinct().where(
             Attempt.user_id == user_id, Attempt.created_at >= since, Attempt.picked != "",
-        )))
+        ))).all()
+        mapping = await question_links.redirects(session)
+        return len({question_links.resolve(mapping, qid) for qid in ids})
     return int(
         (
             await session.execute(
@@ -238,7 +240,9 @@ async def _item_content(session: AsyncSession, items: list[UserPlanItem]) -> dic
         return {}
     keys = {(i.subject, i.part) for i in items}
     pair = tuple_(Card.subject, Card.part).in_(keys)
-    crows = (await session.execute(select(Card.subject, Card.part, Card.id).where(pair, visible()))).all()
+    crows = (await session.execute(select(Card.subject, Card.part, Card.id)
+                                   .where(pair, visible())
+                                   .order_by(Card.subject, Card.part, Card.id))).all()
     dirs = {SUBJECT_DIR[s] for s, _ in keys if s in SUBJECT_DIR}
     qrows = (
         (
@@ -248,6 +252,7 @@ async def _item_content(session: AsyncSession, items: list[UserPlanItem]) -> dic
                 .join(Question, Question.id == CardQuestion.question_id)
                 .where(pair, visible(), Question.subject_dir.in_(dirs))
                 .distinct()
+                .order_by(Card.subject, Card.part, Question.id)
             )
         ).all()
         if dirs
@@ -296,6 +301,41 @@ async def _plan_state(session: AsyncSession, user_id: int) -> dict | None:
     remaining = [i for i in out_items if not i["done"]]
     pending = [task for task in tasks if task.completed_at is None]
     due = [task for task in pending if plan_queue.relative_day(task, today) == 1]
+    # Chapter memberships overlap; assign each daily task to its first selected
+    # chapter so these rows can be added up without counting shared work twice.
+    section_order = {(it.subject, it.part): index for index, it in enumerate(items)}
+    primary_section = {}
+    for link in links:
+        pair = (link.subject, link.part)
+        if pair not in section_order:
+            continue
+        previous = primary_section.get(link.task_id)
+        if previous is None or section_order[pair] < section_order[previous]:
+            primary_section[link.task_id] = pair
+    section_counts = defaultdict(lambda: {"cards": 0, "questions": 0})
+    for task in due:
+        pair = primary_section.get(task.id)
+        if pair is None:
+            # Keep an orphan assignment visible rather than silently losing it.
+            pair = ("其他", "未分类任务")
+        section_counts[pair]["questions" if task.kind == "question" else "cards"] += 1
+    today_sections = [{
+        "key": _item_key(subject, part), "subject": subject, "part": part,
+        "label": f"{subject} · {part}", **counts,
+    } for (subject, part), counts in sorted(
+        section_counts.items(), key=lambda row: section_order.get(row[0], len(items)),
+    )]
+    summaries = {}
+    for task in pending:
+        no = plan_queue.relative_day(task, today)
+        summary = summaries.setdefault(no, {
+            "no": no, "date": today + timedelta(days=no - 1),
+            "cards": 0, "questions": 0, "overdue_cards": 0, "overdue_questions": 0,
+        })
+        kind = "questions" if task.kind == "question" else "cards"
+        summary[kind] += 1
+        if task.due_day < today:
+            summary[f"overdue_{kind}"] += 1
     await session.commit()
     return {
         "plan": plan,
@@ -310,6 +350,8 @@ async def _plan_state(session: AsyncSession, user_id: int) -> dict | None:
         "pending_questions": sum(task.kind == "question" for task in pending),
         "pending_cards": sum(task.kind == "card" for task in pending),
         "scheduled_days": sorted({plan_queue.relative_day(task, today) for task in pending}),
+        "today_sections": today_sections,
+        "day_summaries": [summaries[no] for no in sorted(summaries)],
     }
 
 
@@ -328,7 +370,7 @@ async def plan_today(session: AsyncSession, user_id: int) -> dict:
         "finished": st["finished"],
         "today_items": st["today_items"],
         "items": st["items"],
-        **{key: st[key] for key in ("today_questions", "today_cards", "pending_questions", "pending_cards", "scheduled_days")},
+        **{key: st[key] for key in ("today_questions", "today_cards", "pending_questions", "pending_cards", "scheduled_days", "today_sections", "day_summaries")},
     }
 
 
@@ -395,16 +437,23 @@ async def plan_day_detail(session: AsyncSession, user_id: int, n: int) -> dict:
         cards_by_id.update((c.id, c) for c in (await session.scalars(select(Card).where(Card.id.in_(chunk)))).all())
     for chunk in batches(qids):
         questions_by_id.update((q.id, q) for q in (await session.scalars(select(Question).where(Question.id.in_(chunk)))).all())
-    cards = [{"id": cid, "term": cards_by_id[cid].term, "part": cards_by_id[cid].part} for cid in cids if cid in cards_by_id]
-    groups: dict[str, list[int]] = defaultdict(list)
+    cards = [{
+        "id": cid,
+        "term": cards_by_id[cid].term,
+        "part": cards_by_id[cid].part,
+        "section": cards_by_id[cid].section or "",
+    } for cid in cids if cid in cards_by_id]
+    groups: dict[tuple[str, str], list[int]] = defaultdict(list)
     for qid in qids:
         if qid in questions_by_id:
-            groups[questions_by_id[qid].chapter].append(qid)
+            question = questions_by_id[qid]
+            groups[(question.subject_dir or "", question.chapter or "")].append(qid)
     return {
         "no": n,
         "title": "待完成任务",
         "cards": cards,
-        "question_groups": [{"chapter": ch, "ids": ids} for ch, ids in groups.items()],
+        "question_groups": [{"subject_dir": subject, "chapter": ch, "ids": ids}
+                            for (subject, ch), ids in groups.items()],
     }
 
 
@@ -551,7 +600,11 @@ async def _weak_question_ids(session: AsyncSession, user_id: int, prefs: UserPre
             )
         ).scalars()
     )
-    ids = [q for q in sorted(cand, key=lambda q: cand[q]) if q not in mastered and q not in exclude]
+    mapping = await question_links.redirects(session)
+    mastered = {question_links.resolve(mapping, q) for q in mastered}
+    excluded = {question_links.resolve(mapping, q) for q in exclude}
+    ids = list(dict.fromkeys(question_links.resolve(mapping, q) for q in sorted(cand, key=lambda q: cand[q])))
+    ids = [q for q in ids if q not in mastered and q not in excluded]
     return ids[:limit]
 
 
@@ -562,15 +615,19 @@ async def _generate_schedule(session: AsyncSession, user_id: int, day: date, pre
     done_today = select(Attempt.question_id).where(
         Attempt.user_id == user_id, Attempt.created_at >= day_start_utc(day), Attempt.picked != "",
     )
+    mapping = await question_links.redirects(session)
+    seen_today = {question_links.resolve(mapping, q) for q in (await session.scalars(done_today)).all()}
     due_q = (
         await session.execute(
             select(QuestionProgress.question_id)
             .where(QuestionProgress.user_id == user_id, QuestionProgress.in_plan.is_(True), QuestionProgress.due_at <= now,
                    QuestionProgress.question_id.not_in(done_today))
-            .order_by(QuestionProgress.due_at)
-            .limit(goal)
+            .order_by(QuestionProgress.due_at, QuestionProgress.question_id)
         )
     ).scalars().all()
+    # Apply the quota to identities, after excluding attempts through any alias.
+    due_q = list(dict.fromkeys(question_links.resolve(mapping, q) for q in due_q))
+    due_q = [q for q in due_q if q not in seen_today][:goal]
     items += [("question", i, "due") for i in due_q]
     if len(items) < goal:
         due_c = (
@@ -584,7 +641,6 @@ async def _generate_schedule(session: AsyncSession, user_id: int, day: date, pre
         ).scalars().all()
         items += [("card", i, "due") for i in due_c]
     if len(items) < goal:
-        seen_today = set((await session.scalars(done_today)).all())
         weak = await _weak_question_ids(session, user_id, prefs, set(due_q) | seen_today, goal - len(items))
         items += [("question", i, "weak") for i in weak]
     for t, i, r in items:
@@ -623,7 +679,9 @@ async def schedule_today(session: AsyncSession, user_id: int) -> dict:
     practiced = list((await session.scalars(select(Attempt.question_id).where(Attempt.id.in_(latest)))).all())
     await schedule_progress.complete(session, user_id, "question", practiced)
     await session.commit()
-    qids = [r.item_id for r in rows if r.item_type == "question"]
+    question_mapping = await question_links.redirects(session)
+    qids = list(dict.fromkeys(question_links.resolve(question_mapping, r.item_id)
+                             for r in rows if r.item_type == "question"))
     mapping = await redirects(session)
     cids = list(dict.fromkeys(resolve(mapping, r.item_id) for r in rows if r.item_type == "card"))
     qt: dict[int, str] = {}
@@ -634,13 +692,16 @@ async def schedule_today(session: AsyncSession, user_id: int) -> dict:
         ct = {i: t for i, t in (await session.execute(select(Card.id, Card.term).where(Card.id.in_(cids)))).all()}
     items_by_key = {}
     for r in rows:
-        target = resolve(mapping, r.item_id) if r.item_type == "card" else r.item_id
+        target = (resolve(mapping, r.item_id) if r.item_type == "card"
+                  else question_links.resolve(question_mapping, r.item_id))
         key = (r.item_type, target)
         if key in items_by_key:
             items_by_key[key]["done"] |= r.done_at is not None
+            items_by_key[key]["source_ids"].append(r.id)
             continue
         items_by_key[key] = {
             "id": r.id,
+            "source_ids": [r.id],
             "item_type": r.item_type,
             "item_id": target,
             "reason": r.reason,

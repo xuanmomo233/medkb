@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Card, CardProgress, Question, QuestionProgress
+from app.models import Card, CardProgress, Question, QuestionProgress, User
 from app.services import sm2
 from app.services.card_merges import canonical_id
 
@@ -69,6 +69,7 @@ async def mark(session: AsyncSession, user_id: int, target_type: str, target_id:
         target_id = await canonical_id(session, target_id)
     if await session.get(target_model, target_id) is None:
         return False
+    await session.execute(select(User.id).where(User.id == user_id).with_for_update(key_share=True))
     for attempt in range(2):
         p = (
             await session.execute(

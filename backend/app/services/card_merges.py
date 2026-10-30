@@ -59,6 +59,6 @@ async def details(session: AsyncSession, ids: Sequence[int]) -> dict[int, dict]:
                 card = others[target]
                 out[source]["related_cards"].append({
                     "id": target, "term": card.term, "subject": card.subject,
-                    "part": card.part, "reason": row.reason,
+                    "part": card.part, "section": card.section or "", "reason": row.reason,
                 })
     return out

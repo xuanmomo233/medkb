@@ -57,6 +57,24 @@ class PlanItemOut(BaseModel):
     day: int | None
 
 
+class PlanTodaySection(BaseModel):
+    key: str
+    subject: str
+    part: str
+    label: str
+    cards: int
+    questions: int
+
+
+class PlanDaySummary(BaseModel):
+    no: int
+    date: date
+    cards: int
+    questions: int
+    overdue_cards: int
+    overdue_questions: int
+
+
 class PlanToday(BaseModel):
     configured: bool
     start: date | None = None
@@ -72,6 +90,8 @@ class PlanToday(BaseModel):
     scheduled_days: list[int] = Field(default_factory=list)
     today_items: list[PlanItemOut] = []
     items: list[PlanItemOut] = []
+    today_sections: list[PlanTodaySection] = Field(default_factory=list)
+    day_summaries: list[PlanDaySummary] = Field(default_factory=list)
 
 
 class PlanOptionPart(BaseModel):
@@ -95,13 +115,25 @@ class PlanConfigBody(BaseModel):
     items: list[PlanConfigItem] = Field(min_length=1, max_length=200)
 
 
+class PlanPreview(BaseModel):
+    cards: int
+    questions: int
+    pending_cards: int
+    pending_questions: int
+    daily_cards: int
+    daily_questions: int
+    duplicate_questions_skipped: int
+
+
 class PlanCardBrief(BaseModel):
     id: int
     term: str
     part: str
+    section: str = ""
 
 
 class PlanQuestionGroup(BaseModel):
+    subject_dir: str = ""
     chapter: str
     ids: list[int]
 
@@ -124,6 +156,7 @@ class WeakSpot(BaseModel):
 
 class ScheduleItemOut(BaseModel):
     id: int
+    source_ids: list[int] = Field(default_factory=list)
     item_type: Literal["question", "card"]
     item_id: int
     reason: Literal["due", "weak"]

@@ -33,8 +33,6 @@ _MD_URL = re.compile(r"(?i)^\s*(/|https?:|data:image/|#|mailto:)")
 _MD_DROP = {"script", "style", "iframe", "object", "embed", "form", "link", "meta", "base"}
 _MD_VOID = {"br", "hr", "img"}
 _IMG_HOSTS = r"(?:ixunke\.com|ixunke\.cn|youjiangt\.top)"
-_DETAILS = re.compile(r"<details(?P<attrs>\s[^>]*)?>(?P<body>.*?)</details\s*>", re.I | re.S)
-_SUMMARY = re.compile(r"<summary(?:\s[^>]*)?>(?P<text>.*?)</summary\s*>", re.I | re.S)
 
 
 class _Sanitizer(HTMLParser):
@@ -165,8 +163,9 @@ def _text_highlights(html: str) -> str:
     return "".join(parser.out)
 
 
-def _markdown_source(s: str) -> str:
-    """Keep the app's hard-break and table cleanup rules for nested blocks too."""
+def md(s: str | None) -> str:
+    if not s:
+        return ""
     lines: list[str] = []
     in_table = False
     for ln in s.split("\n"):
@@ -184,53 +183,7 @@ def _markdown_source(s: str) -> str:
             lines.append("")
         in_table = False
         lines.append(ln + "  " if stripped else ln)
-    return "\n".join(lines)
-
-
-def _markdown_html(s: str) -> str:
-    return markdown.markdown(
-        _markdown_source(s),
-        extensions=["tables", "fenced_code", _HighlightExtension()],
-    )
-
-
-def _render_details(s: str) -> tuple[str, list[tuple[str, str]]]:
-    """Render Markdown inside HTML details blocks before the outer Markdown pass.
-
-    Python-Markdown treats a raw HTML block as opaque, so Markdown images and
-    links inside <details> otherwise leak to clients as literal source text.
-    Comment placeholders keep the rendered block intact during the outer pass.
-    """
-    blocks: list[tuple[str, str]] = []
-
-    def replace(match: re.Match[str]) -> str:
-        body = match.group("body")
-        summary_match = _SUMMARY.search(body)
-        if summary_match:
-            summary_html = _markdown_html(summary_match.group("text")).strip()
-            if summary_html.startswith("<p>") and summary_html.endswith("</p>"):
-                summary_html = summary_html[3:-4]
-            summary = "<summary>" + summary_html + "</summary>"
-            body = body[:summary_match.start()] + body[summary_match.end():]
-        else:
-            summary = ""
-        rendered = _markdown_html(body)
-        attrs = match.group("attrs") or ""
-        block = f"<details{attrs}>{summary}{rendered}</details>"
-        marker = f"<!--MEDKBDETAILBLOCK{len(blocks)}-->"
-        blocks.append((marker, block))
-        return marker
-
-    return _DETAILS.sub(replace, s), blocks
-
-
-def md(s: str | None) -> str:
-    if not s:
-        return ""
-    source, detail_blocks = _render_details(s)
-    html = _markdown_html(source)
-    for marker, block in detail_blocks:
-        html = html.replace(marker, block)
+    html = markdown.markdown("\n".join(lines), extensions=["tables", "fenced_code", _HighlightExtension()])
     html = re.sub(r"<!--.*?-->", "", html)
     html = re.sub(
         r'src="(https?://[^"]*' + _IMG_HOSTS + r'/[^"]+)"',

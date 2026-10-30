@@ -10,8 +10,8 @@ from app.schemas import quiz as S
 from app.services.quiz import Recorder, iso, submission_indices
 from app.services.question_groups import batches, ordered_groups
 from app.services import plan_queue, question_links, schedule_progress
-from app.services.quiz_filters import visible_question_condition
 from app.services.option_labels import answer_letters, labels_for
+from app.services.quiz_filters import visible_question_condition
 
 # Up to 5,000 explicit seeds may each expand to four case children.
 SUBMIT_MAX = 20_000
@@ -261,8 +261,8 @@ async def mock(session: AsyncSession, n: int) -> list[int]:
                                   visible_question_condition())
     )).scalars().all()
     case_seeds = [qid for qid in grouped if qid in eligible]
-    mapping = await question_links.redirects(session)
     groups = await ordered_groups(session, case_seeds)
+    mapping = await question_links.redirects(session)
     groups = [list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in group)) for group in groups]
     by_id = {item[0]: item for item in pool}
     missing = [qid for children in groups for qid in children if qid not in by_id]

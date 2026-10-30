@@ -10,6 +10,7 @@ class RelatedCard(BaseModel):
     subject: str
     part: str
     reason: str
+    section: str = ""
 
 
 class CardPartIndex(BaseModel):

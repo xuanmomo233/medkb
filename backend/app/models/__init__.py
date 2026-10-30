@@ -13,11 +13,9 @@ from app.models.learning import (
 from app.models.social import ChatMessage, EditorialBatch, EditorialExecution, EditorialReview, Note, NoteLike, QuestionEdit
 from app.models.planning import PlanSnapshot, PlanTask, PlanTaskSection, QuestionMerge, QuestionRelation, ScheduleDay
 from app.models.user import AuthToken, Checkin, InviteCode, SiteConfig, User, UserPlan, UserPlanItem, UserPrefs
-from app.models.question_sync import SyncClassificationRule, SyncCursor, SyncDocument, SyncProposal, SyncRevision, SyncRun
 
 __all__ = [
     "Base", "User", "AuthToken", "UserPrefs", "Checkin", "InviteCode", "SiteConfig",
-    "SyncClassificationRule", "SyncCursor", "SyncDocument", "SyncProposal", "SyncRevision", "SyncRun",
     "UserPlan", "UserPlanItem",
     "PlanSnapshot", "PlanTask", "PlanTaskSection", "QuestionMerge", "QuestionRelation", "ScheduleDay",
     "Chapter", "Question", "Card", "CardQuestion", "CardMerge", "CardOriginal", "CardRelation",

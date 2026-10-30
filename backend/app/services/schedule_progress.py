@@ -41,7 +41,22 @@ async def questions(session: AsyncSession, uid: int, results: list[tuple[int, bo
         completed.remove(root)  # Retries or repeated entries must not advance SRS twice.
         qp = await session.get(QuestionProgress, (uid, qid))
         if qp is not None:
-            qp.reps, qp.ease, qp.interval_days, qp.due_at = sm2.rate(
-                "rate_good" if correct else "rate_again", qp.reps, qp.ease, qp.interval_days, utcnow(),
+            canonical = await session.get(QuestionProgress, (uid, root))
+            baseline = canonical or qp
+            state = sm2.rate(
+                "rate_good" if correct else "rate_again",
+                baseline.reps, baseline.ease, baseline.interval_days, utcnow(),
             )
-            qp.in_plan = True
+            if canonical is None:
+                canonical = QuestionProgress(user_id=uid, question_id=root)
+                session.add(canonical)
+            members = [root, *(alias for alias in mapping if question_links.resolve(mapping, alias) == root)]
+            from app.services.question_groups import batches
+            records = []
+            for chunk in batches(members):
+                records.extend((await session.scalars(select(QuestionProgress).where(
+                    QuestionProgress.user_id == uid, QuestionProgress.question_id.in_(chunk),
+                ))).all())
+            for record in records:
+                record.reps, record.ease, record.interval_days, record.due_at = state
+                record.in_plan = True

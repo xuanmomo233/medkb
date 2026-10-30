@@ -5,6 +5,7 @@ from fastapi import APIRouter, Query, Response
 from app.api.deps import CurrentUser, Session
 from app.schemas import today as s
 from app.services import study as svc
+from app.services import plan_queue
 
 router = APIRouter()
 
@@ -50,6 +51,13 @@ async def plan_options(user: CurrentUser, session: Session):
 async def put_plan(body: s.PlanConfigBody, user: CurrentUser, session: Session):
     await svc.set_plan(session, user.id, [(i.subject, i.part) for i in body.items], body.total_days)
     return Response(status_code=204)
+
+
+@router.post("/plan/preview", response_model=s.PlanPreview)
+async def preview_plan(body: s.PlanConfigBody, user: CurrentUser, session: Session):
+    return await plan_queue.preview(
+        session, user.id, [(i.subject, i.part) for i in body.items], body.total_days,
+    )
 
 
 @router.delete("/plan/config", status_code=204)
