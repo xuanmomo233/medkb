@@ -71,6 +71,30 @@ class ContentCitation {
       );
 }
 
+class TextbookSource {
+  final String key;
+  final String title;
+  final String subject;
+  final String publisher;
+  final String edition;
+
+  const TextbookSource({
+    required this.key,
+    required this.title,
+    required this.subject,
+    required this.publisher,
+    required this.edition,
+  });
+
+  factory TextbookSource.fromJson(Map<String, dynamic> j) => TextbookSource(
+        key: _s(j['key']),
+        title: _s(j['title']),
+        subject: _s(j['subject']),
+        publisher: _s(j['publisher']),
+        edition: _s(j['edition']),
+      );
+}
+
 class TargetType {
   static const String question = 'question';
   static const String card = 'card';

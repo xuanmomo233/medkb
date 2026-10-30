@@ -79,7 +79,7 @@ export default function BrowsePage() {
 
   return (
     <div>
-      <PageHeader title="目录" sub="按学科浏览导图、考点与题库章节" />
+      <PageHeader title="目录" sub="按学科浏览导图、考点与题库章节" extra={<Link to="/browse/textbooks" className={s.textbooksLink}>整本教材</Link>} />
       <div className={s.toolbar}>
         <Segmented value={tab} options={TABS} onChange={changeTab} />
         <div className={s.filter}><Input value={kw} onChange={(e) => setKw(e.target.value)} placeholder="在本页过滤学科或章节" aria-label="过滤章节" /></div>
