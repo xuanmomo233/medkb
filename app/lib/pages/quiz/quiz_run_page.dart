@@ -56,6 +56,11 @@ class _QuizRunPageState extends State<QuizRunPage> {
   }
 
   Future<void> _openJump() async {
+    final session = widget.args.scheduleSession;
+    if (session != null) {
+      await showScheduleJump(context, session);
+      return;
+    }
     final int? i = await showAppSheet<int>(
       context,
       title: '题号跳转',
@@ -75,9 +80,8 @@ class _QuizRunPageState extends State<QuizRunPage> {
       context: context,
       builder: (BuildContext ctx) => AlertDialog(
         title: const Text('确认交卷'),
-        content: Text(un > 0
-            ? '还有 $un 题未作答，未答题按错误计分。\n确定现在交卷吗？'
-            : '所有题目均已作答，确定现在交卷吗？'),
+        content: Text(
+            un > 0 ? '还有 $un 题未作答，未答题按错误计分。\n确定现在交卷吗？' : '所有题目均已作答，确定现在交卷吗？'),
         actions: <Widget>[
           TextButton(
               onPressed: () => Navigator.of(ctx).pop(false),
@@ -137,9 +141,8 @@ class _QuizRunPageState extends State<QuizRunPage> {
   Widget _buildBody(BuildContext context, Widget? _) {
     final int total = _s.questions.length;
     final bool ready = _s.status == RunStatus.ready && total > 0;
-    final String t = (widget.args.title ?? '').isEmpty
-        ? _modeLabel
-        : widget.args.title!;
+    final String t =
+        (widget.args.title ?? '').isEmpty ? _modeLabel : widget.args.title!;
     return Scaffold(
       appBar: AppBar(
         titleSpacing: 0,
@@ -175,7 +178,7 @@ class _QuizRunPageState extends State<QuizRunPage> {
                 );
               },
             ),
-          if (ready)
+          if (ready && widget.args.scheduleItems.isEmpty)
             TextButton.icon(
               style: TextButton.styleFrom(minimumSize: const Size(48, 48)),
               onPressed: _openJump,
@@ -183,16 +186,17 @@ class _QuizRunPageState extends State<QuizRunPage> {
               label: Text('${_s.idx + 1}/$total'),
             ),
           if (ready && !_s.isTest)
-            TextButton(onPressed: () async {
-              await _s.resetSession();
-              if (mounted) _jumpTo(0);
-            }, child: const Text('本次重练')),
+            TextButton(
+                onPressed: () async {
+                  await _s.resetSession();
+                  if (mounted) _jumpTo(0);
+                },
+                child:
+                    Text(widget.args.scheduleItems.isEmpty ? '本次重练' : '重做本题')),
           const SizedBox(width: 4),
         ],
       ),
       body: Column(children: <Widget>[
-        if (widget.args.scheduleItems.isNotEmpty)
-          ScheduleNavigation(items: widget.args.scheduleItems, index: widget.args.scheduleIndex),
         Expanded(child: _content(context, ready, total)),
       ]),
     );
@@ -215,11 +219,19 @@ class _QuizRunPageState extends State<QuizRunPage> {
     final int? resume = _s.resumeAt;
     return Column(
       children: <Widget>[
-        ProgressBar(value: (_s.idx + 1) / total, height: 3),
+        ProgressBar(
+            value: widget.args.scheduleItems.isEmpty
+                ? (_s.idx + 1) / total
+                : (widget.args.scheduleIndex + 1) /
+                    widget.args.scheduleItems.length,
+            height: 3),
         if (resume != null) _resumeBar(context, resume),
         Expanded(
           child: PageView.builder(
             controller: pc,
+            physics: widget.args.scheduleSession != null
+                ? const NeverScrollableScrollPhysics()
+                : null,
             itemCount: total,
             onPageChanged: _s.onPage,
             itemBuilder: (BuildContext c, int i) => QuestionPageView(
@@ -266,11 +278,8 @@ class _QuizRunPageState extends State<QuizRunPage> {
     final Question q = _s.questions[_s.idx];
     final Ans? cur = _s.ans[q.id];
     final bool judged = cur?.judged ?? false;
-    final bool multiPending = hasOptionsQ(q) &&
-        isMultiQ(q) &&
-        !_s.isTest &&
-        !_s.isRecite &&
-        !judged;
+    final bool multiPending =
+        hasOptionsQ(q) && isMultiQ(q) && !_s.isTest && !_s.isRecite && !judged;
     const Size minSize = Size(0, 48);
     final List<Widget> mid = <Widget>[];
     if (multiPending) {
@@ -295,6 +304,25 @@ class _QuizRunPageState extends State<QuizRunPage> {
       ));
     }
     final bool last = _s.idx >= total - 1;
+    if (widget.args.scheduleItems.isNotEmpty) {
+      final session = widget.args.scheduleSession;
+      if (session != null && session.index != widget.args.scheduleIndex) {
+        return const SizedBox.shrink();
+      }
+      return Material(
+        elevation: 4,
+        child: SafeArea(
+            top: false,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: ScheduleNavigation(
+                  items: widget.args.scheduleItems,
+                  index: widget.args.scheduleIndex,
+                  session: widget.args.scheduleSession,
+                  action: mid.isEmpty ? null : mid.first),
+            )),
+      );
+    }
     return Material(
       color: Theme.of(context).colorScheme.surface,
       elevation: 4,
@@ -321,16 +349,23 @@ class _QuizRunPageState extends State<QuizRunPage> {
                 child: OutlinedButton.icon(
                   style: OutlinedButton.styleFrom(minimumSize: minSize),
                   onPressed: last
-                      ? (widget.args.scheduleItems.isEmpty ? null : () async {
-                          try {
-                            await nextScheduleItem(context, widget.args.scheduleItems, widget.args.scheduleIndex);
-                          } catch (e) {
-                            if (mounted) _msg(errText(e));
-                          }
-                        })
+                      ? (widget.args.scheduleItems.isEmpty
+                          ? null
+                          : () async {
+                              try {
+                                await nextScheduleItem(
+                                    context,
+                                    widget.args.scheduleItems,
+                                    widget.args.scheduleIndex);
+                              } catch (e) {
+                                if (mounted) _msg(errText(e));
+                              }
+                            })
                       : () => _animateTo(_s.idx + 1),
                   icon: const Icon(Icons.chevron_right),
-                  label: Text(last && widget.args.scheduleItems.isNotEmpty ? '下一项日程' : '下一题'),
+                  label: Text(last && widget.args.scheduleItems.isNotEmpty
+                      ? '下一项日程'
+                      : '下一题'),
                 ),
               ),
             ],

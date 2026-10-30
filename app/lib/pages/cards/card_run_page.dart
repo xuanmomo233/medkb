@@ -17,6 +17,7 @@ class CardLoaded {
 }
 
 String cardRunTitle(CardRunArgs a) {
+  if (a.scheduleItems.isNotEmpty) return '今日日程 · 卡片';
   if (a.due) return '到期复习';
   if (a.starred) return '收藏卡片';
   if (a.planDay != null) return '今日计划 · 第 ${a.planDay} 天';
@@ -41,12 +42,17 @@ class _CardRunPageState extends State<CardRunPage> {
 
   Future<CardLoaded> _load() async {
     final List<Card> cards = await Endpoints.cards(widget.args.toQuery());
+    final session = widget.args.scheduleSession;
+    if (session != null)
+      return CardLoaded(cards, 0, Map<int, String>.of(session.ratings));
     int idx = 0;
     final Map<int, String> ratings = <int, String>{};
     try {
       final SharedPreferences p = await SharedPreferences.getInstance();
       final String? raw = p.getString(_key);
-      if (raw != null && widget.args.planDay == null && widget.args.scheduleItems.isEmpty) {
+      if (raw != null &&
+          widget.args.planDay == null &&
+          widget.args.scheduleItems.isEmpty) {
         final Map<String, dynamic> j = asMap(jsonDecode(raw));
         final Object? i = j['idx'];
         if (i is num && i >= 0 && i <= cards.length) idx = i.toInt();
@@ -76,31 +82,41 @@ class _CardRunPageState extends State<CardRunPage> {
     return Scaffold(
       appBar: AppBar(title: Text(cardRunTitle(widget.args))),
       body: Column(children: <Widget>[
-        if (widget.args.scheduleItems.isNotEmpty)
-          ScheduleNavigation(items: widget.args.scheduleItems, index: widget.args.scheduleIndex),
-        Expanded(child: AsyncView<CardLoaded>(
-        loader: _load,
-        reloadKey: _round,
-        builder: (BuildContext c, CardLoaded d, Future<void> Function() r) {
-          if (d.cards.isEmpty) {
-            return EmptyState(
-              '这里暂时没有可背的卡片',
-              icon: Icons.celebration_outlined,
-              action: FilledButton(
-                onPressed: () => Navigator.of(c).pop(),
-                child: const Text('返回'),
-              ),
+        Expanded(
+            child: AsyncView<CardLoaded>(
+          loader: _load,
+          reloadKey: _round,
+          builder: (BuildContext c, CardLoaded d, Future<void> Function() r) {
+            if (d.cards.isEmpty) {
+              return EmptyState(
+                '这里暂时没有可背的卡片',
+                icon: Icons.celebration_outlined,
+                action: FilledButton(
+                  onPressed: () => Navigator.of(c).pop(),
+                  child: const Text('返回'),
+                ),
+              );
+            }
+            return CardRunner(
+              cards: d.cards,
+              initialIdx: d.idx,
+              initialRatings: d.ratings,
+              storeKey: _key,
+              onRestart: _restart,
+              scheduleSession: widget.args.scheduleSession,
+              scheduleIndex: widget.args.scheduleIndex,
             );
-          }
-          return CardRunner(
-            cards: d.cards,
-            initialIdx: d.idx,
-            initialRatings: d.ratings,
-            storeKey: _key,
-            onRestart: _restart,
-          );
-        },
+          },
         )),
+        if (widget.args.scheduleItems.isNotEmpty &&
+            (widget.args.scheduleSession == null ||
+                widget.args.scheduleSession!.index == widget.args.scheduleIndex))
+          SafeArea(
+              top: false,
+              child: ScheduleNavigation(
+                  items: widget.args.scheduleItems,
+                  index: widget.args.scheduleIndex,
+                  session: widget.args.scheduleSession)),
       ]),
     );
   }

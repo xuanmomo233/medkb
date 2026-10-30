@@ -63,6 +63,7 @@ class QuizSession extends ChangeNotifier {
   final Map<int, QuestionStat> stats = <int, QuestionStat>{};
   final Map<int, MarkPatch> patch = <int, MarkPatch>{};
   final Set<int> hidden = <int>{};
+  final Set<int> revealed = <int>{};
   final ValueNotifier<int?> remaining = ValueNotifier<int?>(null);
   bool aiBusy = false;
   bool submitting = false;
@@ -76,7 +77,14 @@ class QuizSession extends ChangeNotifier {
 
   bool get isTest => args.mode == QuizMode.test;
   bool get isRecite => args.mode == QuizMode.recite;
-  bool get trackPos => !isTest && !args.random && !args.shuffle && args.planDay == null && !args.fresh && args.initialQuestionId == null;
+  bool get trackPos =>
+      args.scheduleItems.isEmpty &&
+      !isTest &&
+      !args.random &&
+      !args.shuffle &&
+      args.planDay == null &&
+      !args.fresh &&
+      args.initialQuestionId == null;
   int? get _limit => (args.random && args.ids == null) ? 120 : null;
   String get title => (args.title ?? '').isEmpty ? '测试' : args.title!;
 
@@ -105,19 +113,32 @@ class QuizSession extends ChangeNotifier {
   QuestionStat? statOf(Question q) => stats[q.id] ?? full[q.id]?.stat;
 
   bool showFull(Question q) =>
-      isRecite || (ans[q.id]?.judged ?? false) || !hasOptionsQ(q);
+      isRecite ||
+      revealed.contains(q.id) ||
+      (ans[q.id]?.judged ?? false) ||
+      !hasOptionsQ(q);
 
   Future<void> load() async {
     status = RunStatus.loading;
     error = null;
     _emit();
     try {
-      final List<Question> list =
+      final List<Question> loaded =
           await Endpoints.questions(args.toQuery(limit: _limit), lite: true);
+      final byId = {for (final q in loaded) q.id: q};
+      final List<Question> list = args.exactIds && args.ids != null
+          ? [
+              for (final id in args.ids!.toSet())
+                if (byId[id] != null) byId[id]!
+            ]
+          : args.scheduleSession != null && (args.ids?.isNotEmpty ?? false)
+              ? loaded.where((q) => q.id == args.ids!.first).toList()
+              : loaded;
       final SharedPreferences p = await SharedPreferences.getInstance();
       if (_disposed) return;
       ans.clear();
-      int start = list.indexWhere((Question q) => q.id == args.initialQuestionId);
+      int start =
+          list.indexWhere((Question q) => q.id == args.initialQuestionId);
       if (start < 0) start = 0;
       int? resume;
       _deadline = null;
@@ -155,6 +176,12 @@ class QuizSession extends ChangeNotifier {
           }
         }
       } else {
+        for (final question in list) {
+          final saved = args.scheduleSession?.answerFor(question);
+          if (saved != null)
+            ans[question.id] = Ans(saved['picked'] as String,
+                saved['judged'] as bool, saved['correct'] as bool?);
+        }
         if (trackPos) {
           final int pos = p.getInt(_posKey) ?? 0;
           if (pos > 0 && pos < list.length) resume = pos;
@@ -258,6 +285,7 @@ class QuizSession extends ChangeNotifier {
             !listEquals(labels, q.optionLabels) ||
             f.answer != q.answer) {
           ans.remove(id);
+          args.scheduleSession?.clearAnswer(id);
           _quickTimer?.cancel();
         }
         return Question(
@@ -314,6 +342,7 @@ class QuizSession extends ChangeNotifier {
       ans[q.id] = Ans(picked, false, null);
     }
     if (isTest) unawaited(_saveTest());
+    _saveScheduleAnswer(q);
     _emit();
   }
 
@@ -326,6 +355,7 @@ class QuizSession extends ChangeNotifier {
   void judge(Question q, String picked) {
     final bool correct = sortLetters(picked) == answerOptionLetters(q.answer);
     ans[q.id] = Ans(picked, true, correct);
+    _saveScheduleAnswer(q);
     _emit();
     _ensure();
     unawaited(_report(q, picked));
@@ -333,7 +363,14 @@ class QuizSession extends ChangeNotifier {
       final int at = idx;
       _quickTimer?.cancel();
       _quickTimer = Timer(const Duration(milliseconds: 600), () {
-        if (_disposed || idx != at || at >= questions.length - 1) return;
+        if (_disposed || idx != at) return;
+        final session = args.scheduleSession;
+        if (session != null) {
+          if (session.index == args.scheduleIndex)
+            session.go(args.scheduleIndex + 1);
+          return;
+        }
+        if (at >= questions.length - 1) return;
         pageTo?.call(at + 1);
       });
     }
@@ -354,11 +391,17 @@ class QuizSession extends ChangeNotifier {
   void redo(Question q) {
     _quickTimer?.cancel();
     ans.remove(q.id);
+    revealed.remove(q.id);
+    args.scheduleSession?.clearAnswer(q.id);
     _emit();
   }
 
   Future<void> resetSession() async {
     _quickTimer?.cancel();
+    revealed.clear();
+    for (final question in questions) {
+      args.scheduleSession?.clearAnswer(question.id);
+    }
     ans.clear();
     idx = 0;
     resumeAt = null;
@@ -373,6 +416,22 @@ class QuizSession extends ChangeNotifier {
   void toggleReveal(Question q) {
     if (!hidden.remove(q.id)) hidden.add(q.id);
     _emit();
+  }
+
+  void toggleAnalysis(Question q) {
+    if (!revealed.remove(q.id)) revealed.add(q.id);
+    _ensure();
+    _emit();
+  }
+
+  void _saveScheduleAnswer(Question q) {
+    final answer = ans[q.id];
+    if (answer == null) {
+      args.scheduleSession?.clearAnswer(q.id);
+    } else {
+      args.scheduleSession
+          ?.saveAnswer(q, answer.picked, answer.judged, answer.correct);
+    }
   }
 
   Future<void> toggleMark(Question q, MarkKind kind) async {
@@ -434,6 +493,7 @@ class QuizSession extends ChangeNotifier {
           tags: f.tags,
           state: f.state,
           starred: f.starred,
+          citations: f.citations,
         );
       }
     } catch (e) {

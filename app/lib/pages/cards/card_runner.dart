@@ -10,6 +10,7 @@ import '../../theme.dart';
 import '../../widgets/widgets.dart';
 import 'card_face.dart';
 import 'card_summary.dart';
+import '../today/schedule_session.dart';
 
 class CardRunner extends StatefulWidget {
   final List<Card> cards;
@@ -17,6 +18,8 @@ class CardRunner extends StatefulWidget {
   final Map<int, String> initialRatings;
   final String storeKey;
   final Future<void> Function() onRestart;
+  final ScheduleSession? scheduleSession;
+  final int scheduleIndex;
   const CardRunner({
     super.key,
     required this.cards,
@@ -24,6 +27,8 @@ class CardRunner extends StatefulWidget {
     required this.initialRatings,
     required this.storeKey,
     required this.onRestart,
+    this.scheduleSession,
+    this.scheduleIndex = 0,
   });
 
   @override
@@ -35,8 +40,12 @@ class _CardRunnerState extends State<CardRunner> {
   late final Map<int, String> _ratings =
       Map<int, String>.of(widget.initialRatings);
   late int _idx = widget.initialIdx;
-  late final PageController _pc = PageController(initialPage: widget.initialIdx);
-  bool _flipped = false;
+  late final PageController _pc =
+      PageController(initialPage: widget.initialIdx);
+  late bool _flipped = widget.cards.isNotEmpty &&
+      widget.scheduleSession?.flippedCards.contains(widget.cards.first.id) ==
+          true;
+  bool _rating = false;
 
   int get _total => _cards.length;
 
@@ -47,19 +56,28 @@ class _CardRunnerState extends State<CardRunner> {
   }
 
   Future<void> _save() async {
+    if (widget.scheduleSession != null) return;
     try {
       final SharedPreferences p = await SharedPreferences.getInstance();
       await p.setString(
         widget.storeKey,
         jsonEncode(<String, Object?>{
           'idx': _idx,
-          'ratings': _ratings.map((int k, String v) => MapEntry<String, String>('$k', v)),
+          'ratings': _ratings
+              .map((int k, String v) => MapEntry<String, String>('$k', v)),
         }),
       );
     } catch (_) {}
   }
 
   void _go(int n) {
+    if (_rating) return;
+    final session = widget.scheduleSession;
+    if (session != null) {
+      if (session.index == widget.scheduleIndex)
+        session.go(widget.scheduleIndex + n - _idx);
+      return;
+    }
     final int t = n < 0 ? 0 : (n > _total ? _total : n);
     if (!_pc.hasClients) return;
     if (MediaQuery.of(context).disableAnimations) {
@@ -70,7 +88,8 @@ class _CardRunnerState extends State<CardRunner> {
     }
   }
 
-  void _patch(int id, {
+  void _patch(
+    int id, {
     String? section,
     String? term,
     String? termHtml,
@@ -93,6 +112,8 @@ class _CardRunnerState extends State<CardRunner> {
           bodyHtml: bodyHtml ?? c.bodyHtml,
           state: state ?? c.state,
           starred: starred ?? c.starred,
+          relatedCards: c.relatedCards,
+          citations: c.citations,
         );
       }).toList();
     });
@@ -102,7 +123,8 @@ class _CardRunnerState extends State<CardRunner> {
     final bool saved = await openAdminCardEdit(context, id);
     if (!mounted || !saved) return;
     try {
-      final List<Card> updated = await Endpoints.cards(CardQuery(ids: <int>[id]), cache: false);
+      final List<Card> updated =
+          await Endpoints.cards(CardQuery(ids: <int>[id]), cache: false);
       if (!mounted || updated.isEmpty) return;
       final Card c = updated.first;
       _patch(id,
@@ -126,18 +148,27 @@ class _CardRunnerState extends State<CardRunner> {
     }
   }
 
-  void _rate(String action) {
-    if (_idx >= _total) return;
+  Future<void> _rate(String action) async {
+    if (_rating || _idx >= _total) return;
+    final int at = _idx;
     final Card card = _cards[_idx];
+    setState(() => _rating = true);
+    final bool ok = await _send(card.id, action);
+    if (!mounted) return;
+    if (!ok) {
+      setState(() => _rating = false);
+      return;
+    }
     _ratings[card.id] = action;
+    widget.scheduleSession?.saveCard(card.id, rating: action, flipped: true);
     if (action != MarkAction.rateHard) {
       _patch(card.id,
           state: action == MarkAction.rateGood
               ? ProgressState.mastered
               : ProgressState.again);
     }
-    unawaited(_send(card.id, action));
-    _go(_idx + 1);
+    setState(() => _rating = false);
+    _go(at + 1);
     unawaited(_save());
   }
 
@@ -146,7 +177,8 @@ class _CardRunnerState extends State<CardRunner> {
     final Card card = _cards[_idx];
     final bool next = !card.starred;
     _patch(card.id, starred: next);
-    final bool ok = await _send(card.id, next ? MarkAction.star : MarkAction.unstar);
+    final bool ok =
+        await _send(card.id, next ? MarkAction.star : MarkAction.unstar);
     if (!mounted) return;
     if (ok) {
       toast(context, next ? '已收藏' : '已取消收藏');
@@ -165,6 +197,10 @@ class _CardRunnerState extends State<CardRunner> {
   }
 
   void _openJump() {
+    if (widget.scheduleSession != null) {
+      widget.scheduleSession!.onOpenJump?.call();
+      return;
+    }
     showAppSheet<void>(
       context,
       title: '跳转到第几张',
@@ -239,7 +275,7 @@ class _CardRunnerState extends State<CardRunner> {
                 key: ValueKey<String>('f${card.id}'),
                 card: card,
                 onFlip: () {
-                  if (i == _idx) setState(() => _flipped = true);
+                  if (i == _idx) _flip();
                 },
               ),
       ),
@@ -254,18 +290,29 @@ class _CardRunnerState extends State<CardRunner> {
       padding: const EdgeInsets.fromLTRB(16, 4, 8, 0),
       child: Row(
         children: <Widget>[
-          TextButton.icon(
-            onPressed: _openJump,
-            icon: const Icon(Icons.grid_view, size: 18),
-            label: Text('${_idx < _total ? _idx + 1 : _total} / $_total'),
-          ),
+          if (widget.scheduleSession == null)
+            TextButton.icon(
+              onPressed: _rating ? null : _openJump,
+              icon: const Icon(Icons.grid_view, size: 18),
+              label: Text('${_idx < _total ? _idx + 1 : _total} / $_total'),
+            ),
+          if (widget.scheduleSession != null && onCard)
+            TextButton(
+                onPressed: _rating
+                    ? null
+                    : () {
+                        setState(() => _flipped = !_flipped);
+                        widget.scheduleSession!
+                            .saveCard(card!.id, flipped: _flipped);
+                      },
+                child: Text(_flipped ? '看正面' : '看背面')),
           const Spacer(),
           if (card != null) ...<Widget>[
             IconButton(
               tooltip: card.starred ? '取消收藏' : '收藏',
               icon: Icon(card.starred ? Icons.star : Icons.star_border,
                   color: card.starred ? AppColors.of(context).warn : null),
-              onPressed: _toggleStar,
+              onPressed: _rating ? null : _toggleStar,
             ),
             IconButton(
               tooltip: '加入复习',
@@ -274,19 +321,21 @@ class _CardRunnerState extends State<CardRunner> {
                       ? Icons.bookmark_added
                       : Icons.bookmark_add_outlined,
                   color: card.state == ProgressState.plan ? cs.primary : null),
-              onPressed: _addPlan,
+              onPressed: _rating ? null : _addPlan,
             ),
             IconButton(
               tooltip: '笔记',
               icon: const Icon(Icons.edit_note),
-              onPressed: () => openNotes(context,
-                  targetType: TargetType.card, targetId: card.id),
+              onPressed: _rating
+                  ? null
+                  : () => openNotes(context,
+                      targetType: TargetType.card, targetId: card.id),
             ),
             if (Api.admin)
               IconButton(
                 tooltip: '编辑卡片',
                 icon: const Icon(Icons.edit_outlined),
-                onPressed: () => _editCard(card.id),
+                onPressed: _rating ? null : () => _editCard(card.id),
               ),
           ],
         ],
@@ -304,11 +353,18 @@ class _CardRunnerState extends State<CardRunner> {
             foregroundColor: fg,
             minimumSize: const Size(0, 52),
           ),
-          onPressed: () => _rate(action),
-          child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+          onPressed: _rating ? null : () => _rate(action),
+          child:
+              Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
         ),
       ),
     );
+  }
+
+  void _flip() {
+    if (_idx >= _total) return;
+    setState(() => _flipped = true);
+    widget.scheduleSession?.saveCard(_cards[_idx].id, flipped: true);
   }
 
   Widget _bottomBar() {
@@ -322,6 +378,7 @@ class _CardRunnerState extends State<CardRunner> {
       ),
       child: SafeArea(
         top: false,
+        bottom: widget.scheduleSession == null,
         child: Padding(
           padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
           child: _flipped
@@ -335,9 +392,9 @@ class _CardRunnerState extends State<CardRunner> {
               : SizedBox(
                   width: double.infinity,
                   child: FilledButton(
-                    style: FilledButton.styleFrom(
-                        minimumSize: const Size(0, 52)),
-                    onPressed: () => setState(() => _flipped = true),
+                    style:
+                        FilledButton.styleFrom(minimumSize: const Size(0, 52)),
+                    onPressed: _flip,
                     child: const Text('翻面'),
                   ),
                 ),
@@ -354,20 +411,31 @@ class _CardRunnerState extends State<CardRunner> {
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: ProgressBar(
-              value: _total == 0 ? 0 : (_idx > _total ? _total : _idx) / _total),
+              value: widget.scheduleSession != null
+                  ? (widget.scheduleIndex + 1) /
+                      widget.scheduleSession!.items.length
+                  : _total == 0
+                      ? 0
+                      : (_idx > _total ? _total : _idx) / _total),
         ),
         Expanded(
-          child: PageView.builder(
-            controller: _pc,
-            itemCount: _total + 1,
-            onPageChanged: (int i) {
-              setState(() {
-                _idx = i;
-                _flipped = false;
-              });
-              unawaited(_save());
-            },
-            itemBuilder: (BuildContext c, int i) => _stage(i),
+          child: AbsorbPointer(
+            absorbing: _rating,
+            child: PageView.builder(
+              controller: _pc,
+              physics: widget.scheduleSession != null
+                  ? const NeverScrollableScrollPhysics()
+                  : null,
+              itemCount: _total + (widget.scheduleSession == null ? 1 : 0),
+              onPageChanged: (int i) {
+                setState(() {
+                  _idx = i;
+                  _flipped = false;
+                });
+                unawaited(_save());
+              },
+              itemBuilder: (BuildContext c, int i) => _stage(i),
+            ),
           ),
         ),
         _bottomBar(),
