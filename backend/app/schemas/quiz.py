@@ -16,6 +16,7 @@ class QuestionOut(BaseModel):
     case_index: int = 0
     case_total: int = 0
     options_html: list[str]
+    option_labels: list[str] = Field(default_factory=list)
     answer: str
     analysis_html: str
     analysis_empty: bool
@@ -57,6 +58,8 @@ class QuestionFull(BaseModel):
     id: int
     system: str
     stem_html: str
+    options_html: list[str] = Field(default_factory=list)
+    option_labels: list[str] = Field(default_factory=list)
     answer: str
     analysis_html: str
     analysis_empty: bool

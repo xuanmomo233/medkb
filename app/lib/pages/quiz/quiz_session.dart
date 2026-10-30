@@ -6,24 +6,24 @@ import '../../api.dart';
 import '../../endpoints.dart';
 import '../../models.dart' hide Card;
 import '../../nav.dart';
+import '../../option_labels.dart';
 
-const String kLetters = 'ABCDEFGH';
-
-final RegExp _letterRe = RegExp(r'^[A-H]+$');
-
-bool isMultiQ(Question q) => q.answer.length > 1 && _letterRe.hasMatch(q.answer);
+bool isMultiQ(Question q) =>
+    answerOptionLetters(q.answer).length > 1 && hasOptionsQ(q);
 
 bool hasOptionsQ(Question q) =>
-    q.optionsHtml.isNotEmpty && _letterRe.hasMatch(q.answer);
+    q.optionsHtml.isNotEmpty &&
+    answerOptionLetters(q.answer).isNotEmpty &&
+    answerOptionLetters(q.answer).split('').every(q.optionLabels.contains);
 
 String sortLetters(String s) {
   final List<String> l = s.split('')..sort();
   return l.join();
 }
 
-List<int> lettersToIdx(String s) => s
+List<int> lettersToIdx(String s, Question q) => s
     .split('')
-    .map((String c) => kLetters.indexOf(c))
+    .map((String c) => q.optionLabels.indexOf(c))
     .where((int i) => i >= 0)
     .toList();
 
@@ -85,8 +85,12 @@ class QuizSession extends ChangeNotifier {
   String get _posKey => Api.prefKey('qpos', _raw);
   String get _testKey => Api.prefKey('qtest', _raw);
 
-  String _sig(List<Question> l) =>
-      Api.prefKey('qsig', l.map((Question q) => q.id).join(','));
+  String _sig(List<Question> l) => Api.prefKey(
+      'qsig',
+      jsonEncode(l
+          .map((Question q) =>
+              <Object>[q.id, q.optionsHtml, q.optionLabels, q.answer])
+          .toList()));
 
   void _emit() {
     if (!_disposed) notifyListeners();
@@ -132,7 +136,11 @@ class QuizSession extends ChangeNotifier {
           final Map<String, dynamic> picks = asMap(saved['picks']);
           for (final Question q in list) {
             final Object? v = picks['${q.id}'];
-            if (v is String && v.isNotEmpty) ans[q.id] = Ans(v, false, null);
+            if (v is String &&
+                v.isNotEmpty &&
+                v.split('').every(q.optionLabels.contains)) {
+              ans[q.id] = Ans(v, false, null);
+            }
           }
           final Object? i = saved['idx'];
           if (i is num && list.isNotEmpty) {
@@ -242,6 +250,16 @@ class QuizSession extends ChangeNotifier {
       stats[id] = f.stat;
       questions = questions.map((Question q) {
         if (q.id != id) return q;
+        final List<String> options = f.optionsHtml ?? q.optionsHtml;
+        final List<String> labels = readOptionLabels(
+            f.optionLabels ?? (f.optionsHtml == null ? q.optionLabels : null),
+            options.length);
+        if (!listEquals(options, q.optionsHtml) ||
+            !listEquals(labels, q.optionLabels) ||
+            f.answer != q.answer) {
+          ans.remove(id);
+          _quickTimer?.cancel();
+        }
         return Question(
           id: q.id,
           qid: q.qid,
@@ -253,8 +271,9 @@ class QuizSession extends ChangeNotifier {
           caseGroup: q.caseGroup,
           caseIndex: q.caseIndex,
           caseTotal: q.caseTotal,
-          optionsHtml: q.optionsHtml,
-          answer: q.answer,
+          optionsHtml: options,
+          optionLabels: labels,
+          answer: f.answer,
           analysisHtml: f.analysisHtml,
           analysisEmpty: f.analysisEmpty,
           tags: f.tags,
@@ -272,7 +291,7 @@ class QuizSession extends ChangeNotifier {
   }
 
   void pick(Question q, String letter) {
-    if (!hasOptionsQ(q) || isRecite) return;
+    if (!hasOptionsQ(q) || !q.optionLabels.contains(letter) || isRecite) return;
     final Ans? cur = ans[q.id];
     if (cur != null && cur.judged) return;
     final bool multi = isMultiQ(q);
@@ -305,7 +324,7 @@ class QuizSession extends ChangeNotifier {
   }
 
   void judge(Question q, String picked) {
-    final bool correct = sortLetters(picked) == sortLetters(q.answer);
+    final bool correct = sortLetters(picked) == answerOptionLetters(q.answer);
     ans[q.id] = Ans(picked, true, correct);
     _emit();
     _ensure();
@@ -323,7 +342,7 @@ class QuizSession extends ChangeNotifier {
   Future<void> _report(Question q, String picked) async {
     try {
       final AttemptResult r =
-          await Endpoints.attempt(q.id, lettersToIdx(picked));
+          await Endpoints.attempt(q.id, lettersToIdx(picked, q));
       if (_disposed) return;
       stats[q.id] = r.stat;
       _emit();
@@ -405,6 +424,8 @@ class QuizSession extends ChangeNotifier {
           id: f.id,
           system: f.system,
           stemHtml: f.stemHtml,
+          optionsHtml: f.optionsHtml,
+          optionLabels: f.optionLabels,
           answer: f.answer,
           analysisHtml: h,
           analysisEmpty: false,
@@ -449,7 +470,8 @@ class QuizSession extends ChangeNotifier {
     try {
       final List<SubmitItem> items = questions
           .map((Question q) => SubmitItem(
-              questionId: q.id, picked: lettersToIdx(ans[q.id]?.picked ?? '')))
+              questionId: q.id,
+              picked: lettersToIdx(ans[q.id]?.picked ?? '', q)))
           .toList();
       final ExamReport r = await Endpoints.submitExam(title, items);
       _ticker?.cancel();

@@ -1,6 +1,7 @@
 import 'dart:ui' show PathMetric;
 import 'package:flutter/material.dart';
 import '../../models.dart' hide Card;
+import '../../option_labels.dart';
 import '../../theme.dart';
 import '../../widgets/widgets.dart';
 import 'quiz_session.dart';
@@ -25,6 +26,7 @@ class OptionList extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool multi = isMultiQ(q);
+    final String answer = answerOptionLetters(q.answer);
     final QuestionStat? st = stat;
     int total = 0;
     if (st != null) {
@@ -33,10 +35,10 @@ class OptionList extends StatelessWidget {
       }
     }
     final List<Widget> tiles = <Widget>[];
-    for (int i = 0; i < q.optionsHtml.length && i < kLetters.length; i++) {
-      final String letter = kLetters[i];
+    for (int i = 0; i < q.optionsHtml.length; i++) {
+      final String letter = q.optionLabels[i];
       final bool on = picked.contains(letter);
-      final bool isAns = reveal && q.answer.contains(letter);
+      final bool isAns = reveal && answer.contains(letter);
       int? rate;
       if (judged && st != null && total > 0) {
         rate = (((st.dist[letter] ?? 0) * 100) / total).round();
@@ -49,7 +51,7 @@ class OptionList extends StatelessWidget {
           multi: multi,
           selected: on,
           isAnswer: isAns,
-          wrongPick: judged && on && !q.answer.contains(letter),
+          wrongPick: judged && on && !answer.contains(letter),
           missed: judged && isAns && !on,
           judged: judged,
           rate: rate,

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../../api.dart';
 import '../../endpoints.dart';
 import '../../models.dart' show AdminQuestion, AdminQuestionPatch;
+import '../../option_labels.dart';
 import '../../widgets/widgets.dart';
 import 'admin_markdown_editor.dart';
 
@@ -62,7 +63,7 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
         _err = null;
         _stem.text = q.stem;
         _system.text = q.system;
-        _options.text = q.options.join('\n');
+        _options.text = formatOptionLines(q.options, q.optionLabels);
         _answer.text = q.answer;
         _tags.text = q.tags.join(', ');
         _analysis.text = q.analysis;
@@ -79,11 +80,6 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
       .where((String t) => t.isNotEmpty)
       .toList();
 
-  List<String> _parseOptions(String s) => s
-      .split('\n')
-      .map((String option) => option.replaceFirst(RegExp(r'^[A-J][.、．]\s*', caseSensitive: false), '').trim())
-      .toList();
-
   bool _sameList(List<String> a, List<String> b) {
     if (a.length != b.length) return false;
     for (int i = 0; i < a.length; i++) {
@@ -97,24 +93,34 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
     if (o == null || _saving) return;
     final String stem = _stem.text;
     final String sys = _system.text.trim();
-    final List<String> options = _parseOptions(_options.text);
-    final String answer = _answer.text.toUpperCase();
+    final LabeledOptions parsed;
+    try {
+      parsed = parseOptionLines(_options.text, o.optionLabels);
+    } on FormatException catch (e) {
+      toast(context, e.message);
+      return;
+    }
+    final List<String> options = parsed.options;
+    final String answer = _answer.text;
     final List<String> tags = _parseTags(_tags.text);
     final String ana = _analysis.text;
     final String? pStem = stem != o.stem ? stem : null;
     final String? pSys = sys != o.system ? sys : null;
     final List<String>? pOptions = _sameList(options, o.options) ? null : options;
+    final List<String>? pLabels = _sameList(parsed.labels, o.optionLabels) ? null : parsed.labels;
     final String? pAnswer = answer != o.answer ? answer : null;
     final List<String>? pTags = _sameList(tags, o.tags) ? null : tags;
     final String? pAna = ana != o.analysis ? ana : null;
-    if (pStem == null && pSys == null && pOptions == null && pAnswer == null && pTags == null && pAna == null) {
+    if (pStem == null && pSys == null && pOptions == null && pLabels == null && pAnswer == null && pTags == null && pAna == null) {
       toast(context, '没有修改');
       return;
     }
     setState(() => _saving = true);
     try {
       await Endpoints.adminSaveQuestion(widget.questionId,
-          AdminQuestionPatch(stem: pStem, system: pSys, options: pOptions, answer: pAnswer, tags: pTags, analysis: pAna));
+          AdminQuestionPatch(stem: pStem, system: pSys, options: pOptions,
+              optionLabels: pLabels ?? (pOptions != null ? parsed.labels : null),
+              answer: pAnswer, tags: pTags, analysis: pAna));
       if (!mounted) return;
       toast(context, '已保存');
       Navigator.of(context).pop(true);
@@ -167,7 +173,7 @@ class _AdminEditBodyState extends State<_AdminEditBody> {
                   minLines: 4,
                   maxLines: 10,
                   decoration: const InputDecoration(
-                      labelText: '选项', helperText: '每行一个；可粘贴 A. / B. 前缀'),
+                      labelText: '选项', helperText: '每行一个，保留 A. / J. 等原始字母前缀'),
                 ),
                 const SizedBox(height: 12),
                 TextField(

@@ -1,6 +1,8 @@
 // API v2 类型化模型，与 web/src/api/types.ts 一一对应。注意：本文件的 Card 会与 Material 的 Card 重名，
 // 页面中请使用 `import '../../models.dart' hide Card;`（不需要 Card 模型时）或 `as m` 前缀。
 
+import 'option_labels.dart';
+
 Map<String, dynamic> asMap(Object? v) =>
     v is Map ? Map<String, dynamic>.from(v) : <String, dynamic>{};
 
@@ -568,6 +570,8 @@ class Question {
   final int caseIndex;
   final int caseTotal;
   final List<String> optionsHtml;
+  final List<String>? _optionLabels;
+  List<String> get optionLabels => _optionLabels ?? sequentialOptionLabels(optionsHtml.length);
   final String answer;
   final String analysisHtml;
   final bool analysisEmpty;
@@ -589,6 +593,7 @@ class Question {
     this.caseIndex = 0,
     this.caseTotal = 0,
     required this.optionsHtml,
+    List<String>? optionLabels,
     required this.answer,
     required this.analysisHtml,
     required this.analysisEmpty,
@@ -598,7 +603,7 @@ class Question {
     required this.done,
     required this.lastPicked,
     required this.lastCorrect,
-  });
+  }) : _optionLabels = optionLabels;
   factory Question.fromJson(Map<String, dynamic> j) => Question(
         id: _i(j['id']),
         qid: _s(j['qid']),
@@ -611,6 +616,7 @@ class Question {
         caseIndex: _i(j['case_index']),
         caseTotal: _i(j['case_total']),
         optionsHtml: _ls(j['options_html']),
+        optionLabels: readOptionLabels(j['option_labels'], _ls(j['options_html']).length),
         answer: _s(j['answer']),
         analysisHtml: _s(j['analysis_html']),
         analysisEmpty: _b(j['analysis_empty']),
@@ -679,6 +685,8 @@ class QuestionFull {
   final int id;
   final String system;
   final String stemHtml;
+  final List<String>? optionsHtml;
+  final List<String>? optionLabels;
   final String answer;
   final String analysisHtml;
   final bool analysisEmpty;
@@ -692,6 +700,8 @@ class QuestionFull {
     required this.id,
     required this.system,
     required this.stemHtml,
+    this.optionsHtml,
+    this.optionLabels,
     required this.answer,
     required this.analysisHtml,
     required this.analysisEmpty,
@@ -706,6 +716,8 @@ class QuestionFull {
         id: _i(j['id']),
         system: _s(j['system']),
         stemHtml: _s(j['stem_html']),
+        optionsHtml: j['options_html'] is List ? _ls(j['options_html']) : null,
+        optionLabels: j['option_labels'] is List ? _ls(j['option_labels']) : null,
         answer: _s(j['answer']),
         analysisHtml: _s(j['analysis_html']),
         analysisEmpty: _b(j['analysis_empty']),
@@ -1478,6 +1490,8 @@ class AdminQuestion {
   final String stem;
   final String system;
   final List<String> options;
+  final List<String>? _optionLabels;
+  List<String> get optionLabels => _optionLabels ?? sequentialOptionLabels(options.length);
   final String answer;
   final String analysis;
   final List<String> tags;
@@ -1486,15 +1500,17 @@ class AdminQuestion {
     required this.stem,
     required this.system,
     required this.options,
+    List<String>? optionLabels,
     required this.answer,
     required this.analysis,
     required this.tags,
-  });
+  }) : _optionLabels = optionLabels;
   factory AdminQuestion.fromJson(Map<String, dynamic> j) => AdminQuestion(
         id: _i(j['id']),
         stem: _s(j['stem']),
         system: _s(j['system']),
         options: _ls(j['options']),
+        optionLabels: readOptionLabels(j['option_labels'], _ls(j['options']).length),
         answer: _s(j['answer']),
         analysis: _s(j['analysis']),
         tags: _ls(j['tags']),
@@ -1505,15 +1521,17 @@ class AdminQuestionPatch {
   final String? stem;
   final String? system;
   final List<String>? options;
+  final List<String>? optionLabels;
   final String? answer;
   final String? analysis;
   final List<String>? tags;
-  const AdminQuestionPatch({this.stem, this.system, this.options, this.answer, this.analysis, this.tags});
+  const AdminQuestionPatch({this.stem, this.system, this.options, this.optionLabels, this.answer, this.analysis, this.tags});
   Map<String, dynamic> toJson() {
     final Map<String, dynamic> m = <String, dynamic>{};
     if (stem != null) m['stem'] = stem;
     if (system != null) m['system'] = system;
     if (options != null) m['options'] = options;
+    if (optionLabels != null) m['option_labels'] = optionLabels;
     if (answer != null) m['answer'] = answer;
     if (analysis != null) m['analysis'] = analysis;
     if (tags != null) m['tags'] = tags;

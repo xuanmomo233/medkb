@@ -6,6 +6,7 @@ from .analysis import validate_suggestion
 from .normalize import digest, identity, snapshot
 from .schemas import ReviewPlan, Suggestion
 from .store import utcnow
+from app.services.option_labels import labels_for, answer_letters
 
 
 def require(condition, message):
@@ -45,6 +46,7 @@ async def publish(session, plan: ReviewPlan, actor_id: int):
             result.append(dict(proposal_id=proposal.id, status="rejected"))
             continue
         require(document.latest_version == revision.version, "上游已有更新版本，请重新分析")
+        require("option_labels" in revision.normalized, "旧提案缺少选项标签，请重新获取上游并分析后发布")
         require(not document.validation_error, "最新上游数据转换失败，需先修复转换规则")
         q = await session.scalar(select(Question).where(Question.id == document.question_id).with_for_update().execution_options(populate_existing=True)) if document.question_id else None
         require(digest(snapshot(q) if q else {}) == digest(proposal.local_snapshot), "题目已被人工修改，请重新分析")
@@ -74,8 +76,9 @@ async def publish(session, plan: ReviewPlan, actor_id: int):
         require(q.stem and q.qtype and q.subject_dir and q.system and q.bank_group, "发布题目缺少题干、题型或分类")
         if q.qtype in ("单选", "多选"):
             require(len(q.options) >= 2 and q.answer, "选择题缺少选项或答案")
-            letters = set(q.answer.replace("、", "").replace(",", "").replace(" ", ""))
-            require(letters and letters <= set("ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:len(q.options)]), "选择题答案与选项不匹配")
+            labels = labels_for(q.options, q.option_labels)
+            letters = answer_letters(q.answer)
+            require(letters and letters <= set(labels), "选择题答案与选项不匹配")
         introduced = dict(merge=None, relation_ids=[], card_ids=[], citation_ids=[])
         if decision.duplicate_of is not None:
             require(decision.duplicate_of in proposal.context["exact_ids"], "合并目标必须来自严格重复候选")

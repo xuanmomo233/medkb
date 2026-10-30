@@ -3,9 +3,10 @@ import html
 import json
 import re
 import unicodedata
+from app.services.option_labels import import_options, labels_for
 
 FIELDS = (
-    "bank_group", "bank", "subject_dir", "system", "chapter", "qtype", "stem", "options",
+    "bank_group", "bank", "subject_dir", "system", "chapter", "qtype", "stem", "options", "option_labels",
     "answer", "analysis", "parent_stem", "meta", "source_file", "tags", "is_real_exam",
 )
 TYPES = {"1": "单选", "2": "多选", "3": "多选", "5": "口诀", "6": "病例串", "7": "填空"}
@@ -36,7 +37,7 @@ def normalize(raw: dict, meta: dict) -> dict:
     options = raw.get("options") or []
     if not isinstance(options, list) or len(options) > 26:
         raise ValueError("上游选项格式不受支持")
-    options = [plain_html(item) for item in options]
+    options, option_labels = import_options([plain_html(item) for item in options], raw.get("option_labels"))
     answers = raw.get("answer") or []
     answers = answers if isinstance(answers, list) else [answers]
     converted = []
@@ -44,7 +45,7 @@ def normalize(raw: dict, meta: dict) -> dict:
         if isinstance(answer, int) and not isinstance(answer, bool):
             if not 0 <= answer < len(options):
                 raise ValueError("上游答案索引越界")
-            converted.append(chr(65 + answer))
+            converted.append(option_labels[answer])
         else:
             converted.append(plain_html(answer))
     bank = str(meta.get("bank_title", ""))
@@ -52,13 +53,20 @@ def normalize(raw: dict, meta: dict) -> dict:
     if len(bank) > 64 or len(chapter) > 200 or len("、".join(converted)) > 255:
         raise ValueError("上游题库名、章节或答案超出当前题库字段长度，需人工拆分转换")
     return dict(bank_group="", bank=bank, subject_dir="", system="", chapter=chapter,
-                qtype=TYPES[str(raw["type"])], stem=stem, options=options, answer="、".join(converted),
+                qtype=TYPES[str(raw["type"])], stem=stem, options=options, option_labels=option_labels, answer="、".join(converted),
                 analysis=plain_html(raw.get("analysis")), parent_stem=plain_html(meta.get("parent_stem")),
                 meta="", source_file=f"wcyk:{raw['id']}", tags=[], is_real_exam=bool(meta.get("is_real_exam", False)))
 
 
 def snapshot(question) -> dict:
-    return {field: getattr(question, field) for field in FIELDS}
+    result = {field: getattr(question, field) for field in FIELDS}
+    result["option_labels"] = labels_for(result["options"], result["option_labels"])
+    return result
+
+
+def compatible_data(value: dict) -> dict:
+    """Read old staged revisions without mutating their historical payload/hash."""
+    return dict(value, option_labels=labels_for(value.get("options", []), value.get("option_labels")))
 
 
 def identity(value: dict, *, include_answer=True) -> str | None:
@@ -66,7 +74,7 @@ def identity(value: dict, *, include_answer=True) -> str | None:
     if not value.get("stem") or not value.get("answer"):
         return None
     fields = [value.get(k, "") for k in ("qtype", "parent_stem", "stem")]
-    fields += [value.get("options", [])]
+    fields += [value.get("options", []), labels_for(value.get("options", []), value.get("option_labels"))]
     if include_answer:
         fields += [value["answer"]]
 

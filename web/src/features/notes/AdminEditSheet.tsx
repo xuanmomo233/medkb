@@ -8,17 +8,16 @@ import MarkdownEditor from './MarkdownEditor'
 import CitationEditor from './CitationEditor'
 import { citationInputs, sameCitations } from './citationHelpers'
 import s from './notes.module.css'
+import { formatLabeledOptions, questionOptionPatch } from '@/optionLabels'
 
 interface Props { questionId: number; open: boolean; onClose: () => void; onSaved?: () => void }
 
 const splitTags = (v: string) => v.split(/[,，]/).map((t) => t.trim()).filter(Boolean)
-const splitOptions = (v: string) => v.split(/\r?\n/).map((option) => option.replace(/^[A-J][.、．]\s*/i, '').trim())
-
 function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: number; onClose: () => void; onSaved?: () => void }) {
   const toast = useToast()
   const [stem, setStem] = useState(data.stem)
   const [system, setSystem] = useState(data.system)
-  const [options, setOptions] = useState(data.options.join('\n'))
+  const [options, setOptions] = useState(() => formatLabeledOptions(data.options, data.option_labels))
   const [answer, setAnswer] = useState(data.answer)
   const [tags, setTags] = useState(data.tags.join(', '))
   const [analysis, setAnalysis] = useState(data.analysis)
@@ -29,9 +28,9 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
   const patch: AdminQuestionPatch = {}
   if (stem !== data.stem) patch.stem = stem
   if (system !== data.system) patch.system = system
-  const newOptions = splitOptions(options)
-  if (newOptions.join('\n') !== data.options.join('\n')) patch.options = newOptions
-  if (answer !== data.answer) patch.answer = answer
+  let optionError = ''
+  try { Object.assign(patch, questionOptionPatch(data, options, answer)) }
+  catch (e) { optionError = e instanceof Error ? e.message : '选项格式无效' }
   const newTags = splitTags(tags)
   if (newTags.join('\n') !== data.tags.join('\n')) patch.tags = newTags
   if (analysis !== data.analysis) patch.analysis = analysis
@@ -53,15 +52,16 @@ function Editor({ data, id, onClose, onSaved }: { data: AdminQuestion; id: numbe
   return (
     <div className={s.form}>
       <MarkdownEditor label="题干（Markdown 原文）" value={stem} onChange={setStem} kind="markdown" />
-      <Field label="选项" hint="每行一个选项；可粘贴 A. / B. 前缀，保存时会自动去除"><textarea className={s.textarea} value={options} onChange={(e) => setOptions(e.target.value)} rows={Math.max(4, data.options.length)} /></Field>
-      <Field label="正确答案" hint="单选填 A；多选连续填写字母，例如 AC"><Input value={answer} onChange={(e) => setAnswer(e.target.value.toUpperCase())} /></Field>
+      <Field label="选项" hint="每行保留原标签，例如 A. / J.；支持 A–Z，缺号不会自动重排"><textarea className={s.textarea} value={options} onChange={(e) => setOptions(e.target.value)} rows={Math.max(4, data.options.length)} /></Field>
+      <Field label="正确答案" hint="填写原选项标签；多选例如 AJ，修改标签时须同时核对答案"><Input value={answer} onChange={(e) => setAnswer(e.target.value.toUpperCase())} /></Field>
+      {optionError && <p role="alert">{optionError}</p>}
       <Field label="系统分类"><Input value={system} onChange={(e) => setSystem(e.target.value)} /></Field>
       <Field label="标签" hint="多个标签用逗号分隔"><Input value={tags} onChange={(e) => setTags(e.target.value)} /></Field>
       <MarkdownEditor label="解析（Markdown 原文）" value={analysis} onChange={setAnalysis} kind="markdown" />
       <CitationEditor value={citations} onChange={setCitations} subject={data.subject_dir} />
       <div className={s.actions}>
         <Button onClick={onClose}>取消</Button>
-        <Button variant="primary" disabled={!dirty || saving} onClick={save}>{saving ? '保存中…' : '保存'}</Button>
+        <Button variant="primary" disabled={!dirty || saving || !!optionError} onClick={save}>{saving ? '保存中…' : '保存'}</Button>
       </div>
     </div>
   )

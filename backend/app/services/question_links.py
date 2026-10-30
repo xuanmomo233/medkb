@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Attempt, PlanTask, Question, QuestionMerge, QuestionRelation
+from app.models import Attempt, ContentCitation, PlanTask, Question, QuestionMerge, QuestionRelation
 from app.services.question_groups import batches
 
 
@@ -20,6 +20,17 @@ def resolve(mapping: dict[int, int], qid: int) -> int:
         seen.add(qid)
         qid = mapping[qid]
     return qid
+
+
+def identity_members(mapping: dict[int, int], qids) -> dict[int, set[int]]:
+    """Return every stored ID grouped under its active canonical question."""
+    roots = {resolve(mapping, qid) for qid in qids}
+    out = {root: {root} for root in roots}
+    for alias in mapping:
+        root = resolve(mapping, alias)
+        if root in roots:
+            out[root].add(alias)
+    return out
 
 
 async def answered(session: AsyncSession, uid: int, mapping: dict[int, int]) -> dict[int, object]:
@@ -58,9 +69,26 @@ async def related(session: AsyncSession, uid: int, qid: int, limit: int = 3) -> 
             candidates.setdefault(other, rel)
     if not candidates:
         return []
-    pending = set((await session.scalars(select(PlanTask.target_id).where(
+    # A disputed citation on any historical alias concerns the whole identity.
+    # Scope the lookup to these identities; chapter-level disputes are separate.
+    relevant = {root, *candidates}
+    members = relevant | {alias for alias in mapping if resolve(mapping, alias) in relevant}
+    disputed = set()
+    for chunk in batches(list(members)):
+        disputed.update(resolve(mapping, target) for target in (await session.scalars(
+            select(ContentCitation.target_id).where(
+                ContentCitation.target_type == "question", ContentCitation.status == "disputed",
+                ContentCitation.target_id.in_(chunk),
+            )
+        )).all())
+    if root in disputed:
+        return []
+    candidates = {target: rel for target, rel in candidates.items() if target not in disputed}
+    if not candidates:
+        return []
+    pending = {resolve(mapping, target) for target in (await session.scalars(select(PlanTask.target_id).where(
         PlanTask.user_id == uid, PlanTask.kind == "question", PlanTask.completed_at.is_(None),
-    ))).all())
+    ))).all()}
     by_id = {}
     for chunk in batches(list(candidates)):
         by_id.update((q.id, q) for q in (await session.scalars(select(Question).where(Question.id.in_(chunk)))).all())

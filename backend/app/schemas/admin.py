@@ -21,6 +21,7 @@ class AdminQuestion(BaseModel):
     system: str
     stem: str
     options: list[str]
+    option_labels: list[str] = Field(default_factory=list)
     answer: str
     analysis: str
     tags: list[str]
@@ -30,8 +31,9 @@ class AdminQuestion(BaseModel):
 class AdminQuestionPatch(BaseModel):
     system: str | None = None
     stem: str | None = None
-    options: list[str] | None = Field(default=None, max_length=10)
-    answer: str | None = Field(default=None, max_length=32)
+    options: list[str] | None = Field(default=None, max_length=26)
+    option_labels: list[str] | None = Field(default=None, max_length=26)
+    answer: str | None = Field(default=None, max_length=255)
     analysis: str | None = None
     tags: list[str] | None = None
     citations: list[ContentCitationIn] | None = Field(default=None, max_length=12)

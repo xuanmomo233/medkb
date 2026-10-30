@@ -2,19 +2,20 @@ import random as _random
 import re
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import JSON, cast, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Exam, Question
 from app.schemas import quiz as S
-from app.services.quiz import Recorder, iso
+from app.services.quiz import Recorder, iso, submission_indices
 from app.services.question_groups import batches, ordered_groups
-from app.services import plan_queue, schedule_progress
+from app.services import plan_queue, question_links, schedule_progress
+from app.services.quiz_filters import visible_question_condition
+from app.services.option_labels import answer_letters, labels_for
 
 # Up to 5,000 explicit seeds may each expand to four case children.
 SUBMIT_MAX = 20_000
 MOCK_QTYPES = ("单选", "多选", "病例子题", "病例串")
-_JUDGEABLE = re.compile(r"[A-J]+(?:[\s,，、/;；]+[A-J]+)*")
 UNKNOWN_SYSTEM = "未细分"
 
 
@@ -23,12 +24,25 @@ async def submit(session: AsyncSession, uid: int, title: str, items: list[S.Subm
         raise HTTPException(400, "交卷题目不能为空")
     if len(items) > SUBMIT_MAX:
         raise HTTPException(400, f"单次最多交卷 {SUBMIT_MAX} 题")
-    qids = list({it.question_id for it in items})
+    mapping = await question_links.redirects(session)
+    normalized_items = []
+    seen = set()
+    for item in items:
+        qid = question_links.resolve(mapping, item.question_id)
+        if qid not in seen:
+            normalized_items.append((qid, item.question_id, item.picked))
+            seen.add(qid)
+    qids = list(seen | {source for _, source, _ in normalized_items})
     qs = {}
     for chunk in batches(qids):
         qs.update((q.id, q) for q in (await session.execute(
             select(Question).where(Question.id.in_(chunk))
         )).scalars().all())
+    prepared = []
+    for qid, source_id, picked in normalized_items:
+        source, target = qs.get(source_id), qs.get(qid)
+        if source is not None and target is not None:
+            prepared.append((qid, submission_indices(source, target, picked)))
     title = (title or "").strip()[:80]
     exam = None
     if title:
@@ -40,11 +54,11 @@ async def submit(session: AsyncSession, uid: int, title: str, items: list[S.Subm
     wrong_ids: list[int] = []
     by_ch: dict[str, list[int]] = {}
     total = correct = 0
-    for it in items:
-        q = qs.get(it.question_id)
+    for qid, picked in prepared:
+        q = qs.get(qid)
         if q is None:
             continue
-        ok = rec.judge(q, it.picked, exam.id if exam else None)
+        ok = rec.judge(q, picked, exam.id if exam else None)
         if ok is None:
             results.append(S.SubmitResult(question_id=q.id, judged=False, answer=q.answer or ""))
             continue
@@ -92,7 +106,16 @@ async def exams(session: AsyncSession, uid: int) -> list[S.ExamRecord]:
 # ---------------- 模考抽题 ----------------
 def type_rank(qtype: str, answer: str) -> int:
     """Classify every child by its actual answer, even inside a case."""
-    return 3 if len(set(re.findall(r"[A-J]", (answer or "").upper()))) > 1 else 1
+    return 3 if len(answer_letters(answer)) > 1 else 1
+
+
+def judgeable_answer(answer, option_labels, option_count):
+    try:
+        labels = labels_for([None] * int(option_count or 0), option_labels)
+    except ValueError:
+        return False
+    selected = answer_letters(answer)
+    return bool(selected and selected <= set(labels))
 
 
 def _reachable_size(counts: dict[int, int], target: int) -> bool:
@@ -210,30 +233,37 @@ async def mock(session: AsyncSession, n: int) -> list[int]:
         (s or UNKNOWN_SYSTEM): int(c)
         for s, c in (
             await session.execute(
-                select(Question.system, func.count(Question.id)).where(Question.is_real_exam.is_(True)).group_by(Question.system)
+                select(Question.system, func.count(Question.id)).where(
+                    Question.is_real_exam.is_(True), visible_question_condition(),
+                ).group_by(Question.system)
             )
         ).all()
     }
+    option_count = func.json_array_length(cast(Question.options, JSON) if session.bind.dialect.name == "postgresql" else Question.options)
     rows = (
         await session.execute(
-            select(Question.id, Question.system, Question.is_real_exam, Question.qtype, Question.answer)
-            .where(Question.qtype.in_(MOCK_QTYPES))
+            select(Question.id, Question.system, Question.is_real_exam, Question.qtype, Question.answer,
+                   Question.option_labels, option_count)
+            .where(Question.qtype.in_(MOCK_QTYPES), visible_question_condition())
         )
     ).all()
     pool = [
         (i, s or UNKNOWN_SYSTEM, bool(hot), type_rank(qt, ans))
-        for i, s, hot, qt, ans in rows
-        if _JUDGEABLE.fullmatch((ans or "").strip().upper())
+        for i, s, hot, qt, ans, labels, count in rows
+        if judgeable_answer(ans, labels, count)
     ]
     eligible = {item[0] for item in pool}
     # Only cases have a parent stem. Scan narrow IDs, not unbounded question
     # ORM objects/text; then complete eligible case seeds regardless of whether
     # a sibling itself passed the mock's answer/type seed rules.
     grouped = (await session.execute(
-        select(Question.id).where(Question.qtype.in_(MOCK_QTYPES), Question.parent_stem != "")
+        select(Question.id).where(Question.qtype.in_(MOCK_QTYPES), Question.parent_stem != "",
+                                  visible_question_condition())
     )).scalars().all()
     case_seeds = [qid for qid in grouped if qid in eligible]
+    mapping = await question_links.redirects(session)
     groups = await ordered_groups(session, case_seeds)
+    groups = [list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in group)) for group in groups]
     by_id = {item[0]: item for item in pool}
     missing = [qid for children in groups for qid in children if qid not in by_id]
     for chunk in batches(missing):

@@ -2,7 +2,9 @@ import hashlib
 import json
 import re
 import time
+import unicodedata
 from collections import defaultdict, deque
+from dataclasses import replace
 from datetime import datetime, timezone
 
 from fastapi import HTTPException
@@ -10,15 +12,15 @@ from sqlalchemy import and_, case, func, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.render import card_md, md
-from app.models import Attempt, Card, CardQuestion, Question, QuestionProgress as QP
+from app.models import Attempt, Card, CardQuestion, Question, QuestionProgress as QP, User
 from app.schemas import quiz as S
 from app.services import plan_queue, provenance, question_links, schedule_progress
 from app.services.glm import glm_call
-from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, answered_condition, level_conditions, pool_flt_condition
-from app.services.question_groups import batches, complete_question_ids, group_key, legacy_case_parts
+from app.services.quiz_filters import LEVELS, SEP, QuizParams, all_conditions, answered_condition, hides_merged_aliases, level_conditions, pool_flt_condition, scoped_question_roots
+from app.services.question_groups import batches, complete_question_ids, flatten_groups, group_key, legacy_case_parts, ordered_groups
 from app.services.card_merges import visible
+from app.services.option_labels import LETTERS, answer_letters, labels_for
 
-LETTERS = "ABCDEFGHIJ"
 SUBJECT_DIR = {
     "生理学": "01-生理学", "生物化学": "02-生物化学", "病理学": "03-病理学", "诊断学": "04-诊断学",
     "内科学": "05-内科学", "外科学": "06-外科学", "医学人文": "07-医学人文",
@@ -27,11 +29,14 @@ DEFAULT_LIMIT, MAX_LIMIT, RANDOM_LIMIT = 400, 5000, 120
 
 
 def ans_set(ans: str | None) -> set[str]:
-    return set(re.findall(r"[A-J]", (ans or "").upper()))
+    return answer_letters(ans)
 
 
-def picked_letters(picked: list[int]) -> str:
-    return "".join(sorted({LETTERS[i] for i in picked if isinstance(i, int) and 0 <= i < len(LETTERS)}))
+def picked_letters(picked: list[int], labels: list[str] | None = None) -> str:
+    labels = list(LETTERS) if labels is None else labels
+    if any(not isinstance(i, int) or isinstance(i, bool) or not 0 <= i < len(labels) for i in picked):
+        raise HTTPException(400, "选择的选项下标超出范围")
+    return "".join(sorted({labels[i] for i in picked}))
 
 
 def derive_state(qp: QP | None) -> str:
@@ -66,6 +71,51 @@ def _opts(q: Question) -> list:
     return list(o or [])
 
 
+def remap_picked_to_target(picked: str, source_options, source_labels, target_options, target_labels) -> str | None:
+    """Translate a preserved attempt's letters when a merged alias reorders options.
+
+    Attempt rows remain attached to their original question IDs. Read-time
+    translation keeps their selected option meaning aligned with the canonical
+    question. Ambiguous or unmatched choices are left unmapped rather than
+    being assigned a potentially incorrect canonical letter.
+    """
+    if not picked:
+        return ""
+    selected = answer_letters(picked)
+    try:
+        source_labels = labels_for(source_options, source_labels)
+        target_labels = labels_for(target_options, target_labels)
+    except ValueError:
+        return None
+    if not selected or not selected.issubset(set(source_labels)):
+        return None
+
+    def option_key(value):
+        text = unicodedata.normalize("NFC", str(value or ""))
+        text = "".join(chr(ord(ch) - 0xFEE0) if 0xFF01 <= ord(ch) <= 0xFF5E else ch for ch in text)
+        text = text.translate(str.maketrans({
+            "Ⅰ": "I", "Ⅱ": "II", "Ⅲ": "III", "Ⅳ": "IV", "Ⅴ": "V",
+            "Ⅵ": "VI", "Ⅶ": "VII", "Ⅷ": "VIII", "Ⅸ": "IX", "Ⅹ": "X",
+            "Ⅺ": "XI", "Ⅻ": "XII", "ⅰ": "i", "ⅱ": "ii", "ⅲ": "iii",
+            "ⅳ": "iv", "ⅴ": "v", "ⅵ": "vi", "ⅶ": "vii", "ⅷ": "viii",
+            "ⅸ": "ix", "ⅹ": "x", "ⅺ": "xi", "ⅻ": "xii",
+        }))
+        return re.sub(r"\s+", "", text)
+
+    source_by_label = dict(zip(source_labels, source_options))
+    target_by_text = defaultdict(list)
+    for label, option in zip(target_labels, target_options):
+        target_by_text[option_key(option)].append(label)
+
+    translated = []
+    for label in selected:
+        matches = target_by_text.get(option_key(source_by_label[label]), [])
+        if len(matches) != 1:
+            return None
+        translated.append(matches[0])
+    return "".join(sorted(set(translated)))
+
+
 def _tags(q: Question) -> list[str]:
     t = q.tags
     return [str(x) for x in t] if isinstance(t, list) else []
@@ -77,11 +127,34 @@ async def facets(session: AsyncSession, uid: int, p: QuizParams) -> dict:
     done = func.coalesce(func.sum(case((answered_condition(uid), 1), else_=0)), 0)
     for i, lv in enumerate(LEVELS):
         col = getattr(Question, lv)
+        conditions = level_conditions(p, i)
+        if hides_merged_aliases(p):
+            members = scoped_question_roots(conditions, lv).subquery()
+            # A root may belong to several source groups. Count once within
+            # each group, and once again within their shared top-level bank.
+            if lv == "bank_group":
+                rows = (await session.execute(
+                    select(members.c.value, Question.id, answered_condition(uid))
+                    .join(Question, Question.id == members.c.qid)
+                )).all()
+                grouped: dict[str, dict[int, bool]] = defaultdict(dict)
+                for name, qid, answered in rows:
+                    if name:
+                        grouped[name.split(SEP)[0]][qid] = bool(answered)
+                        if SEP in name:
+                            grouped[name][qid] = bool(answered)
+                out[lv] = dict(sorted((name, [len(ids), sum(ids.values())]) for name, ids in grouped.items()))
+                continue
+            col = members.c.value
+            conditions = []
+            source = Question.__table__.join(members, Question.id == members.c.qid)
+        else:
+            source = Question
         stmt = (
             select(col, func.count(Question.id), done)
-            .select_from(Question)
+            .select_from(source)
             .outerjoin(QP, and_(QP.question_id == Question.id, QP.user_id == uid))
-            .where(*level_conditions(p, i))
+            .where(*conditions)
             .group_by(col)
         )
         rows = (await session.execute(stmt)).all()
@@ -125,12 +198,59 @@ async def _latest_attempts(session: AsyncSession, uid: int, qids: list[int]) -> 
     return out
 
 
+async def _latest_attempts_by_root(
+    session: AsyncSession, uid: int, roots: list[int], mapping: dict[int, int], canonical_questions: dict[int, Question]
+) -> dict[int, tuple[str, bool | None]]:
+    members = question_links.identity_members(mapping, roots)
+    member_ids = sorted({qid for group in members.values() for qid in group})
+    latest = await _latest_attempts(session, uid, member_ids)
+
+    source_questions = dict(canonical_questions)
+    alias_ids = [qid for qid in member_ids if qid not in source_questions]
+    for chunk in batches(alias_ids):
+        rows = (await session.scalars(select(Question).where(Question.id.in_(chunk)))).all()
+        source_questions.update((q.id, q) for q in rows)
+
+    out = {}
+    for root, qids in members.items():
+        attempts = [latest[qid] for qid in qids if qid in latest]
+        if not attempts:
+            continue
+        attempt = max(attempts, key=lambda row: row.id)
+        source = source_questions.get(attempt.question_id)
+        target = source_questions.get(root)
+        picked = remap_picked_to_target(
+            attempt.picked, _opts(source), source.option_labels, _opts(target), target.option_labels,
+        ) if source is not None and target is not None else None
+        out[root] = (picked or "", attempt.is_correct)
+    return out
+
+
+async def _progress_by_root(session: AsyncSession, uid: int, roots: list[int], mapping: dict[int, int]) -> dict[int, dict[str, bool]]:
+    roots = {question_links.resolve(mapping, qid) for qid in roots}
+    out = {root: {"in_wrongbook": False, "starred": False, "in_plan": False, "mastered": False}
+           for root in roots}
+    rows = (await session.execute(select(QP).where(QP.user_id == uid))).scalars().all()
+    for qp in rows:
+        root = question_links.resolve(mapping, qp.question_id)
+        if root not in out:
+            continue
+        for field in out[root]:
+            out[root][field] = out[root][field] or bool(getattr(qp, field))
+    return out
+
+
 async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: bool) -> list[S.QuestionOut]:
     plan_ids = None
     if p.plan_day is not None:
         plan_ids = await plan_day_qids(session, uid, p.plan_day)
         if not plan_ids:
             return []
+        mapping = await question_links.redirects(session)
+        plan_ids = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in plan_ids))
+        if p.ids is not None:
+            mapping = await question_links.redirects(session)
+            p = replace(p, ids=list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in p.ids)))
     # Apply filters to lightweight seeds, then complete cases WITHOUT applying
     # progress/type filters to siblings. Only selected children load full content.
     stmt = (
@@ -157,14 +277,32 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
     if p.ids is not None:
         eligible = set(seed_ids)
         seed_ids = [qid for qid in p.ids if qid in eligible]
-    qids = await complete_question_ids(session, seed_ids, limit)
+    if hides_merged_aliases(p):
+        # Case completion may add aliases. Replace them with their reviewed
+        # root as well, so a case never serves a superseded answer.
+        mapping = await question_links.redirects(session)
+        groups = await ordered_groups(session, seed_ids)
+        seen = set()
+        canonical_groups = []
+        for group in groups:
+            members = []
+            for qid in group:
+                root = question_links.resolve(mapping, qid)
+                if root not in seen:
+                    seen.add(root)
+                    members.append(root)
+            canonical_groups.append(members)
+        qids = flatten_groups(canonical_groups, limit)
+    else:
+        qids = await complete_question_ids(session, seed_ids, limit)
+    mapping = await question_links.redirects(session)
+    qids = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in qids))
     if plan_ids is not None:
         # The persisted queue already contains the full case. Never bring a
         # completed child back merely to expand its unfinished sibling.
         selected = set(qids)
         qids = [qid for qid in plan_ids if qid in selected]
     elif p.fresh:
-        mapping = await question_links.redirects(session)
         done = await question_links.answered(session, uid, mapping)
         used = set(done)
         fresh_ids = []
@@ -172,7 +310,9 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
             root = question_links.resolve(mapping, qid)
             if root not in used:
                 used.add(root)
-                fresh_ids.append(qid)
+                # Keep the representative stable when a duplicate group has
+                # historical answer variants.
+                fresh_ids.append(root)
         qids = fresh_ids
     rows_by_id = {}
     for chunk in batches(qids):
@@ -184,7 +324,12 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
         rows_by_id.update((q.id, (q, qp)) for q, qp in rows)
     rows = [rows_by_id[qid] for qid in qids if qid in rows_by_id]
     legacy = await legacy_case_parts(session, [q.id for q, _ in rows if not (q.parent_stem or "").strip()])
-    last = await _latest_attempts(session, uid, [q.id for q, _ in rows])
+    canonical_questions = {q.id: q for q, _ in rows}
+    last_by_root = await _latest_attempts_by_root(
+        session, uid, list(canonical_questions), mapping, canonical_questions,
+    )
+    done = await question_links.answered(session, uid, mapping)
+    progress = await _progress_by_root(session, uid, [q.id for q, _ in rows], mapping)
     case_members = defaultdict(list)
     for q, _ in rows:
         parent = "\n".join((legacy[q.id][2], legacy[q.id][0])) if q.id in legacy else q.parent_stem
@@ -198,7 +343,7 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
             case_meta[qid] = (token, index, len(ids))
     out = []
     for q, qp in rows:
-        a = last.get(q.id)
+        last_picked, last_correct = last_by_root.get(q.id, ("", None))
         empty = not (q.analysis or "").strip()
         case_group, case_index, case_total = case_meta.get(q.id, ("", 0, 0))
         out.append(
@@ -208,12 +353,16 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
                 parent_html=md(legacy.get(q.id, (q.parent_stem, q.stem))[0]),
                 case_group=case_group, case_index=case_index, case_total=case_total,
                 options_html=[md(str(o)) for o in _opts(q)],
+                option_labels=labels_for(_opts(q), q.option_labels),
                 answer=q.answer or "",
                 analysis_html="" if (lite or empty) else md(q.analysis),
                 analysis_empty=empty, tags=_tags(q),
-                state=derive_state(qp), starred=bool(qp and qp.starred),
-                done=a is not None,
-                last_picked=a.picked if a else "", last_correct=a.is_correct if a else None,
+                state=("mastered" if progress[q.id]["mastered"] else
+                       "again" if progress[q.id]["in_wrongbook"] else
+                       "plan" if progress[q.id]["in_plan"] else ""),
+                starred=progress[q.id]["starred"],
+                done=question_links.resolve(mapping, q.id) in done,
+                last_picked=last_picked, last_correct=last_correct,
             )
         )
     return out
@@ -221,22 +370,39 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
 
 # ---------------- stat / full ----------------
 async def question_stat(session: AsyncSession, qid: int) -> S.QuestionStat:
+    mapping = await question_links.redirects(session)
+    roots = question_links.identity_members(mapping, [qid])
+    root = question_links.resolve(mapping, qid)
+    qids = list(roots.get(root, {qid}))
     total, correct = (
         await session.execute(
             select(func.count(Attempt.id), func.coalesce(func.sum(case((Attempt.is_correct.is_(True), 1), else_=0)), 0))
-            .where(Attempt.question_id == qid)
+            .where(Attempt.question_id.in_(qids))
         )
     ).one()
     rows = (
         await session.execute(
-            select(Attempt.picked, func.count(Attempt.id))
-            .where(Attempt.question_id == qid, Attempt.picked != "")
-            .group_by(Attempt.picked)
+            select(Attempt.question_id, Attempt.picked, func.count(Attempt.id))
+            .where(Attempt.question_id.in_(qids), Attempt.picked != "")
+            .group_by(Attempt.question_id, Attempt.picked)
         )
     ).all()
+    source_questions = {}
+    for chunk in batches(qids):
+        qs = (await session.scalars(select(Question).where(Question.id.in_(chunk)))).all()
+        source_questions.update((question.id, question) for question in qs)
+    target = source_questions.get(root)
     dist: dict[str, int] = defaultdict(int)
-    for picked, n in rows:
-        for ch in picked:
+    for source_id, picked, n in rows:
+        source = source_questions.get(source_id)
+        canonical_picked = remap_picked_to_target(
+            picked, _opts(source), source.option_labels, _opts(target), target.option_labels,
+        ) if source is not None and target is not None else None
+        if canonical_picked is None:
+            # Keep the stored attempt, but do not assign its option letters to
+            # the wrong canonical choices when source options are ambiguous.
+            continue
+        for ch in canonical_picked:
             dist[ch] += int(n)
     return S.QuestionStat(total=int(total), correct=int(correct), dist=dict(sorted(dist.items())))
 
@@ -250,19 +416,23 @@ async def _related_cards(session: AsyncSession, qid: int, limit: int) -> list[Ca
 
 
 async def question_full(session: AsyncSession, uid: int, qid: int) -> S.QuestionFull:
+    mapping = await question_links.redirects(session)
+    qid = question_links.resolve(mapping, qid)
     q = await session.get(Question, qid)
     if q is None:
         raise HTTPException(404, "题目不存在")
-    qp = await session.get(QP, (uid, qid))
+    progress = (await _progress_by_root(session, uid, [qid], mapping))[qid]
     empty = not (q.analysis or "").strip()
     cards = await _related_cards(session, qid, 4) if empty else []
     legacy = await legacy_case_parts(session, [qid]) if not (q.parent_stem or "").strip() else {}
     return S.QuestionFull(
         id=q.id, system=q.system or "", stem_html=md(legacy.get(qid, (q.parent_stem, q.stem))[1]), answer=q.answer or "",
+        options_html=[md(str(o)) for o in _opts(q)], option_labels=labels_for(_opts(q), q.option_labels),
         analysis_html="" if empty else md(q.analysis), analysis_empty=empty,
         related_cards=[S.RelatedCard(id=c.id, term=c.term, term_html=md(c.term), hint=c.hint or "", body_html=card_md(c.body)) for c in cards],
         stat=await question_stat(session, qid), tags=_tags(q),
-        state=derive_state(qp), starred=bool(qp and qp.starred),
+        state=("mastered" if progress["mastered"] else "again" if progress["in_wrongbook"] else
+               "plan" if progress["in_plan"] else ""), starred=progress["starred"],
         citations=await provenance.citations_for_target(session, "question", q.id),
     )
 
@@ -294,6 +464,8 @@ def _plain(s: str) -> str:
 
 
 async def ai_analysis(session: AsyncSession, uid: int, qid: int) -> str:
+    mapping = await question_links.redirects(session)
+    qid = question_links.resolve(mapping, qid)
     q = await session.get(Question, qid)
     if q is None:
         raise HTTPException(404, "题目不存在")
@@ -305,7 +477,7 @@ async def ai_analysis(session: AsyncSession, uid: int, qid: int) -> str:
     ref = "\n".join("【%s】%s" % (c.term, re.sub(r"\s+", " ", c.body or "")[:900]) for c in cards)
     user = "题干：{}\n\n选项：\n{}\n\n答案：{}".format(
         _plain(q.stem),
-        "\n".join(f"{LETTERS[i]}. {_plain(str(o))}" for i, o in enumerate(_opts(q)[:10])),
+        "\n".join(f"{label}. {_plain(str(o))}" for label, o in zip(labels_for(_opts(q), q.option_labels), _opts(q))),
         q.answer or "（无）",
     )
     if ref:
@@ -340,6 +512,9 @@ class Recorder:
 
     @classmethod
     async def create(cls, session: AsyncSession, uid: int, qids: list[int]) -> "Recorder":
+        # Same lock order as daily schedule generation. Concurrent alias writes
+        # must serialize before touching their separate progress records.
+        await session.execute(select(User.id).where(User.id == uid).with_for_update(key_share=True))
         existing = {}
         for chunk in batches(list(set(qids))):
             rows = (await session.execute(
@@ -365,8 +540,9 @@ class Recorder:
 
     def judge(self, q: Question, picked: list[int], exam_id: int | None = None) -> bool | None:
         ans = ans_set(q.answer)
-        letters = picked_letters(picked)
-        if not ans or not letters:
+        labels = labels_for(_opts(q), q.option_labels)
+        letters = picked_letters(picked, labels)
+        if not ans or not ans <= set(labels) or not letters:
             self.touch(q.id, None)
             return None
         ok = set(letters) == ans
@@ -375,10 +551,29 @@ class Recorder:
         return ok
 
 
+def submission_indices(source: Question, target: Question, picked: list[int]) -> list[int]:
+    """A cached alias submission carries positions in its own source options."""
+    source_labels = labels_for(_opts(source), source.option_labels)
+    letters = picked_letters(picked, source_labels)
+    if source.id == target.id or not letters:
+        return picked
+    target_labels = labels_for(_opts(target), target.option_labels)
+    translated = remap_picked_to_target(
+        letters, _opts(source), source_labels, _opts(target), target_labels,
+    )
+    if translated is None or len(translated) != len(letters):
+        raise HTTPException(409, "题目选项已变化，请刷新题目后重新作答")
+    return [target_labels.index(letter) for letter in translated]
+
+
 async def attempt(session: AsyncSession, uid: int, qid: int, picked: list[int]) -> S.AttemptResult:
+    mapping = await question_links.redirects(session)
+    source = await session.get(Question, qid)
+    qid = question_links.resolve(mapping, qid)
     q = await session.get(Question, qid)
-    if q is None:
+    if q is None or source is None:
         raise HTTPException(404, "题目不存在")
+    picked = submission_indices(source, q, picked)
     rec = await Recorder.create(session, uid, [qid])
     ok = rec.judge(q, picked)
     await session.flush()
@@ -402,79 +597,108 @@ async def pool(session: AsyncSession, uid: int, p: QuizParams, flt: str | None, 
     plan_ids = None
     if p.plan_day is not None:
         plan_ids = await plan_day_qids(session, uid, p.plan_day)
-    conds = all_conditions(p, plan_ids if plan_ids else None)
+        mapping = await question_links.redirects(session)
+        plan_ids = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in plan_ids))
+        if p.ids is not None:
+            mapping = await question_links.redirects(session)
+            p = replace(p, ids=list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in p.ids)))
+    conds = all_conditions(p, plan_ids if plan_ids is not None else None, pool_filter=flt)
     if p.plan_day is not None and not plan_ids:
         conds.append(Question.id.in_([]))
-    join_qp = and_(QP.question_id == Question.id, QP.user_id == uid)
-
-    def cnt(cond):
-        return func.coalesce(func.sum(case((cond, 1), else_=0)), 0)
-
-    st = (
-        await session.execute(
-            select(
-                func.count(Question.id), cnt(answered_condition(uid)), cnt(QP.in_wrongbook.is_(True)),
-                cnt(QP.starred.is_(True)), cnt(QP.in_plan.is_(True)), cnt(QP.mastered.is_(True)),
-            ).select_from(Question).outerjoin(QP, join_qp).where(*conds)
-        )
-    ).one()
-    stats = S.PoolStats(
-        total=int(st[0]), done=int(st[1]), wrong=int(st[2]), starred=int(st[3]), plan=int(st[4]), mastered=int(st[5])
-    )
-    att = (
-        select(
-            Attempt.question_id.label("qid"),
-            func.count(Attempt.id).label("n"),
-            func.sum(case((Attempt.is_correct.is_(False), 1), else_=0)).label("w"),
-            func.max(case((Attempt.is_correct.is_(False), Attempt.created_at))).label("wts"),
-        )
-        .where(Attempt.user_id == uid, Attempt.picked != "").group_by(Attempt.question_id).subquery()
-    )
-    stmt = (
-        select(Question, QP, att.c.n, att.c.w, att.c.wts)
-        .outerjoin(QP, join_qp).outerjoin(att, att.c.qid == Question.id).where(*conds)
-    )
+    stmt = select(Question.id).outerjoin(QP, and_(QP.question_id == Question.id, QP.user_id == uid)).where(*conds)
     fc = pool_flt_condition(flt, uid=uid)
+    scope_ids = list((await session.scalars(stmt.order_by(Question.id))).all())
     if fc is not None:
         stmt = stmt.where(fc)
-    rows = (await session.execute(stmt.order_by(Question.id).offset(offset).limit(size))).all()
-    items = [
-        S.PoolItem(
+        source_ids = list((await session.scalars(stmt.order_by(Question.id))).all())
+    else:
+        source_ids = scope_ids
+    mapping = await question_links.redirects(session)
+    roots = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in source_ids))
+    scope_roots = list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in scope_ids))
+    root_state = await _progress_by_root(session, uid, scope_roots, mapping)
+    done = await question_links.answered(session, uid, mapping)
+    stats = S.PoolStats(
+        total=len(scope_roots), done=sum(root in done for root in scope_roots),
+        wrong=sum(root_state[root]["in_wrongbook"] for root in scope_roots),
+        starred=sum(root_state[root]["starred"] for root in scope_roots),
+        plan=sum(root_state[root]["in_plan"] for root in scope_roots),
+        mastered=sum(root_state[root]["mastered"] for root in scope_roots),
+    )
+    page_ids = roots[offset:offset + size]
+    members = question_links.identity_members(mapping, page_ids)
+    member_ids = {qid for root in page_ids for qid in members[root]}
+    attempt_stats: dict[int, list] = {root: [0, 0, None] for root in page_ids}
+    for chunk in batches(list(member_ids)):
+        rows = (await session.execute(
+            select(
+                Attempt.question_id, func.count(Attempt.id),
+                func.sum(case((Attempt.is_correct.is_(False), 1), else_=0)),
+                func.max(case((Attempt.is_correct.is_(False), Attempt.created_at))),
+            ).where(Attempt.user_id == uid, Attempt.question_id.in_(chunk), Attempt.picked != "")
+            .group_by(Attempt.question_id)
+        )).all()
+        for qid, n, wrong, wrong_at in rows:
+            root = question_links.resolve(mapping, qid)
+            state = attempt_stats[root]
+            state[0] += int(n or 0)
+            state[1] += int(wrong or 0)
+            if wrong_at is not None and (state[2] is None or iso(wrong_at) > iso(state[2])):
+                state[2] = wrong_at
+    by_id = {}
+    for chunk in batches(page_ids):
+        by_id.update((q.id, q) for q in (await session.scalars(
+            select(Question).where(Question.id.in_(chunk))
+        )).all())
+    items = []
+    for qid in page_ids:
+        q = by_id.get(qid)
+        if q is None:
+            continue
+        progress = root_state[qid]
+        n, wrong, wrong_at = attempt_stats[qid]
+        items.append(S.PoolItem(
             id=q.id, qid=q.qid, stem=snippet(q.stem), answer=q.answer or "", source=q.source_file or "",
-            tags=_tags(q), state=derive_state(qp), starred=bool(qp and qp.starred),
-            in_plan=bool(qp and qp.in_plan), done=bool(n),
-            attempts=int(n or 0), wrong_count=int(w or 0), last_wrong_at=iso(wts),
-        )
-        for q, qp, n, w, wts in rows
-    ]
+            tags=_tags(q), state=("mastered" if progress["mastered"] else
+                                  "again" if progress["in_wrongbook"] else
+                                  "plan" if progress["in_plan"] else ""),
+            starred=progress["starred"], in_plan=progress["in_plan"], done=qid in done,
+            attempts=n, wrong_count=wrong, last_wrong_at=iso(wrong_at),
+        ))
     return S.PoolPage(stats=stats, items=items)
 
 
 async def wrongbook(session: AsyncSession, uid: int) -> list[S.WrongBookGroup]:
-    qs = (
-        await session.execute(
-            select(Question.id, Question.chapter).join(QP, QP.question_id == Question.id)
-            .where(QP.user_id == uid, QP.in_wrongbook.is_(True))
-        )
-    ).all()
-    if not qs:
+    qps = (await session.scalars(select(QP).where(QP.user_id == uid, QP.in_wrongbook.is_(True)))).all()
+    if not qps:
         return []
-    att = {
-        qid: (int(n), ts)
-        for qid, n, ts in (
-            await session.execute(
-                select(Attempt.question_id, func.count(Attempt.id), func.max(Attempt.created_at))
-                .join(QP, and_(QP.question_id == Attempt.question_id, QP.user_id == uid, QP.in_wrongbook.is_(True)))
-                .where(Attempt.user_id == uid, Attempt.is_correct.is_(False))
-                .group_by(Attempt.question_id)
-            )
-        ).all()
-    }
+    mapping = await question_links.redirects(session)
+    roots = list(dict.fromkeys(question_links.resolve(mapping, qp.question_id) for qp in qps))
+    aliases_in_wrongbook = {qp.question_id for qp in qps}
+    chapters = {}
+    for chunk in batches(roots):
+        chapters.update((q.id, q.chapter or "未分类") for q in (await session.scalars(
+            select(Question).where(Question.id.in_(chunk))
+        )).all())
+    att: dict[int, tuple[int, object]] = {}
+    attempt_ids = list(aliases_in_wrongbook)
+    for chunk in batches(attempt_ids):
+        rows = (await session.execute(
+            select(Attempt.question_id, func.count(Attempt.id), func.max(Attempt.created_at))
+            .where(Attempt.user_id == uid, Attempt.is_correct.is_(False), Attempt.question_id.in_(chunk))
+            .group_by(Attempt.question_id)
+        )).all()
+        for qid, n, ts in rows:
+            root = question_links.resolve(mapping, qid)
+            previous_n, previous_ts = att.get(root, (0, None))
+            if ts is not None and (previous_ts is None or iso(ts) > iso(previous_ts)):
+                previous_ts = ts
+            att[root] = (previous_n + int(n), previous_ts)
     groups: dict[str, list] = {}
-    for qid, ch in qs:
-        g = groups.setdefault(ch or "未分类", [0, 0, None])
+    for root in roots:
+        g = groups.setdefault(chapters.get(root, "未分类"), [0, 0, None])
         g[0] += 1
-        n, ts = att.get(qid, (0, None))
+        n, ts = att.get(root, (0, None))
         g[1] += n
         if ts is not None and (g[2] is None or iso(ts) > iso(g[2])):
             g[2] = ts
@@ -494,6 +718,7 @@ async def get_question(session: AsyncSession, qid: int):
     return AdminQuestion(
         id=q.id, subject_dir=q.subject_dir or "", system=q.system or "", stem=q.stem or "",
         options=[str(option) for option in _opts(q)], answer=q.answer or "", analysis=q.analysis or "", tags=_tags(q),
+        option_labels=labels_for(_opts(q), q.option_labels),
         citations=await provenance.citations_for_target(session, "question", q.id),
     )
 
@@ -506,6 +731,27 @@ async def update_question(session: AsyncSession, admin_id: int, qid: int, patch)
     q = await session.get(Question, qid)
     if q is None:
         raise HTTPException(404, "题目不存在")
+    old_options = [str(option) for option in _opts(q)]
+    next_options = [option.strip() for option in patch.options] if patch.options is not None else old_options
+    incoming_labels = patch.option_labels
+    try:
+        # A noncontiguous source map must never be silently regenerated after
+        # an old editor changes the option count.
+        if incoming_labels is None and q.option_labels and len(next_options) != len(old_options):
+            raise ValueError("修改选项数量时必须同时填写选项标签")
+        next_labels = labels_for(next_options, incoming_labels if incoming_labels is not None else q.option_labels)
+    except ValueError as error:
+        raise HTTPException(400, str(error)) from error
+    if patch.answer is not None:
+        next_answer = "".join(sorted(ans_set(patch.answer)))
+        if not next_answer:
+            raise HTTPException(400, "正确答案必须填写选项字母")
+        if not set(next_answer) <= set(next_labels):
+            raise HTTPException(400, "正确答案超出当前选项范围")
+    elif patch.options is not None or incoming_labels is not None:
+        current_answer = ans_set(q.answer)
+        if not current_answer or not current_answer <= set(next_labels):
+            raise HTTPException(400, "修改选项后，请同时填写有效的正确答案")
     changes: list[tuple[str, str, str]] = []
     if patch.system is not None:
         new = patch.system.strip()
@@ -522,7 +768,6 @@ async def update_question(session: AsyncSession, admin_id: int, qid: int, patch)
         if patch.stem != (q.stem or ""):
             changes.append(("stem", q.stem or "", patch.stem))
             q.stem = patch.stem
-    next_options = [str(option) for option in _opts(q)]
     if patch.options is not None:
         next_options = [option.strip() for option in patch.options]
         if len(next_options) < 2:
@@ -535,18 +780,12 @@ async def update_question(session: AsyncSession, admin_id: int, qid: int, patch)
             changes.append(("options", json.dumps(_opts(q), ensure_ascii=False), json.dumps(next_options, ensure_ascii=False)))
             q.options = next_options
     if patch.answer is not None:
-        next_answer = "".join(sorted(ans_set(patch.answer)))
-        if not next_answer:
-            raise HTTPException(400, "正确答案必须填写选项字母")
-        if any(letter not in LETTERS[:len(next_options)] for letter in next_answer):
-            raise HTTPException(400, "正确答案超出当前选项范围")
         if next_answer != (q.answer or ""):
             changes.append(("answer", q.answer or "", next_answer))
             q.answer = next_answer
-    elif patch.options is not None:
-        current_answer = "".join(sorted(ans_set(q.answer)))
-        if not current_answer or any(letter not in LETTERS[:len(next_options)] for letter in current_answer):
-            raise HTTPException(400, "修改选项后，请同时填写有效的正确答案")
+    if incoming_labels is not None and next_labels != (q.option_labels or []):
+        changes.append(("option_labels", json.dumps(q.option_labels or [], ensure_ascii=False), json.dumps(next_labels, ensure_ascii=False)))
+        q.option_labels = next_labels
     if patch.analysis is not None:
         if len(patch.analysis) > 20000:
             raise HTTPException(400, "解析内容过长（最多 20000 字）")

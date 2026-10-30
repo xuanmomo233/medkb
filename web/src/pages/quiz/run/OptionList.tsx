@@ -1,6 +1,6 @@
 import type { Question, QuestionStat } from '@/api/types'
 import { HtmlView, Icon } from '@/ui'
-import { LETTERS } from '../lib'
+import { answerLabels, optionLabels } from '@/optionLabels'
 import { isMulti } from './useQuizSession'
 import s from './run.module.css'
 
@@ -15,20 +15,22 @@ interface Props {
 
 export default function OptionList({ q, picked, judged, reveal, stat, onPick }: Props) {
   const multi = isMulti(q)
+  const labels = optionLabels(q.options_html.length, q.option_labels)
+  const answers = answerLabels(q.answer, labels) ?? []
   const total = stat ? Object.values(stat.dist).reduce((a, b) => a + b, 0) : 0
   return (
     <div className={s.options} role={multi ? 'group' : 'radiogroup'} aria-label="选项">
       {q.options_html.map((html, i) => {
-        const L = LETTERS[i]
+        const L = labels[i] ?? '—'
         const on = picked.includes(L)
-        const isAns = reveal && q.answer.includes(L)
-        const wrongPick = judged && on && !q.answer.includes(L)
+        const isAns = reveal && answers.includes(L)
+        const wrongPick = judged && on && !answers.includes(L)
         const missed = judged && isAns && !on
         const cls = [s.option, on && !judged && s.optSel, isAns && s.optGood, wrongPick && s.optBad, missed && s.optMiss].filter(Boolean).join(' ')
         const mark = wrongPick ? 'x' : isAns ? 'check' : on ? 'dot' : ''
         const rate = total && stat ? Math.round(((stat.dist[L] ?? 0) / total) * 100) : null
         return (
-          <button key={L} type="button" className={cls} disabled={judged}
+          <button key={i} type="button" className={cls} disabled={judged || !labels[i]}
             role={multi ? 'checkbox' : 'radio'} aria-checked={on} onClick={() => onPick(L)}>
             <span className={s.optLetter}>{L}</span>
             <span className={s.optBody}>

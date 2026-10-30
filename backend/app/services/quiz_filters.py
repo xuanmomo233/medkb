@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 from fastapi import HTTPException
 from sqlalchemy import and_, or_, select
 
-from app.models import Attempt, Question, QuestionProgress
+from app.models import Attempt, Question, QuestionMerge, QuestionProgress
 
 LEVELS = ("bank_group", "bank", "subject_dir", "system", "chapter", "qtype")
 SEP = "·"
@@ -57,6 +57,35 @@ def level_conditions(p: QuizParams, upto: int = len(LEVELS)) -> list:
     return [level_condition(lv, getattr(p, lv)) for lv in LEVELS[:upto] if getattr(p, lv)]
 
 
+def hides_merged_aliases(p: QuizParams, pool_filter: str | None = None) -> bool:
+    """New selection uses canonical records; explicit and personal history stays original."""
+    return (p.ids is None and p.plan_day is None and not (p.wrong or p.starred or p.due)
+            and pool_filter not in {"done", "wrong", "starred", "plan", "mastered"})
+
+
+def visible_question_condition():
+    return ~select(QuestionMerge.alias_id).where(QuestionMerge.alias_id == Question.id).exists()
+
+
+def scoped_question_roots(conditions: list, facet: str | None = None):
+    """Keep source membership while selecting the reviewed canonical content.
+
+    UNION terminates cycles; only terminal records are returned. Carrying the
+    source facet through each hop lets a canonical question belong to every
+    original bank/chapter without changing either record's stored taxonomy.
+    """
+    columns = [Question.id.label("qid")]
+    if facet:
+        columns.append(getattr(Question, facet).label("value"))
+    roots = select(*columns).where(*conditions).cte(recursive=True)
+    following = [QuestionMerge.canonical_id.label("qid")]
+    if facet:
+        following.append(roots.c.value)
+    roots = roots.union(select(*following).join(roots, QuestionMerge.alias_id == roots.c.qid))
+    terminal = ~select(QuestionMerge.alias_id).where(QuestionMerge.alias_id == roots.c.qid).exists()
+    return select(*roots.c).where(terminal).distinct()
+
+
 def progress_conditions(p: QuizParams, qp=QuestionProgress) -> list:
     conds = []
     if p.starred:
@@ -69,9 +98,16 @@ def progress_conditions(p: QuizParams, qp=QuestionProgress) -> list:
 
 
 def answered_condition(uid: int):
-    return select(Attempt.id).where(
-        Attempt.user_id == uid, Attempt.question_id == Question.id, Attempt.picked != "",
-    ).exists()
+    # Expand in both directions so historical attempts on any level of an alias
+    # chain count. UNION (distinct) also terminates safely on malformed cycles.
+    edges = select(QuestionMerge.alias_id.label("source"), QuestionMerge.canonical_id.label("target")).union_all(
+        select(QuestionMerge.canonical_id, QuestionMerge.alias_id)
+    ).subquery()
+    answered = select(Attempt.question_id.label("qid")).where(
+        Attempt.user_id == uid, Attempt.picked != "",
+    ).distinct().cte(recursive=True)
+    answered = answered.union(select(edges.c.target).join(answered, edges.c.source == answered.c.qid))
+    return Question.id.in_(select(answered.c.qid))
 
 
 def pool_flt_condition(flt: str | None, qp=QuestionProgress, *, uid: int):
@@ -89,8 +125,12 @@ def pool_flt_condition(flt: str | None, qp=QuestionProgress, *, uid: int):
     }[flt]
 
 
-def all_conditions(p: QuizParams, plan_ids: list[int] | None = None) -> list:
-    conds = level_conditions(p) + progress_conditions(p)
+def all_conditions(p: QuizParams, plan_ids: list[int] | None = None, *, pool_filter: str | None = None) -> list:
+    if hides_merged_aliases(p, pool_filter):
+        conds = [Question.id.in_(scoped_question_roots(level_conditions(p)))]
+    else:
+        conds = level_conditions(p)
+    conds += progress_conditions(p)
     if p.ids is not None:
         conds.append(Question.id.in_(p.ids))
     if plan_ids is not None:

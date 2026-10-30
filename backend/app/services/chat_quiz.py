@@ -12,6 +12,7 @@ from app.core.render import md
 from app.models import Question
 from app.services import glm, knowledge as kb
 from app.services.chat_agent import GUARD_RE
+from app.services.option_labels import answer_letters, import_options, labels_for
 
 SUBJ_KW = {"生理": "生理学", "生化": "生物化学", "病理": "病理学",
            "内科": "内科学", "外科": "外科学", "人文": "医学人文"}
@@ -78,7 +79,7 @@ def _remember_shown(uid: int, qids: list[str]) -> None:
 
 
 def norm_answer(a: str | None) -> str:
-    return re.sub(r"[^A-Z]", "", (a or "").upper())
+    return "".join(sorted(answer_letters(a)))
 
 
 def quiz_count(msg: str) -> int:
@@ -184,7 +185,7 @@ def question_card(q) -> dict:
         "system": q.system or "",
         "multi": len(norm_answer(q.answer)) > 1,
         "stem_html": md(q.stem),
-        "options": [{"key": chr(65 + i), "html": md(str(o))} for i, o in enumerate(_options(q))],
+        "options": [{"key": label, "html": md(str(o))} for label, o in zip(labels_for(_options(q), q.option_labels), _options(q))],
     }
 
 
@@ -249,17 +250,17 @@ async def gen_llm_quizzes(uid: int, topic: str, n: int) -> list[dict]:
     out: list[dict] = []
     for it in arr[:n]:
         try:
-            opts = [re.sub(r"^[A-E][.、．]\s*", "", str(o)).strip() for o in it["options"]][:6]
+            opts, labels = import_options([str(o).strip() for o in it["options"]], it.get("option_labels"))
             ans = norm_answer(str(it.get("answer", "")))
             stem = str(it["stem"])
-        except (KeyError, TypeError, AttributeError):
+        except (KeyError, TypeError, AttributeError, ValueError):
             continue
-        if len(opts) < 2 or not ans:
+        if len(opts) < 2 or not ans or not set(ans) <= set(labels):
             continue
-        qid = put_pending(uid, {"answer": ans, "stem": stem, "opts": opts, "explain": str(it.get("explain", ""))})
+        qid = put_pending(uid, {"answer": ans, "stem": stem, "opts": opts, "option_labels": labels, "explain": str(it.get("explain", ""))})
         out.append({
             "qid": qid, "system": "AI生成·" + topic, "multi": len(ans) > 1,
             "stem_html": md(stem),
-            "options": [{"key": chr(65 + i), "html": md(o)} for i, o in enumerate(opts)],
+            "options": [{"key": label, "html": md(o)} for label, o in zip(labels, opts)],
         })
     return out

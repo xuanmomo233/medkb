@@ -9,6 +9,7 @@ import QuestionToolbar from './QuestionToolbar'
 import { hasOptions, isMulti, useQuizSession } from './useQuizSession'
 import { useQuizKeys } from './useQuizKeys'
 import s from './run.module.css'
+import { optionLabels } from '@/optionLabels'
 import ScheduleNavigation from '../../today/ScheduleNavigation'
 
 function fmtRemain(sec: number) {
@@ -38,7 +39,7 @@ export function QuizExercise({ search, onBack }: { search: string; onBack?: () =
   const multiPending = !!q && isMulti(q) && !test && !judged
 
   useQuizKeys({
-    enabled: S.status === 'ready' && !jump && !confirm, mode, optionCount: q?.options_html.length ?? 0,
+    enabled: S.status === 'ready' && !jump && !confirm, mode, optionLabels: q ? optionLabels(q.options_html.length, q.option_labels) : [],
     prev: () => S.go(S.idx - 1), next: () => S.go(S.idx + 1), pick: S.pick, confirm: S.confirmMulti,
     reveal: S.toggleReveal, star: () => S.toggleMark('star'),
   })

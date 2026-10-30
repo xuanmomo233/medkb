@@ -168,7 +168,7 @@ class _SourceBody extends StatelessWidget {
         if (qq != null && qq.optionsHtml.isNotEmpty) ...<Widget>[
           const SizedBox(height: 10),
           for (int i = 0; i < qq.optionsHtml.length; i++)
-            ListTile(title: HtmlView(qq.optionsHtml[i]), leading: Text(String.fromCharCode(65 + i))),
+            ListTile(title: HtmlView(qq.optionsHtml[i]), leading: Text(qq.optionLabels[i])),
         ],
         const SizedBox(height: 12),
         Text(qq?.done == true ? '已作答' : '未作答'),

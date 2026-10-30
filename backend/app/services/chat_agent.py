@@ -14,6 +14,7 @@ from app.core.config import get_settings
 from app.core.render import md
 from app.models import ChatMessage, Question
 from app.services import chat_files, glm, knowledge
+from app.services.option_labels import labels_for
 
 log = logging.getLogger("medkb.chat")
 
@@ -154,7 +155,7 @@ async def _tool_exec(name: str, args: dict, session: AsyncSession, found: list[s
                 ops = r.options if isinstance(r.options, list) else []
                 found.append(str(r.qid))
                 out.append("题号%s（%s）%s | %s | 答案:%s" % (
-                    r.qid, r.system, (r.stem or "")[:150], " / ".join(str(o)[:40] for o in ops), r.answer))
+                    r.qid, r.system, (r.stem or "")[:150], " / ".join(f"{label}. {str(o)[:40]}" for label, o in zip(labels_for(ops, r.option_labels), ops)), r.answer))
             return "\n".join(out) if out else "（题库没有相关题）"
     except Exception as e:
         log.warning("tool %s failed: %s", name, type(e).__name__)
@@ -337,12 +338,14 @@ async def answer_quiz(session: AsyncSession, uid: int, qid: str, answer: str) ->
     if not ans:
         raise HTTPException(400, "请先选择答案")
     limited = await is_rate_limited(session, uid)
-    letters = "ABCDEFGH"
     if qid.startswith("L"):
         p = chat_quiz.get_pending(uid, qid)
         if not p:
             raise HTTPException(404, "题目已过期，请重新抽题")
         right = p["answer"]
+        letters = labels_for(p["opts"], p.get("option_labels"))
+        if not set(ans) <= set(letters) or not set(right) <= set(letters):
+            raise HTTPException(400, "答案不属于当前题目的选项标签")
         correct = set(ans) == set(right)
         opt_t = "\n".join("%s. %s" % (letters[i], o) for i, o in enumerate(p["opts"]))
         extra = "出题备注: %s\n" % p["explain"]
@@ -355,8 +358,11 @@ async def answer_quiz(session: AsyncSession, uid: int, qid: str, answer: str) ->
         right = chat_quiz.norm_answer(q.answer)
         correct = set(ans) == set(right)
         ops = q.options if isinstance(q.options, list) else []
+        letters = labels_for(ops, q.option_labels)
+        if not set(ans) <= set(letters) or not right or not set(right) <= set(letters):
+            raise HTTPException(400, "答案不属于当前题目的选项标签")
         stem_t = _FIG_RE.sub("[图]", q.stem or "")
-        opt_t = "\n".join("%s. %s" % (letters[i], _FIG_RE.sub("[图]", str(o))) for i, o in enumerate(ops[:8]))
+        opt_t = "\n".join("%s. %s" % (letters[i], _FIG_RE.sub("[图]", str(o))) for i, o in enumerate(ops))
         ana = _FIG_RE.sub("[图]", q.analysis or "")[:900]
         extra = "【题库解析】%s\n" % (ana or "（无）")
         ctx = SYS_PROMPT

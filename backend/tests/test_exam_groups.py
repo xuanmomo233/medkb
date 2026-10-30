@@ -10,20 +10,20 @@ from test_question_groups import question
 
 @pytest.mark.parametrize("answer", ["AB", "BC", "A,B", "A、C", "A/B"])
 def test_mock_accepts_contiguous_and_separated_multiple_answers(answer):
-    assert exam._JUDGEABLE.fullmatch(answer)
+    assert exam.judgeable_answer(answer, [], 3)
     assert exam.type_rank("多选", answer) == 3
 
 
 @pytest.mark.parametrize("answer", ["", "A或B", "ABC错误", "AJ!"])
 def test_mock_excludes_unjudgeable_answers(answer):
-    assert not exam._JUDGEABLE.fullmatch(answer)
+    assert not exam.judgeable_answer(answer, [], 3)
 
 
 @pytest.mark.asyncio
 async def test_mock_includes_standalone_multiselect_seeds(session):
     session.add_all([
         question(1, answer="AB", qtype="多选"),
-        question(2, answer="BC", qtype="多选"),
+        question(2, answer="BC", qtype="多选", options=["one", "two", "three"]),
         question(3, answer="A,B", qtype="多选"),
         question(4, answer="ab", qtype="多选"),
         question(5, answer="不是选项", qtype="多选"),
@@ -75,7 +75,7 @@ async def test_mock_completes_partial_eligible_seeds_including_invalid_answer_an
                      question(2, "case", qtype="病例子题", answer="AB", system="a"),
                      question(3, "case", qtype="other", answer="", system="a"),
                      question(4, "case", qtype="病例子题", answer="B?", system="a"),
-                     question(5, "case", qtype="病例子题", answer="C", system="a", bank="other"),
+                     question(5, "case", qtype="病例子题", answer="C", system="a", bank="other", options=["one", "two", "three"]),
                      question(6, "", qtype="单选", answer="A", system="a")])
     await session.flush()
     assert await ordered_groups(session, [1]) == [(1, 2, 3, 4)]

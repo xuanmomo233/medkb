@@ -50,8 +50,8 @@ async def ingest(session, raw: dict, source_meta: dict) -> str:
     baseline = {}
     if first_version and doc.question_id and not doc.validation_error:
         existing = await session.get(Question, doc.question_id)
-        clinical_fields = ("bank", "qtype", "stem", "options", "answer", "analysis", "parent_stem")
-        if existing is not None and all(getattr(existing, field) == data[field] for field in clinical_fields):
+        clinical_fields = ("bank", "qtype", "stem", "options", "option_labels", "answer", "analysis", "parent_stem")
+        if existing is not None and all(snapshot(existing)[field] == data[field] for field in clinical_fields):
             baseline = snapshot(existing)
             doc.published_version = doc.latest_version
             result = "unchanged"

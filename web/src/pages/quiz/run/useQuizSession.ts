@@ -5,15 +5,18 @@ import { invalidateStudy } from '../../today/invalidateStudy'
 import { api } from '@/api/endpoints'
 import type { ProgressState, Question, QuestionFull, QuestionStat } from '@/api/types'
 import { useToast } from '@/ui'
-import { hashStr, LETTERS, readJson, sortLetters, type RunParams } from '../lib'
+import { hashStr, readJson, sortLetters, type RunParams } from '../lib'
+import { answerLabels, optionLabels, pickedIndices } from '@/optionLabels'
 
 export interface Ans { picked: string; judged: boolean; correct: boolean | null }
 export type MarkKind = 'star' | 'wrong' | 'master' | 'plan'
 interface Patch { state?: ProgressState; starred?: boolean }
 interface TestSave { sig: string; picks: Record<number, string>; deadline: number | null; idx: number }
 
-export const isMulti = (q: Question) => q.answer.length > 1 && /^[A-H]+$/.test(q.answer)
-export const hasOptions = (q: Question) => q.options_html.length > 0 && /^[A-H]+$/.test(q.answer)
+const labelsFor = (q: Question) => optionLabels(q.options_html.length, q.option_labels)
+export const isMulti = (q: Question) => (answerLabels(q.answer, labelsFor(q))?.length ?? 0) > 1
+export const hasOptions = (q: Question) => q.options_html.length > 0 && answerLabels(q.answer, labelsFor(q)) !== null
+const testSignature = (qs: Question[]) => hashStr(JSON.stringify(qs.map((q) => [q.id, q.options_html, q.option_labels ?? [], q.answer])))
 
 export function useQuizSession(search: string, p: RunParams) {
   const nav = useNavigate()
@@ -51,7 +54,7 @@ export function useQuizSession(search: string, p: RunParams) {
       if (off) return
       const next: Record<number, Ans> = {}
       let i = Math.max(0, list.findIndex((question) => question.id === p.startId))
-      const sig = hashStr(list.map((q) => q.id).join(','))
+      const sig = testSignature(list)
       const saved = mode === 'test' ? readJson<TestSave>(sessionStorage, testKey) : null
       if (mode === 'test') {
         const ok = saved && saved.sig === sig
@@ -93,6 +96,11 @@ export function useQuizSession(search: string, p: RunParams) {
       const f = await api.questionFull(id)
       setFull((m) => ({ ...m, [id]: f }))
       setStats((m) => ({ ...m, [id]: f.stat }))
+      const original = questions.find((q) => q.id === id)
+      const selectionChanged = original && (f.answer !== original.answer
+        || (f.options_html !== undefined && JSON.stringify(f.options_html) !== JSON.stringify(original.options_html))
+        || (f.option_labels !== undefined && JSON.stringify(f.option_labels) !== JSON.stringify(original.option_labels ?? [])))
+      if (selectionChanged) setAns((m) => { const { [id]: _, ...rest } = m; void _; return rest })
       setFullErr((m) => {
         if (!m[id]) return m
         const { [id]: _, ...rest } = m
@@ -101,13 +109,15 @@ export function useQuizSession(search: string, p: RunParams) {
       })
       setQuestions((qs) => qs.map((q) => q.id === id ? {
         ...q, stem_html: f.stem_html, system: f.system, tags: f.tags,
+        answer: f.answer, options_html: f.options_html ?? q.options_html,
+        option_labels: f.option_labels ?? q.option_labels,
         analysis_html: f.analysis_html, analysis_empty: f.analysis_empty,
       } : q))
     } catch (e) {
       setFullErr((m) => ({ ...m, [id]: true }))
       toast(e instanceof Error ? e.message : '已保存，但刷新题目失败，请重试', true)
     }
-  }, [toast])
+  }, [toast, questions])
 
   const cur = q ? ans[q.id] : undefined
   const showFull = !!q && (mode === 'recite' || !!cur?.judged || !hasOptions(q))
@@ -128,16 +138,16 @@ export function useQuizSession(search: string, p: RunParams) {
     if (mode !== 'test' || status !== 'ready') return
     const picks: Record<number, string> = {}
     for (const [id, a] of Object.entries(ans)) picks[Number(id)] = a.picked
-    const sig = hashStr(questions.map((x) => x.id).join(','))
+    const sig = testSignature(questions)
     sessionStorage.setItem(testKey, JSON.stringify({ sig, picks, deadline, idx } satisfies TestSave))
   }, [mode, status, ans, deadline, idx, questions, testKey])
 
   const go = useCallback((i: number) => setIdx(Math.max(0, Math.min(questions.length - 1, i))), [questions.length])
 
   const judge = useCallback((question: Question, picked: string) => {
-    const correct = sortLetters(picked) === sortLetters(question.answer)
+    const correct = sortLetters(picked) === sortLetters((answerLabels(question.answer, labelsFor(question)) ?? []).join(''))
     setAns((m) => ({ ...m, [question.id]: { picked, judged: true, correct } }))
-    api.attempt({ question_id: question.id, picked: [...picked].map((c) => LETTERS.indexOf(c)) })
+    api.attempt({ question_id: question.id, picked: pickedIndices(picked, labelsFor(question)) })
       .then((r) => { setStats((m) => ({ ...m, [question.id]: r.stat })); void invalidateStudy(queryClient) }, () => toast('作答记录保存失败', true))
     if (mode === 'quick' && correct) {
       const at = idx
@@ -146,7 +156,7 @@ export function useQuizSession(search: string, p: RunParams) {
   }, [mode, idx, questions.length, toast, queryClient])
 
   const pick = useCallback((letter: string) => {
-    if (!q || !hasOptions(q) || mode === 'recite' || cur?.judged) return
+    if (!q || !hasOptions(q) || !labelsFor(q).includes(letter) || mode === 'recite' || cur?.judged) return
     const multi = isMulti(q)
     const old = cur?.picked ?? ''
     const picked = multi ? (old.includes(letter) ? old.replace(letter, '') : sortLetters(old + letter)) : letter
@@ -206,7 +216,7 @@ export function useQuizSession(search: string, p: RunParams) {
     submitted.current = true
     setSubmitting(true)
     try {
-      const items = questions.map((x) => ({ question_id: x.id, picked: [...(ans[x.id]?.picked ?? '')].map((c) => LETTERS.indexOf(c)) }))
+      const items = questions.map((x) => ({ question_id: x.id, picked: pickedIndices(ans[x.id]?.picked ?? '', labelsFor(x)) }))
       const name = title || '测试'
       const report = await api.submitExam({ title: name, items })
       void invalidateStudy(queryClient)

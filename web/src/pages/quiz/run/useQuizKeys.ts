@@ -1,11 +1,12 @@
 import { useEffect } from 'react'
 import type { QuizMode } from '@/api/types'
-import { isTypingTarget, LETTERS } from '../lib'
+import { isTypingTarget } from '../lib'
+import { optionKey } from '@/optionLabels'
 
 interface Handlers {
   enabled: boolean
   mode: QuizMode
-  optionCount: number
+  optionLabels: string[]
   prev: () => void
   next: () => void
   pick: (letter: string) => void
@@ -27,10 +28,10 @@ export function useQuizKeys(h: Handlers) {
         if (h.mode !== 'recite') return
         e.preventDefault()
         h.reveal()
-      } else if (k === 's' || k === 'S') h.star()
+      } else if ((k === 's' || k === 'S') && !h.optionLabels.includes('S')) h.star()
       else {
-        const i = /^[1-8]$/.test(k) ? Number(k) - 1 : LETTERS.indexOf(k.toUpperCase())
-        if (k.length === 1 && i >= 0 && i < h.optionCount) h.pick(LETTERS[i])
+        const label = optionKey(k, h.optionLabels)
+        if (label) h.pick(label)
       }
     }
     document.addEventListener('keydown', onKey)

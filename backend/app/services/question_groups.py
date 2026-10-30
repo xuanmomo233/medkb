@@ -36,6 +36,40 @@ def group_key(bank_group: str, bank: str, source_file: str, parent_stem: str | N
 
 
 LEGACY_HEADER = re.compile(r"^[（(]\s*(\d+)\s*[~～〜\-—–至]\s*(\d+)\s*题共用题干[）)]")
+UNNUMBERED_HEADER = re.compile(r"^[（(]\s*共用题干\s*[）)]")
+
+
+def unnumbered_case_parts(rows, header):
+    """Require a repeated complete case, with at least one single-sentence child.
+
+    A marker alone is not a case identity. Overlapping candidate cases are
+    ambiguous and remain intact rather than combining their clinical details.
+    """
+    bodies = [(qid, stem[len(header):]) for qid, stem in rows]
+    candidates = {}
+    for _, body in bodies:
+        boundaries = list(re.finditer(r"[。！？；\n]", body.rstrip("。！？；\n")))
+        if not boundaries:
+            continue
+        boundary = boundaries[-1].end()
+        parent = body[:boundary].strip()
+        if len(parent) < 20 or len(boundaries) < 2:
+            continue
+        children = [(qid, text[len(parent):].strip()) for qid, text in bodies if text.startswith(parent)]
+        if 2 <= len(children) <= 10 and all(child for _, child in children):
+            candidates[parent] = children
+    memberships = {}
+    for children in candidates.values():
+        for qid, _ in children:
+            memberships[qid] = memberships.get(qid, 0) + 1
+    parts = {}
+    for parent, children in candidates.items():
+        if any(memberships[qid] != 1 for qid, _ in children):
+            continue
+        if len({child for _, child in children}) != len(children):
+            continue
+        parts.update((qid, (parent, child, header)) for qid, child in children)
+    return parts
 
 
 async def legacy_case_parts(session: AsyncSession, seed_ids: Sequence[int]) -> dict[int, tuple[str, str, str]]:
@@ -51,6 +85,9 @@ async def legacy_case_parts(session: AsyncSession, seed_ids: Sequence[int]) -> d
             match = LEGACY_HEADER.match(stem)
             if match and 2 <= int(match[2]) - int(match[1]) + 1 <= 10:
                 scopes.add((bg, bank, source, match[0], int(match[2]) - int(match[1]) + 1))
+            unnumbered = UNNUMBERED_HEADER.match(stem)
+            if unnumbered:
+                scopes.add((bg, bank, source, unnumbered[0], None))
     for bg, bank, source, header, count in scopes:
         rows = (await session.execute(
             select(Question.id, Question.stem)
@@ -58,6 +95,9 @@ async def legacy_case_parts(session: AsyncSession, seed_ids: Sequence[int]) -> d
                    parent_expression(session) == "", Question.stem.startswith(header, autoescape=True))
             .order_by(Question.id)
         )).all()
+        if count is None:
+            parts.update(unnumbered_case_parts(rows, header))
+            continue
         # Reused numbering or incomplete exports are ambiguous, not permission to merge.
         if len(rows) != count:
             continue

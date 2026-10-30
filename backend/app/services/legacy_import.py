@@ -5,10 +5,13 @@ from typing import Any
 
 from sqlalchemy import create_engine, inspect, text
 from sqlalchemy.engine import Engine
+from app.services.option_labels import import_options
 
 _QREF = re.compile(r"Q(\d+)")
 _PAGE = re.compile(r"page_(\d+)")
 _TAG_SPLIT = re.compile(r"[,，、;；]")
+_DATED_REVIEW_TITLE = re.compile(r"^【\d{1,2}\.\d{1,2}[^】]*】")
+_BLANK_LABELS = re.compile(r"(?m)^[^\n:：]{1,64}[:：]\s*$")
 
 # 字段宽度直接取模型列定义，避免与模型脱节
 from app.models import Card as _Card, Chapter as _Chapter, Question as _Question
@@ -31,7 +34,7 @@ LIMITS = {
 }
 
 QUESTION_COLS = ["id", "qid", "chapter", "subjdir", "system", "bank", "bankgrp", "qtype", "stem",
-                 "options", "answer", "analysis", "parent", "meta", "srcfile", "tags"]
+                 "options", "option_labels", "answer", "analysis", "parent", "meta", "srcfile", "tags"]
 CARD_COLS = ["id", "subj_real", "part", "section", "term", "hint", "body", "qids", "srcfile"]
 CHAPTER_COLS = ["id", "subj", "title", "kind", "content", "srcfile"]
 
@@ -51,6 +54,9 @@ def parse_options(raw: Any) -> list[str]:
     try:
         v = json.loads(t)
     except (ValueError, TypeError):
+        lines = [line for line in t.splitlines() if line.strip()]
+        if lines and all(re.match(r"^\s*(?:[-*]\s+)?[A-ZＡ-Ｚ]\s*[.、．)）:：]", line) for line in lines):
+            return lines
         return []
     return [s(x) for x in v] if isinstance(v, list) else []
 
@@ -88,12 +94,13 @@ def _clip(table: str, row: dict, stats: dict) -> dict:
 
 def map_question(r: dict) -> dict:
     src = s(r.get("srcfile"))
+    options, labels = import_options(parse_options(r.get("options")), r.get("option_labels"))
     return {
         "id": int(r["id"]), "qid": s(r.get("qid")).strip(),
         "bank_group": s(r.get("bankgrp")), "bank": s(r.get("bank")),
         "subject_dir": s(r.get("subjdir")), "system": s(r.get("system")),
         "chapter": s(r.get("chapter")), "qtype": s(r.get("qtype")) or "单选",
-        "stem": s(r.get("stem")), "options": parse_options(r.get("options")),
+        "stem": s(r.get("stem")), "options": options, "option_labels": labels,
         "answer": s(r.get("answer")), "analysis": s(r.get("analysis")),
         "parent_stem": s(r.get("parent")), "meta": s(r.get("meta")),
         "source_file": src, "tags": parse_tags(r.get("tags")),
@@ -102,11 +109,38 @@ def map_question(r: dict) -> dict:
 
 
 def map_card(r: dict) -> dict:
+    term = s(r.get("term"))
+    source_file = s(r.get("srcfile"))
     return {
         "id": int(r["id"]), "subject": s(r.get("subj_real")), "part": s(r.get("part")),
-        "section": s(r.get("section")), "term": s(r.get("term")), "hint": s(r.get("hint")),
-        "body": s(r.get("body")), "source_file": s(r.get("srcfile")),
+        "section": card_section(s(r.get("section")), source_file, term), "term": term, "hint": s(r.get("hint")),
+        "body": s(r.get("body")), "source_file": source_file,
     }
+
+
+def card_section(section: str, source_file: str, term: str) -> str:
+    """Split exercise prompts from the generic mnemonic section without changing topic taxonomy."""
+    if section != "数字·口诀":
+        return section
+    if re.search(r"判断下列|判断下列表述", term):
+        return "判断练习"
+    if re.search(r"连连看|用线连接|相联系|在这里选择|在这些中选择|填写对应序号", term):
+        return "配对练习"
+    if "学成选择题" in term:
+        return "选择题整理"
+    if (
+        source_file == "填空"
+        or re.search(r"^请完善|^填写|^请分别填写", term)
+        or re.search(r"^(肺癌临床表现|胸腔积液@研小岛整理)", term)
+    ):
+        return "填空练习"
+    if _DATED_REVIEW_TITLE.search(term):
+        return "考点自测"
+    if source_file == "病例子题" or re.search(r"^请回答|^请将下列", term):
+        return "问答练习"
+    if len(_BLANK_LABELS.findall(term)) >= 2:
+        return "填空练习"
+    return section
 
 
 def map_chapter(r: dict) -> dict:

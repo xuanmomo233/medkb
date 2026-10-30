@@ -110,6 +110,7 @@ export interface Question {
   case_index?: number
   case_total?: number
   options_html: string[]
+  option_labels?: string[] // 缺失或空列表为旧接口，按连续 A、B… 回退
   answer: string // 如 "A" / "ABD"；主观题可能非字母
   analysis_html: string // 懒加载模式下可能为空，用 getQuestionFull 取
   analysis_empty: boolean
@@ -130,6 +131,8 @@ export interface QuestionFull {
   id: number
   system: string
   stem_html: string
+  options_html?: string[]
+  option_labels?: string[]
   answer: string
   analysis_html: string
   analysis_empty: boolean
@@ -264,8 +267,8 @@ export interface Invite { code: string; created_by: number; used_by: number | nu
 export interface AdminUser { id: number; username: string; is_admin: boolean; created_at: string | null; last_login_at: string | null; invite_code: string | null }
 export interface SiteConfig { exam_date: string }
 
-export interface AdminQuestion { id: number; subject_dir: string; system: string; stem: string; options: string[]; answer: string; analysis: string; tags: string[]; citations?: ContentCitation[] }
-export interface AdminQuestionPatch { system?: string; stem?: string; options?: string[]; answer?: string; analysis?: string; tags?: string[]; citations?: ContentCitationInput[] }
+export interface AdminQuestion { id: number; subject_dir: string; system: string; stem: string; options: string[]; option_labels?: string[]; answer: string; analysis: string; tags: string[]; citations?: ContentCitation[] }
+export interface AdminQuestionPatch { system?: string; stem?: string; options?: string[]; option_labels?: string[]; answer?: string; analysis?: string; tags?: string[]; citations?: ContentCitationInput[] }
 export interface AdminCard { id: number; subject: string; part: string; section: string; term: string; hint: string; body: string; citations?: ContentCitation[] }
 export interface AdminCardPatch { section?: string; term?: string; hint?: string; body?: string; citations?: ContentCitationInput[] }
 export interface VersionInfo { build: number; note: string }
