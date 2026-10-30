@@ -1,0 +1,50 @@
+.catalog { display: flex; flex-direction: column; gap: 16px; }
+.group { padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
+.group h2 { margin-bottom: 12px; color: var(--brand); }
+.books { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.book { min-width: 0; min-height: 120px; display: flex; flex-direction: column; gap: 5px; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--bg); color: var(--text); }
+.book:hover { border-color: var(--brand); background: var(--brand-soft); text-decoration: none; }
+.bookTitle { font-weight: 700; }
+.meta { color: var(--text-3); font-size: 13px; }
+.open { margin-top: auto; color: var(--brand); font-size: 13px; font-weight: 600; }
+.reader { display: flex; flex-direction: column; gap: 14px; }
+.readerHeader { position: sticky; top: 58px; z-index: 10; display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--line); border-radius: var(--radius); background: color-mix(in srgb, var(--surface) 94%, transparent); box-shadow: var(--shadow); backdrop-filter: blur(8px); }
+.readerTitle { display: flex; align-items: baseline; gap: 9px; flex-wrap: wrap; }
+.readerTitle h1 { font-size: 18px; }
+.readerTitle > a { font-size: 13px; }
+.readerTitle > span:not(.readerMeta) { color: var(--text-3); }
+.readerMeta { color: var(--text-3); font-size: 12px; }
+.readerTools { display: flex; align-items: center; justify-content: center; gap: 7px; flex-wrap: wrap; }
+.readerTools > button, .pageJump button { min-height: 34px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--surface); }
+.readerTools > button:hover:not(:disabled), .pageJump button:hover:not(:disabled) { border-color: var(--brand); color: var(--brand); }
+.readerTools button:disabled { cursor: not-allowed; opacity: .45; }
+.readerTools > span { color: var(--text-2); font-variant-numeric: tabular-nums; }
+.readerTools .divider { height: 24px; margin: 0 2px; border-left: 1px solid var(--line); }
+.pageJump { display: flex; align-items: center; gap: 5px; }
+.pageJump input { width: 64px; height: 34px; padding: 0 7px; border: 1px solid var(--line); border-radius: 7px; text-align: center; background: var(--surface); }
+.pageJump span { color: var(--text-2); white-space: nowrap; }
+.loadStatus { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface); }
+.loadStatus progress { width: min(220px, 35vw); accent-color: var(--brand); }
+.readerError { display: flex; align-items: center; justify-content: center; gap: 12px; flex-wrap: wrap; padding: 12px; border: 1px solid color-mix(in srgb, var(--bad) 50%, var(--line)); border-radius: var(--radius-sm); background: var(--bad-soft); color: var(--bad); }
+.readerError button { border: 0; background: transparent; color: inherit; font-weight: 700; text-decoration: underline; }
+.readerLayout { display: grid; grid-template-columns: minmax(210px, 280px) minmax(0, 1fr); align-items: start; gap: 14px; }
+.readerLayout:has(.pageArea:first-child) { grid-template-columns: 1fr; }
+.outline { position: sticky; top: 200px; max-height: calc(100vh - 220px); overflow: auto; padding: 14px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.outline h2 { margin-bottom: 8px; font-size: 15px; }
+.outlineList { margin: 0; padding-left: 16px; list-style: none; }
+.outlineList li { min-width: 0; }
+.outlineList button { width: 100%; padding: 4px 2px; overflow: hidden; border: 0; background: transparent; color: var(--text-2); text-align: left; text-overflow: ellipsis; white-space: nowrap; }
+.outlineList button:hover { color: var(--brand); }
+.pageArea { min-width: 0; min-height: 70vh; display: flex; justify-content: center; align-items: flex-start; overflow: auto; padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-2); }
+.pagePaper { position: relative; flex: none; min-height: 180px; margin-inline: auto; background: white; box-shadow: var(--shadow-lg); }
+.pagePaper canvas { display: block; max-width: none; }
+.renderStatus { position: absolute; right: 8px; bottom: 8px; padding: 2px 7px; border-radius: 8px; background: rgb(0 0 0 / 55%); color: white; font-size: 11px; }
+@media (max-width: 860px) {
+  .readerHeader { top: 58px; padding: 10px; }
+  .readerTitle h1 { font-size: 16px; }
+  .readerTools { justify-content: flex-start; gap: 5px; }
+  .readerTools > button, .pageJump button { min-height: 32px; padding: 3px 8px; font-size: 13px; }
+  .readerLayout { grid-template-columns: 1fr; }
+  .outline { position: static; max-height: 30vh; }
+  .pageArea { min-height: 60vh; justify-content: flex-start; }
+}

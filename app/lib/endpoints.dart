@@ -22,6 +22,10 @@ class Endpoints {
   // ---------- 内容 ----------
   static Future<ContentTree> tree() async =>
       ContentTree.fromJson(asMap(await Api.get('/content/tree')));
+  static Future<List<TextbookSource>> textbooks() async => _list(
+        asMap(await Api.get('/content/textbooks'))['sources'],
+        TextbookSource.fromJson,
+      );
   static Future<ChapterDetail> chapter(int id) async =>
       ChapterDetail.fromJson(asMap(await Api.get('/content/chapters/$id')));
   static Future<List<SearchHit>> search(String q, {String? kind}) async =>

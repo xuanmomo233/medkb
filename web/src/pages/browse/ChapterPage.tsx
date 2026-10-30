@@ -5,7 +5,7 @@ import { api } from '@/api/endpoints'
 import type { ContentCitation } from '@/api/types'
 import { useAuth } from '@/app/auth'
 import { CitationEditSheet } from '@/features/notes'
-import { Badge, Card, Citations, ErrorState, HtmlView, Icon, Spinner } from '@/ui'
+import { Badge, Card, ErrorState, HtmlView, Icon, Spinner } from '@/ui'
 import PageGallery from './PageGallery'
 import NoteReader from './NoteReader'
 import { useLoad } from './useLoad'
@@ -71,7 +71,6 @@ export default function ChapterPage() {
               : <Card className={s.body}><HtmlView html={data.html} /></Card>}
             {data.pages.length > 0 && <PageGallery pages={data.pages} />}
             {textbookPages.map((gallery) => <PageGallery key={gallery.sourceKey} {...gallery} />)}
-            <Citations items={data.citations} />
             {user?.is_admin && <CitationEditSheet targetType="chapter" targetId={data.id} initial={data.citations} subject={data.subject}
               open={editCitations} onClose={() => setEditCitations(false)} onSaved={reload} />}
           </>

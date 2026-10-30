@@ -229,7 +229,6 @@ class _ChapterPageState extends State<ChapterPage> {
               sourceKey: gallery.sourceKey,
             ),
           ],
-          CitationList(d.citations),
         ],
       ),
     );

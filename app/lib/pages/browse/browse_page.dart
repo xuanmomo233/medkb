@@ -3,8 +3,9 @@ import '../../endpoints.dart';
 import '../../models.dart' hide Card;
 import '../../nav.dart';
 import '../../widgets/widgets.dart';
+import 'textbook_catalog_page.dart';
 
-enum _Tab { mindmaps, notes, questions }
+enum _Tab { mindmaps, notes, questions, textbooks }
 
 class _Item {
   final String key;
@@ -222,6 +223,7 @@ class _BrowsePageState extends State<BrowsePage> {
                 _Tab.mindmaps: '思维导图',
                 _Tab.notes: '考点精要',
                 _Tab.questions: '题库章节',
+                _Tab.textbooks: '教材原书',
               },
               value: _tab,
               onChanged: (_Tab t) => setState(() => _tab = t),
@@ -231,7 +233,9 @@ class _BrowsePageState extends State<BrowsePage> {
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
             child: TextField(
               decoration: InputDecoration(
-                hintText: '在本页过滤学科或章节',
+                hintText: _tab == _Tab.textbooks
+                    ? '过滤教材名称或学科'
+                    : '在本页过滤学科或章节',
                 prefixIcon: const Icon(Icons.filter_list),
                 isDense: true,
                 suffixIcon: _kw.isEmpty
@@ -250,12 +254,23 @@ class _BrowsePageState extends State<BrowsePage> {
             ),
           ),
           Expanded(
-            child: AsyncView<ContentTree>(
-              loader: Endpoints.tree,
-              builder: (BuildContext c, ContentTree t,
-                      Future<void> Function() refresh) =>
-                  _content(t, refresh),
-            ),
+            child: _tab == _Tab.textbooks
+                ? AsyncView<List<TextbookSource>>(
+                    loader: Endpoints.textbooks,
+                    builder: (BuildContext c, List<TextbookSource> sources,
+                            Future<void> Function() refresh) =>
+                        TextbookCatalogList(
+                          sources: sources,
+                          filter: _kw,
+                          onRefresh: refresh,
+                        ),
+                  )
+                : AsyncView<ContentTree>(
+                    loader: Endpoints.tree,
+                    builder: (BuildContext c, ContentTree t,
+                            Future<void> Function() refresh) =>
+                        _content(t, refresh),
+                  ),
           ),
         ],
       ),

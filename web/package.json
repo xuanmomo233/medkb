@@ -7,12 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "test": "node --test src/features/notes/*.test.mjs",
+    "test": "node --test src/features/notes/*.test.mjs src/pages/browse/textbookReaderHelpers.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.104.1",
     "dompurify": "^3.4.16",
+    "pdfjs-dist": "^6.4.299",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-router-dom": "^7.18.4"
