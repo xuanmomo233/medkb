@@ -207,10 +207,9 @@ def test_archive_apply_retains_input_when_publication_receipt_is_incomplete(tmp_
     value["local_catalog_sync_performed"] = False
     write(receipt, value)
     plan["publication_receipt_sha256"] = archive.digest(receipt.read_bytes())
-    result = archive.archive_consumed(tmp_path, plan, apply=True)
-    assert not result["archived"]
+    with pytest.raises(ValueError, match="Publication receipt is no longer verified"):
+        archive.archive_consumed(tmp_path, plan, apply=True)
     assert candidate.is_file()
-    assert "Publication receipt is no longer verified" in result["skipped"][-1]["reason"]
 
 
 def test_archive_apply_writes_verified_gzip_before_removing_original(tmp_path):
