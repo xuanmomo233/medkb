@@ -1,4 +1,4 @@
-import { useCallback } from 'react'
+import { useCallback, useMemo } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '@/api/endpoints'
@@ -13,7 +13,8 @@ export function useScheduleNavigation(enabled = true) {
   const id = Number(params.get('schedule_item'))
   const active = enabled && id > 0
   const query = useQuery({ queryKey: keys.schedule, queryFn: api.scheduleToday, enabled: active })
-  const items = query.data?.items ?? []
+  const fetchedItems = query.data?.items
+  const items = useMemo(() => fetchedItems ?? [], [fetchedItems])
   const index = scheduleIndex(items, id)
   const mode = params.get('mode')
   const go = useCallback((next: number) => {
