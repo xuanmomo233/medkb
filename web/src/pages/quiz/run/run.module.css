@@ -1,4 +1,9 @@
 .wrap { max-width: 780px; margin: 0 auto; display: flex; flex-direction: column; gap: 12px; }
+.content { display: contents; }
+.wrap.embedded { flex: 1; min-height: 0; max-width: none; margin: 0; padding: 0; gap: 0; overflow: hidden; }
+.embedded .content { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 18px; scrollbar-gutter: stable; }
+.embedded .content > * { flex-shrink: 0; }
+.embedded .bottom { position: static; flex: none; flex-wrap: wrap; padding: 12px 18px max(12px, env(safe-area-inset-bottom)); background: var(--surface); border-top: 1px solid var(--line); backdrop-filter: none; }
 .top { display: flex; align-items: center; gap: 8px; }
 .topTitle { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .topMeta { font-size: 13px; color: var(--text-2); white-space: nowrap; }
@@ -68,6 +73,8 @@
 
 .bottom { position: sticky; bottom: 0; z-index: 10; display: flex; gap: 10px; padding: 10px 0; background: color-mix(in srgb, var(--bg) 92%, transparent); backdrop-filter: blur(8px); }
 .bottom > * { flex: 1; }
+.scheduleBottom { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.scheduleBottom > .answerAction { grid-column: 1 / -1; grid-row: 1; }
 
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(46px, 1fr)); gap: 8px; }
 .cell { position: relative; height: 44px; border: 1.5px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-2); font-weight: 600; transition: border-color .15s, background .15s; }
@@ -87,6 +94,7 @@
 .confirmBtns { display: flex; justify-content: flex-end; gap: 10px; }
 
 @media (max-width: 860px) {
+  .top { gap: 4px; }
   .wrap { padding-bottom: 72px; }
   .card { padding: 16px 14px; }
   .analysis { padding: 16px 14px; }

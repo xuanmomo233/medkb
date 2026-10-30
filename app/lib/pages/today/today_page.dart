@@ -97,14 +97,18 @@ class _TodayPageState extends State<TodayPage> {
                       const SizedBox(height: 12),
                       CheckinBlock(data: d, onChecked: _onSummaryChanged),
                       const SizedBox(height: 12),
-                      TodoBlock(counts: d.counts, onReturn: _onReturn),
+                      ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        title: const Text('更多练习入口'),
+                        children: <Widget>[
+                          TodoBlock(counts: d.counts, onReturn: _onReturn),
+                        ],
+                      ),
                     ],
                   );
                 },
               ),
             ),
-            const SizedBox(height: 12),
-            CalendarBlock(key: _calKey),
             const SizedBox(height: 12),
             asyncBlock<ScheduleToday>(
               key: _schKey,
@@ -118,12 +122,26 @@ class _TodayPageState extends State<TodayPage> {
               ),
             ),
             const SizedBox(height: 12),
+            asyncBlock<PlanToday>(
+              key: _planKey,
+              title: '学习计划',
+              loader: Endpoints.plan,
+              builder: (BuildContext ctx, PlanToday p, RefreshFn refresh) =>
+                  PlanBody(
+                      plan: p,
+                      onReturn: _onReturn,
+                      onRestarted: () => _planKey.currentState?.reload()),
+            ),
+            const SizedBox(height: 12),
+            CalendarBlock(key: _calKey),
+            const SizedBox(height: 12),
             asyncBlock<List<WeakSpot>>(
               key: _weakKey,
               title: '薄弱点分析',
               loader: Endpoints.weakSpots,
-              builder: (BuildContext ctx, List<WeakSpot> l, RefreshFn refresh) =>
-                  WeakList(list: l, onReturn: _onReturn),
+              builder:
+                  (BuildContext ctx, List<WeakSpot> l, RefreshFn refresh) =>
+                      WeakList(list: l, onReturn: _onReturn),
             ),
             const SizedBox(height: 12),
             asyncBlock<StatsOverview>(
@@ -134,17 +152,6 @@ class _TodayPageState extends State<TodayPage> {
                   StatsBody(data: d),
             ),
             const SizedBox(height: 12),
-            asyncBlock<PlanToday>(
-              key: _planKey,
-              title: '学习计划',
-              loader: Endpoints.plan,
-              builder: (BuildContext ctx, PlanToday p, RefreshFn refresh) =>
-                  PlanBody(
-                plan: p,
-                onReturn: _onReturn,
-                onRestarted: () => _planKey.currentState?.reload(),
-              ),
-            ),
             const SizedBox(height: 12),
           ],
         ),

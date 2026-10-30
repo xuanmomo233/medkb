@@ -8,6 +8,8 @@ import { Async } from './Async'
 import { keys } from './queries'
 import PlanDay from './PlanDay'
 import PlanSetup from './PlanSetup'
+import { invalidateStudy } from './invalidateStudy'
+import { planDayDisplay, planTodayBreakdown } from './planTodayBreakdown.mjs'
 import s from './today.module.css'
 
 const ratio = (a: number, b: number) => (b ? (a / b) * 100 : 0)
@@ -17,7 +19,7 @@ function ItemRow({ it }: { it: PlanItem }) {
   return (
     <li>
       <div className={`${s.planRow} ${it.done ? s.planDone : ''}`}>
-        <span className={s.planNo}>{it.done ? <Icon name="check" size={13} /> : `D${it.day}`}</span>
+        {it.done && <Icon name="check" size={13} />}
         <span className={s.itemTitle}>{it.label}</span>
         <span className={s.meta}>{it.card_done}/{it.cards}卡 · {it.question_done}/{it.questions}题</span>
       </div>
@@ -31,7 +33,9 @@ function Body({ p, onEdit, onRestart }: { p: PlanToday; onEdit: () => void; onRe
   const [open, setOpen] = useState<number | null>(null)
   const todayCards = p.today_cards
   const todayQ = p.today_questions
-  const days = p.scheduled_days
+  const today = planTodayBreakdown(p)
+  const days = (p.day_summaries ?? []).filter((d) => d.cards + d.questions > 0)
+  const sections = p.today_sections ?? []
   return (
     <div className={s.stack}>
       {p.finished ? (
@@ -42,15 +46,22 @@ function Body({ p, onEdit, onRestart }: { p: PlanToday; onEdit: () => void; onRe
           <div className={s.rowBetween}>
             <div>
               <span className={s.sub}>第 </span><span className={s.big}>{p.day_no}</span>
-              <span className={s.sub}> / {p.total_days} 天 · 剩 {p.days_left} 天 · 还有 {p.remaining} 章</span>
+              <span className={s.sub}> / {p.total_days} 天 · 当前日期 {today.date} · 剩 {p.days_left} 天 · 还有 {p.remaining} 章</span>
             </div>
-            <Badge tone="brand">{p.today_items.length} 章</Badge>
+            <Badge tone="brand">今日执行总数 {today.total} 项</Badge>
           </div>
-          {p.today_items.length > 0 ? (
+          <p className={s.meta}>顺延 {today.overdue} 项 · 今天到期 {today.dueToday} 项 · {todayCards} 卡 · {todayQ} 题</p>
+          {sections.length > 0 ? (
             <>
-              <ul className={s.list}>
-                {p.today_items.map((i) => <ItemRow key={i.key} it={i} />)}
-              </ul>
+              <p className={s.sub}>今日待做 · 每项任务只计一次</p>
+              <details><summary className={s.sub}>查看今日章节（{sections.length}）</summary><ul className={s.list}>
+                {sections.map((i) => (
+                  <li key={i.key} className={s.planRow}>
+                    <span className={s.itemTitle}>{i.label}</span>
+                    <span className={s.meta}>{i.cards} 卡 · {i.questions} 题</span>
+                  </li>
+                ))}
+              </ul></details>
               <div className={s.actions}>
                 <Button variant="primary" disabled={!todayCards} onClick={() => nav('/cards/run?plan_day=1')}>继续背卡（{todayCards}）</Button>
                 <Button disabled={!todayQ} onClick={() => nav('/quiz/run?plan_day=1')}>继续刷题（{todayQ}）</Button>
@@ -58,26 +69,32 @@ function Body({ p, onEdit, onRestart }: { p: PlanToday; onEdit: () => void; onRe
               </div>
             </>
           ) : (
-            <EmptyState text="今天没有安排，全部已完成或在剩余天数中排布完毕"
+            <EmptyState text="今天的任务已完成，后续安排见下方"
               action={<Button variant="primary" onClick={onEdit}>调整计划</Button>} />
           )}
         </>
       )}
       {days.length > 0 && (
-        <ul className={s.list} aria-label="剩余天数">
+        <details><summary className={s.sub}>查看每日安排</summary><ul className={s.list} aria-label="剩余天数">
           {days.map((d) => (
-            <li key={d}>
-              <button type="button" className={`${s.planRow} ${d === 1 ? s.planNow : ''}`} aria-expanded={open === d}
-                onClick={() => setOpen(open === d ? null : d)}>
-                <span className={s.planNo}>{d === 1 ? '今' : `D${d}`}</span>
-                <span className={s.itemTitle}>{d === 1 ? '今日待完成' : '待完成任务'}</span>
+            <li key={d.date}>
+              <button type="button" className={`${s.planRow} ${d.no === 1 ? s.planNow : ''}`} aria-expanded={open === d.no}
+                aria-label={planDayDisplay(p, d.no, d.date)}
+                onClick={() => setOpen(open === d.no ? null : d.no)}>
+                <span className={s.planNo}>D{p.day_no + d.no - 1}</span>
+                <span className={s.itemTitle}>{d.no === 1 ? '今天' : d.no === 2 ? '明天' : d.no === 3 ? '后天' : ''}{d.no <= 3 ? ` · ${d.date}` : d.date}</span>
+                <span className={s.meta}>{d.cards} 卡 · {d.questions} 题{d.overdue_cards + d.overdue_questions > 0 ? `（含顺延 ${d.overdue_cards} 卡 · ${d.overdue_questions} 题）` : ''}</span>
                 <span aria-hidden="true"><Icon name="chevDown" size={13} /></span>
               </button>
-              {open === d && <PlanDay n={d} />}
+              {open === d.no && <PlanDay n={d.no} />}
             </li>
           ))}
-        </ul>
+        </ul></details>
       )}
+      <details className={s.planTotals}>
+        <summary>全章累计进度（章节可能共享题目，不等于今日任务量）</summary>
+        <ul className={s.list}>{p.items.map((i) => <ItemRow key={i.key} it={i} />)}</ul>
+      </details>
       <div className={s.actions}>
         <Button variant="ghost" onClick={onRestart}>重新开始计划</Button>
       </div>
@@ -96,7 +113,7 @@ export default function PlanCard() {
     onSuccess: () => {
       setConfirm(false)
       toast('计划已重新开始，剩余内容从今天起重新均分')
-      void qc.invalidateQueries({ queryKey: keys.plan })
+      void invalidateStudy(qc)
     },
     onError: (e) => toast(e instanceof Error ? e.message : '操作失败', true),
   })

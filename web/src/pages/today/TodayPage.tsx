@@ -15,8 +15,8 @@ export default function TodayPage() {
       <div className={s.grid}>
         <div className={s.col}>
           <ScheduleCard />
-          <TodoCard />
           <PlanCard />
+          <TodoCard />
         </div>
         <div className={s.col}>
           <CheckinCard />

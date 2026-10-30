@@ -194,13 +194,20 @@ export interface PlanToday {
   today_questions: number; today_cards: number
   pending_questions: number; pending_cards: number; scheduled_days: number[]
   today_items: PlanItem[]; items: PlanItem[]
+  today_sections: { key: string; subject: string; part: string; label: string; cards: number; questions: number }[]
+  day_summaries: { no: number; date: string; cards: number; questions: number; overdue_cards: number; overdue_questions: number }[]
+}
+export interface PlanConfig { total_days: number; items: { subject: string; part: string }[] }
+export interface PlanPreview {
+  cards: number; questions: number; pending_cards: number; pending_questions: number
+  daily_cards: number; daily_questions: number; duplicate_questions_skipped: number
 }
 export interface PlanOptionPart { part: string; cards: number; questions: number }
 export interface PlanOption { subject: string; parts: PlanOptionPart[] }
 export interface PlanDayDetail {
   no: number; title: string
   cards: { id: number; term: string; part: string }[]
-  question_groups: { chapter: string; ids: number[] }[]
+  question_groups: { subject_dir: string; chapter: string; ids: number[] }[]
 }
 export interface WeakSpot {
   system: string; chapter: string
@@ -209,6 +216,7 @@ export interface WeakSpot {
 }
 export interface ScheduleItem {
   id: number
+  source_ids?: number[]
   item_type: TargetType
   item_id: number
   reason: 'due' | 'weak'

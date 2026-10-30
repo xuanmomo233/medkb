@@ -4,7 +4,7 @@ import pytest
 from sqlalchemy import func, select
 
 from app.models import (Card, CardQuestion, PlanSnapshot, PlanTask, PlanTaskSection,
-                        QuestionMerge, QuestionRelation, User)
+                        QuestionMerge, QuestionRelation, User, UserPlan)
 from app.services import plan_queue, progress, question_links, quiz, study
 from app.services.exam import submit
 from app.services.quiz_filters import QuizParams
@@ -46,6 +46,102 @@ async def test_shared_question_is_one_task_and_satisfies_both_sections(session):
     assert all(it["question_done"] == 1 for it in p["items"])
     for _ in range(2):
         assert await quiz.plan_day_qids(session, 1, 1) == [3, 4, 2]
+
+
+@pytest.mark.asyncio
+async def test_plan_distribution_round_robins_chapters_and_keeps_cases_whole(session):
+    session.add(User(id=1, username="learner", password_hash="x"))
+    parts = ("甲", "乙", "丙")
+    cards = []
+    links = []
+    questions = []
+    for section_index, part in enumerate(parts):
+        first = section_index * 6 + 1
+        for qid in range(first, first + 6):
+            parent = "共同病例" if qid in (7, 8) else ""
+            questions.append(question(qid, parent, chapter=part, subject_dir="05-内科学"))
+        card_ids = (100 + section_index * 2, 101 + section_index * 2)
+        cards.extend(Card(id=cid, subject="内科学", part=part, term=f"{part}-{cid}", body="")
+                     for cid in card_ids)
+        links.extend(CardQuestion(card_id=card_ids[0], question_id=qid)
+                     for qid in range(first, first + 6))
+    # Question 1 is shared by two chapter cards, but it remains one scheduled task.
+    links.append(CardQuestion(card_id=102, question_id=1))
+    session.add_all([*questions, *cards, *links])
+    await session.commit()
+
+    await study.set_plan(session, 1, [("内科学", part) for part in parts], 3)
+    plan = await session.get(UserPlan, 1)
+    tasks = (await session.scalars(select(PlanTask).order_by(PlanTask.position))).all()
+    task_links = (await session.scalars(select(PlanTaskSection))).all()
+    by_task = {task.id: task for task in tasks}
+    section_order = {part: index for index, part in enumerate(parts)}
+    primary_part = {}
+    for link in task_links:
+        task = by_task[link.task_id]
+        old = primary_part.get(task.id)
+        if old is None or section_order[link.part] < section_order[old]:
+            primary_part[task.id] = link.part
+
+    assert plan.total_days == 3
+    assert sum(task.kind == "question" for task in tasks) == 18
+    assert sum(task.kind == "card" for task in tasks) == 6
+    assert len([task for task in tasks if task.kind == "question" and task.target_id == 1]) == 1
+    shared = next(task for task in tasks if task.kind == "question" and task.target_id == 1)
+    assert {link.part for link in task_links if link.task_id == shared.id} == {"甲", "乙"}
+
+    question_day_counts = {}
+    chapter_by_day = {}
+    for task in tasks:
+        day = (task.due_day - plan.start_day).days + 1
+        if task.kind == "question":
+            question_day_counts[day] = question_day_counts.get(day, 0) + 1
+            counts = chapter_by_day.setdefault(day, {part: 0 for part in parts})
+            counts[primary_part[task.id]] += 1
+    assert question_day_counts == {1: 6, 2: 6, 3: 6}
+    assert all(min(counts.values()) >= 1 and max(counts.values()) - min(counts.values()) <= 2
+               for counts in chapter_by_day.values()), chapter_by_day
+    assert {part: sum(counts[part] for counts in chapter_by_day.values()) for part in parts} == {
+        "甲": 6, "乙": 6, "丙": 6,
+    }
+
+    case_days = {task.due_day for task in tasks
+                 if task.kind == "question" and task.target_id in (7, 8)}
+    assert len(case_days) == 1
+    card_day_counts = {}
+    for task in tasks:
+        if task.kind == "card":
+            day = (task.due_day - plan.start_day).days + 1
+            card_day_counts[day] = card_day_counts.get(day, 0) + 1
+    assert card_day_counts == {1: 2, 2: 2, 3: 2}
+
+
+@pytest.mark.asyncio
+async def test_plan_distribution_weights_chapters_by_remaining_work(session):
+    session.add(User(id=1, username="learner", password_hash="x"))
+    questions = [question(qid, chapter="大章", subject_dir="05-内科学") for qid in range(1, 10)]
+    questions += [question(qid, chapter="小章", subject_dir="05-内科学") for qid in range(10, 13)]
+    cards = [Card(id=100, subject="内科学", part="大章", term="大章", body=""),
+             Card(id=101, subject="内科学", part="小章", term="小章", body="")]
+    links = [CardQuestion(card_id=100, question_id=qid) for qid in range(1, 10)]
+    links += [CardQuestion(card_id=101, question_id=qid) for qid in range(10, 13)]
+    session.add_all([*questions, *cards, *links])
+    await session.commit()
+
+    await study.set_plan(session, 1, [("内科学", "大章"), ("内科学", "小章")], 3)
+    plan = await session.get(UserPlan, 1)
+    tasks = (await session.scalars(select(PlanTask).where(
+        PlanTask.kind == "question",
+    ).order_by(PlanTask.position))).all()
+    daily = {}
+    for task in tasks:
+        day = (task.due_day - plan.start_day).days + 1
+        daily.setdefault(day, {"大章": 0, "小章": 0})
+        daily[day]["大章" if task.target_id <= 9 else "小章"] += 1
+
+    assert daily == {1: {"大章": 3, "小章": 1},
+                     2: {"大章": 3, "小章": 1},
+                     3: {"大章": 3, "小章": 1}}
 
 
 @pytest.mark.asyncio
@@ -122,16 +218,17 @@ async def test_submission_cards_and_empty_selection_sync_without_false_seen(sess
 
 
 @pytest.mark.asyncio
-async def test_no_automatic_classification_and_only_explicit_related_questions(session):
+async def test_practice_dedup_keeps_global_classification_and_explicit_relations_unchanged(session):
     await seed(session)
-    # Two identical bodies intentionally remain independent until classification is authorized.
+    # Equivalent exercises share plan work, but never create global identity or relation rows.
     q = question(5, stem="child 1", chapter="一", subject_dir="05-内科学")
     session.add(q)
     await session.flush()
     session.add(CardQuestion(card_id=10, question_id=5))
     await session.commit()
     await configure(session)
-    assert {1, 5}.issubset(set(await quiz.plan_day_qids(session, 1, 1)))
+    assert 1 in await quiz.plan_day_qids(session, 1, 1)
+    assert 5 not in await quiz.plan_day_qids(session, 1, 1)
     assert await question_links.related(session, 1, 1) == []
     assert await session.scalar(select(func.count()).select_from(QuestionMerge)) == 0
     assert await session.scalar(select(func.count()).select_from(QuestionRelation)) == 0
@@ -186,6 +283,18 @@ async def test_fresh_related_practice_never_expands_a_done_case_child(session):
 
 
 @pytest.mark.asyncio
+async def test_fresh_identity_uses_canonical_record_when_answers_differ(session):
+    session.add_all([question(1, answer="D"), question(2, answer="B")])
+    session.add(QuestionMerge(alias_id=2, canonical_id=1, reason="same question; preserve answer discrepancy"))
+    await session.flush()
+
+    qs = await quiz.list_questions(session, 1, QuizParams(ids=[2, 1], fresh=True), True)
+
+    assert [q.id for q in qs] == [1]
+    assert qs[0].answer == "D"
+
+
+@pytest.mark.asyncio
 async def test_cards_do_not_consume_the_daily_question_quota(session):
     await seed(session)
     session.add_all([Card(id=i, subject="内科学", part="甲", term=f"卡{i}", body="") for i in range(20, 40)])
@@ -193,3 +302,58 @@ async def test_cards_do_not_consume_the_daily_question_quota(session):
     await configure(session, 4)
     assert await quiz.plan_day_qids(session, 1, 1)
     assert await plan_queue.targets(session, 1, 1, "card")
+
+
+@pytest.mark.asyncio
+async def test_existing_plan_collapses_new_aliases_and_keeps_section_membership(session):
+    await seed(session)
+    await configure(session, 2)
+    before = (await session.scalars(select(PlanTask).where(PlanTask.kind == "question"))).all()
+    earliest = min(t.due_day for t in before if t.target_id in (1, 2))
+    session.add(QuestionMerge(alias_id=2, canonical_id=1, reason="review after plan creation"))
+    await session.commit()
+    tasks, links = await plan_queue.read(session, 1)
+    questions = [t for t in tasks if t.kind == "question"]
+    assert {t.target_id for t in questions} == {1, 3, 4}
+    assert len(questions) == 3
+    root = next(t for t in questions if t.target_id == 1)
+    assert root.due_day == earliest
+    assert {(link.subject, link.part) for link in links if link.task_id == root.id} == {
+        ("内科学", "甲"), ("内科学", "乙"),
+    }
+    state = await study.plan_today(session, 1)
+    assert state["pending_questions"] == 3
+    # A plan link already open on the client may still carry the old alias ID.
+    pending = await quiz.list_questions(session, 1, QuizParams(plan_day=1, ids=[2]), True)
+    assert [q.id for q in pending] == [1]
+    pool = await quiz.pool(session, 1, QuizParams(plan_day=1, ids=[2]), None, 0, 20)
+    assert [q.id for q in pool.items] == [1]
+    await quiz.attempt(session, 1, 2, [0])
+    assert (await study.plan_today(session, 1))["pending_questions"] == 2
+    assert 1 not in await quiz.plan_day_qids(session, 1, 1)
+    assert 2 not in await quiz.plan_day_qids(session, 1, 1)
+    await study.plan_restart(session, 1)
+    assert (await study.plan_today(session, 1))["pending_questions"] == 2
+    from app.models import Attempt
+    assert await session.scalar(select(func.count()).select_from(Attempt)) == 1
+
+
+@pytest.mark.asyncio
+async def test_existing_alias_only_plan_moves_to_final_root_without_losing_other_user_tasks(session):
+    await seed(session)
+    await study.set_plan(session, 1, [("内科学", "甲")], 1)
+    session.add(User(id=2, username="other", password_hash="x"))
+    await session.commit()
+    await study.set_plan(session, 2, [("内科学", "甲")], 1)
+    # The final root is outside the selected section and was never a task.
+    session.add(question(5, chapter="外部章节", subject_dir="05-内科学"))
+    await session.flush()
+    session.add_all([QuestionMerge(alias_id=1, canonical_id=2, reason="first"),
+                     QuestionMerge(alias_id=2, canonical_id=5, reason="second")])
+    await session.commit()
+    assert await quiz.plan_day_qids(session, 1, 1) == [5, 3, 4]
+    user2 = (await session.scalars(select(PlanTask).where(
+        PlanTask.user_id == 2, PlanTask.kind == "question",
+    ))).all()
+    assert {t.target_id for t in user2} == {1, 3, 4}
+    assert await quiz.plan_day_qids(session, 1, 1) == [5, 3, 4]
