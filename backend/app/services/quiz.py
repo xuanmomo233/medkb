@@ -249,6 +249,9 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
         if p.ids is not None:
             mapping = await plan_queue.question_mapping(session, uid, p.ids)
             p = replace(p, ids=list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in p.ids)))
+    elif p.ids is not None:
+        mapping = await question_links.redirects(session)
+        p = replace(p, ids=list(dict.fromkeys(question_links.resolve(mapping, qid) for qid in p.ids)))
     # Apply filters to lightweight seeds, then complete cases WITHOUT applying
     # progress/type filters to siblings. Only selected children load full content.
     stmt = (
