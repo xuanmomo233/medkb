@@ -43,14 +43,31 @@ jobs:
           echo "name=${version%%+*}" >> "$GITHUB_OUTPUT"
           echo "build=${version##*+}" >> "$GITHUB_OUTPUT"
 
-      # 运行号低于 build135（#133）的现存发布包；以后运行保持逐次递增。
+      - name: read current public APK
+        id: current
+        run: |
+          curl -fsSL https://luck.021209.xyz/api/version -o "$RUNNER_TEMP/current-apk-version.json"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          from pathlib import Path
+          version = json.loads((Path(os.environ["RUNNER_TEMP"]) / "current-apk-version.json").read_text())
+          print(f"build={int(version['build'])}")
+          print(f"sha256={version['apk_sha256']}")
+          PY
+
+      # 同时超过源码版本、线上下载包和当前工作流运行号，保证首次及后续发布均可升级。
       - name: select monotonic build number
         id: build
         run: |
           source_build='${{ steps.ver.outputs.build }}'
           workflow_floor=$(( ${{ github.run_number }} + 2 ))
-          if (( workflow_floor > source_build )); then
-            source_build=$workflow_floor
+          public_floor=$(( ${{ steps.current.outputs.build }} + 1 ))
+          if (( workflow_floor > source_build )); then source_build=$workflow_floor; fi
+          if (( public_floor > source_build )); then source_build=$public_floor; fi
+          if (( source_build <= ${{ steps.current.outputs.build }} )); then
+            echo "::error::新 APK 构建号未高于当前线上版本"
+            exit 1
           fi
           echo "number=$source_build" >> "$GITHUB_OUTPUT"
 
@@ -104,6 +121,21 @@ jobs:
           if not (has_v1 and has_v2):
               raise SystemExit('APK 签名不完整（缺 v1 或 v2/v3），拒绝发布')
           EOF
+
+      - name: verify upgrade signer against current download
+        env:
+          CURRENT_BUILD: ${{ steps.current.outputs.build }}
+          CURRENT_SHA256: ${{ steps.current.outputs.sha256 }}
+        run: |
+          curl -fsSL "https://luck.021209.xyz/app.apk?v=$CURRENT_BUILD" -o "$RUNNER_TEMP/current.apk"
+          echo "$CURRENT_SHA256  $RUNNER_TEMP/current.apk" | sha256sum --check
+          old_cert=$(keytool -printcert -jarfile "$RUNNER_TEMP/current.apk" | awk -F': ' '/SHA256:/{gsub(":", "", $2); print toupper($2); exit}')
+          new_cert=$(keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | awk -F': ' '/SHA256:/{gsub(":", "", $2); print toupper($2); exit}')
+          if [[ -z "$old_cert" || "$old_cert" != "$new_cert" ]]; then
+            echo "::error::新 APK 签名证书与当前正式下载包不一致，拒绝发布"
+            exit 1
+          fi
+          echo "当前与候选 APK 的签名证书一致：$old_cert"
 
       - name: release apk
         uses: softprops/action-gh-release@v2
