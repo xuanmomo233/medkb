@@ -77,7 +77,7 @@ class Attempt(Base, CreatedMixin):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"))
     question_id: Mapped[int] = mapped_column(ForeignKey("questions.id", ondelete="CASCADE"), index=True)
     exam_id: Mapped[int | None] = mapped_column(ForeignKey("exams.id", ondelete="SET NULL"))
-    picked: Mapped[str] = mapped_column(String(16), default="")
+    picked: Mapped[str] = mapped_column(String(26), default="")
     is_correct: Mapped[bool] = mapped_column(Boolean)
 
 
