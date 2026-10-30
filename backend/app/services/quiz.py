@@ -341,7 +341,9 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
             case_meta[qid] = (token, index, len(ids))
     out = []
     for q, qp in rows:
-        last_picked, last_correct = last_by_root.get(q.id, ("", None))
+        root = question_links.resolve(mapping, q.id)
+        root_progress = progress.get(root, {"mastered": False, "in_wrongbook": False, "in_plan": False, "starred": False})
+        last_picked, last_correct = last_by_root.get(root, ("", None))
         empty = not (q.analysis or "").strip()
         case_group, case_index, case_total = case_meta.get(q.id, ("", 0, 0))
         out.append(
@@ -355,9 +357,9 @@ async def list_questions(session: AsyncSession, uid: int, p: QuizParams, lite: b
                 answer=q.answer or "",
                 analysis_html="" if (lite or empty) else md(q.analysis),
                 analysis_empty=empty, tags=_tags(q),
-                state=("mastered" if progress[q.id]["mastered"] else "again" if progress[q.id]["in_wrongbook"] else "plan" if progress[q.id]["in_plan"] else ""),
-                starred=progress[q.id]["starred"],
-                done=question_links.resolve(mapping, q.id) in done,
+                state=("mastered" if root_progress["mastered"] else "again" if root_progress["in_wrongbook"] else "plan" if root_progress["in_plan"] else ""),
+                starred=root_progress["starred"],
+                done=root in done,
                 last_picked=last_picked, last_correct=last_correct,
             )
         )
