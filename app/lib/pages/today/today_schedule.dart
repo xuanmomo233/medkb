@@ -23,6 +23,8 @@ class ScheduleList extends StatefulWidget {
 class ScheduleListState extends State<ScheduleList> {
   late List<ScheduleItem> _items = List<ScheduleItem>.of(widget.data.items);
   final Set<int> _pending = <int>{};
+  bool _expanded = false;
+  bool _showDone = false;
 
   @override
   void didUpdateWidget(covariant ScheduleList oldWidget) {
@@ -34,6 +36,7 @@ class ScheduleListState extends State<ScheduleList> {
 
   ScheduleItem _withDone(ScheduleItem x, bool done) => ScheduleItem(
         id: x.id,
+        sourceIds: x.sourceIds,
         itemType: x.itemType,
         itemId: x.itemId,
         reason: x.reason,
@@ -67,7 +70,9 @@ class ScheduleListState extends State<ScheduleList> {
   }
 
   void _open(ScheduleItem it) {
-    final Future<void> f = openScheduleItem(context, _items, _items.indexWhere((ScheduleItem item) => item.id == it.id));
+    final Future<void> f = openScheduleItem(context, _items,
+        _items.indexWhere((ScheduleItem item) => item.id == it.id),
+        day: widget.data.day);
     f.then((_) => widget.onReturn());
   }
 
@@ -75,13 +80,25 @@ class ScheduleListState extends State<ScheduleList> {
   Widget build(BuildContext context) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final int done = _items.where((ScheduleItem x) => x.done).length;
+    final visible = <ScheduleItem>[
+      ..._items.where((it) => !it.done),
+      if (_showDone) ..._items.where((it) => it.done)
+    ];
     if (_items.isEmpty) {
       return const SizedBox(
-          height: 120, child: EmptyState('今天暂无日程，去刷几道题吧', icon: Icons.event_available_outlined));
+          height: 120,
+          child: EmptyState('今天暂无日程，去刷几道题吧',
+              icon: Icons.event_available_outlined));
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
+        Text(
+            done == _items.length
+                ? '今日复习已完成'
+                : '到期复习与薄弱补强 · 待做 ${_items.length - done} 项',
+            style: TextStyle(color: cs.onSurfaceVariant)),
+        const SizedBox(height: 8),
         Row(
           children: <Widget>[
             Expanded(
@@ -93,11 +110,14 @@ class ScheduleListState extends State<ScheduleList> {
           ],
         ),
         const SizedBox(height: 4),
-        FilledButton(onPressed: () {
-          final int next = _items.indexWhere((ScheduleItem item) => !item.done);
-          _open(_items[next < 0 ? 0 : next]);
-        }, child: Text(done == _items.length ? '重新练习日程' : '继续今日日程')),
-        ..._items.map((ScheduleItem it) {
+        FilledButton(
+            onPressed: () {
+              final int next =
+                  _items.indexWhere((ScheduleItem item) => !item.done);
+              _open(_items[next < 0 ? 0 : next]);
+            },
+            child: Text(done == _items.length ? '重新练习日程' : '继续今日日程')),
+        ...visible.take(_expanded ? visible.length : 5).map((ScheduleItem it) {
           final bool isQ = it.itemType == TargetType.question;
           final bool due = it.reason == 'due';
           return InkWell(
@@ -110,29 +130,48 @@ class ScheduleListState extends State<ScheduleList> {
                     value: it.done,
                     onChanged: it.done ? null : (bool? _) => _complete(it),
                   ),
-                  Icon(isQ ? Icons.edit_note : Icons.style_outlined,
-                      size: 18, color: cs.onSurfaceVariant),
-                  const SizedBox(width: 6),
                   Expanded(
-                    child: Text(
-                      it.title,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        decoration:
-                            it.done ? TextDecoration.lineThrough : null,
-                        color: it.done ? cs.onSurfaceVariant : null,
-                      ),
-                    ),
+                    child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 10),
+                        child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                it.title,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  decoration: it.done
+                                      ? TextDecoration.lineThrough
+                                      : null,
+                                  color: it.done ? cs.onSurfaceVariant : null,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                  '${isQ ? '题目' : '卡片'} · ${due ? '到期复习' : '薄弱补强'}',
+                                  style: TextStyle(
+                                      fontSize: 12, color: cs.onSurfaceVariant))
+                            ])),
                   ),
-                  const SizedBox(width: 6),
-                  AppBadge(due ? '到期复习' : '薄弱补强',
-                      tone: due ? BadgeTone.info : BadgeTone.warn),
                 ],
               ),
             ),
           );
         }),
+        Wrap(children: [
+          if (visible.length > 5)
+            TextButton(
+                onPressed: () => setState(() => _expanded = !_expanded),
+                child: Text(_expanded ? '收起任务' : '展开全部任务')),
+          if (done > 0)
+            TextButton(
+                onPressed: () => setState(() {
+                      _showDone = !_showDone;
+                      _expanded = true;
+                    }),
+                child: Text(_showDone ? '隐藏已完成' : '查看已完成（$done）')),
+        ]),
       ],
     );
   }

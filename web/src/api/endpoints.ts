@@ -47,6 +47,7 @@ export const api = {
   planDay: (n: number) => get<T.PlanDayDetail>(`/plan/days/${n}`),
   planRestart: () => post<void>('/plan/restart'),
   planOptions: () => get<T.PlanOption[]>('/plan/options'),
+  planPreview: (b: T.PlanConfig) => post<T.PlanPreview>('/plan/preview', b),
   planSaveConfig: (b: { total_days: number; items: { subject: string; part: string }[] }) => put<void>('/plan/config', b),
   planClear: () => del<void>('/plan/config'),
   statsOverview: () => get<T.StatsOverview>('/stats/overview'),

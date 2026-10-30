@@ -72,6 +72,13 @@ registerMock('PUT', '/plan/config', ({ body }) => {
   }))
 })
 registerMock('DELETE', '/plan/config', () => { planItems = null })
+registerMock('POST', '/plan/preview', ({ body }) => {
+  const b = body as { total_days: number; items: { subject: string; part: string }[] }
+  const cards = b.items.reduce((n, i) => n + (OPT_PARTS.find(([p]) => p === i.part)?.[1] ?? 40), 0)
+  const questions = b.items.reduce((n, i) => n + (OPT_PARTS.find(([p]) => p === i.part)?.[2] ?? 90), 0)
+  return { cards, questions, pending_cards: cards, pending_questions: questions,
+    daily_cards: Math.ceil(cards / b.total_days), daily_questions: Math.ceil(questions / b.total_days), duplicate_questions_skipped: 0 }
+})
 
 const planItemOut = (i: NonNullable<typeof planItems>[number], day: number | null, cd: number, qd: number) => ({
   key: `${i.subject}|${i.part}`, subject: i.subject, part: i.part, label: `${i.subject} · ${i.part}`,
@@ -94,6 +101,13 @@ registerMock('GET', '/plan', (): PlanToday => {
     pending_cards: items.reduce((n, i) => n + Math.max(0, i.cards - i.card_done), 0),
     scheduled_days: [...new Set(items.flatMap((i) => i.day === null ? [] : [i.day]))].sort((a, b) => a - b),
     today_items: items.filter((i) => i.day === 1), items,
+    today_sections: items.filter((i) => i.day === 1).map((i) => ({ key: i.key, subject: i.subject, part: i.part,
+      label: i.label, cards: Math.max(0, i.cards - i.card_done), questions: Math.max(0, i.questions - i.question_done) })),
+    day_summaries: [...new Set(items.flatMap((i) => i.day === null ? [] : [i.day]))].sort((a, b) => a - b).map((no) => ({
+      no, date: fmt(daysAgo(1 - no)), overdue_cards: 0, overdue_questions: 0,
+      cards: items.filter((i) => i.day === no).reduce((n, i) => n + Math.max(0, i.cards - i.card_done), 0),
+      questions: items.filter((i) => i.day === no).reduce((n, i) => n + Math.max(0, i.questions - i.question_done), 0),
+    })),
   }
 })
 registerMock('GET', '/plan/days/{n}', ({ params }): PlanDayDetail => {
@@ -103,7 +117,7 @@ registerMock('GET', '/plan/days/{n}', ({ params }): PlanDayDetail => {
   return {
     no: n, title: '01-呼吸系统疾病',
     cards: cards.map((id, i) => ({ id, term: TERMS[(i + n) % TERMS.length], part: chs[i % 2] })),
-    question_groups: chs.map((chapter, gi) => ({ chapter, ids: Array.from({ length: 12 }, (_, i) => n * 1000 + gi * 20 + i) })),
+    question_groups: chs.map((chapter, gi) => ({ subject_dir: '内科学', chapter, ids: Array.from({ length: 12 }, (_, i) => n * 1000 + gi * 20 + i) })),
   }
 })
 registerMock('POST', '/plan/restart', () => undefined)

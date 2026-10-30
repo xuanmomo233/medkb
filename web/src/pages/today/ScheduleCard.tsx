@@ -1,5 +1,6 @@
 ﻿import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useState } from 'react'
 import { api } from '@/api/endpoints'
 import type { ScheduleToday } from '@/api/types'
 import { Badge, Button, Card, EmptyState, Icon, ProgressBar, useToast } from '@/ui'
@@ -9,6 +10,8 @@ import s from './today.module.css'
 import { schedulePath } from './schedulePath'
 
 export default function ScheduleCard() {
+  const [expanded, setExpanded] = useState(false)
+  const [showDone, setShowDone] = useState(false)
   const qc = useQueryClient()
   const toast = useToast()
   const q = useQuery({ queryKey: keys.schedule, queryFn: api.scheduleToday })
@@ -41,12 +44,13 @@ export default function ScheduleCard() {
       <Async q={q} height={220}>
         {(d) => d.items.length === 0 ? <EmptyState icon="calendar" text="今天暂无日程，去刷几道题吧" /> : (
           <div className={s.stack}>
+            <p className={s.sub}>{d.done_count >= d.items.length ? '今日复习已完成' : `到期复习与薄弱补强 · 待做 ${d.items.length - d.done_count} 项`}</p>
             <ProgressBar value={d.items.length ? (d.done_count / d.items.length) * 100 : 0} tone={d.done_count >= d.items.length ? 'good' : undefined} />
             <Link to={schedulePath(d.items.find((item) => !item.done) ?? d.items[0])}>
               <Button variant="primary">{d.done_count >= d.items.length ? '重新练习日程' : '继续今日日程'}</Button>
             </Link>
             <ul className={s.list}>
-              {d.items.map((it) => {
+              {d.items.filter((it) => showDone || !it.done).sort((a, b) => Number(a.done) - Number(b.done)).slice(0, expanded ? undefined : 5).map((it) => {
                 const isQ = it.item_type === 'question'
                 const to = schedulePath(it)
                 return (
@@ -60,6 +64,10 @@ export default function ScheduleCard() {
                 )
               })}
             </ul>
+            <div className={s.actions}>
+              {d.items.filter((it) => showDone || !it.done).length > 5 && <Button variant="ghost" onClick={() => setExpanded(!expanded)}>{expanded ? '收起任务' : '展开全部任务'}</Button>}
+              {d.done_count > 0 && <Button variant="ghost" onClick={() => { setShowDone(!showDone); setExpanded(true) }}>{showDone ? '隐藏已完成' : `查看已完成（${d.done_count}）`}</Button>}
+            </div>
           </div>
         )}
       </Async>

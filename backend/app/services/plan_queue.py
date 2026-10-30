@@ -41,15 +41,52 @@ async def _sync(session: AsyncSession, uid: int, tasks: list[PlanTask], mapping=
             task.completed_at = None
 
 
-def _assign(plan: UserPlan, units: list[list[PlanTask]], start=None) -> None:
-    """Give cards and questions daily quotas; keep each case together."""
-    pending = [[task for task in unit if task.completed_at is None] for unit in units]
+def _smooth_round_robin(
+    units: list[list[PlanTask]], buckets: list[tuple[str, str] | None],
+) -> list[list[PlanTask]]:
+    """Interleave chapter buckets in proportion to their pending task counts."""
+    grouped = defaultdict(list)
+    for unit, bucket in zip(units, buckets):
+        grouped[bucket].append(unit)
+    weights = {bucket: sum(len(unit) for unit in queue) for bucket, queue in grouped.items()}
+    current = {bucket: 0 for bucket in grouped}
+    order = {bucket: index for index, bucket in enumerate(grouped)}
+    result = []
+    while grouped:
+        total_weight = sum(weights.values())
+        for bucket in grouped:
+            current[bucket] += weights[bucket]
+        selected = max(grouped, key=lambda bucket: (current[bucket], -order[bucket]))
+        current[selected] -= total_weight
+        result.append(grouped[selected].pop(0))
+        if not grouped[selected]:
+            del grouped[selected]
+            del weights[selected]
+            del current[selected]
+            del order[selected]
+    return result
+
+
+def _assign(
+    plan: UserPlan,
+    units: list[list[PlanTask]],
+    start=None,
+    unit_buckets: list[tuple[str, str] | None] | None = None,
+) -> None:
+    """Give cards and questions daily quotas; interleave chapters and keep cases whole."""
+    if unit_buckets is None:
+        unit_buckets = [None] * len(units)
+    if len(unit_buckets) != len(units):
+        raise ValueError("unit_buckets must align with units")
+    pending = [([task for task in unit if task.completed_at is None], bucket)
+               for unit, bucket in zip(units, unit_buckets)]
     for kind in ("card", "question"):
-        track = [unit for unit in pending if unit and unit[0].kind == kind]
-        total = sum(map(len, track))
+        track = [(unit, bucket) for unit, bucket in pending if unit and unit[0].kind == kind]
+        ordered = _smooth_round_robin([unit for unit, _ in track], [bucket for _, bucket in track])
+        total = sum(map(len, ordered))
         budget = max(1, ceil(total / plan.total_days))
         cursor = 0
-        for unit in track:
+        for unit in ordered:
             day = min(cursor // budget, plan.total_days - 1)
             for task in unit:
                 task.due_day = (start or plan.start_day) + timedelta(days=day)
@@ -80,6 +117,8 @@ async def _build(session: AsyncSession, plan: UserPlan) -> None:
                 memberships[("question", question_links.resolve(mapping, child))].add(pair)
     tasks = {}
     units = []
+    unit_buckets = []
+    section_order = {(section.subject, section.part): index for index, section in enumerate(sections)}
     for section in sections:
         cids, qids = content.get(study._item_key(section.subject, section.part), ([], []))
         work = [[("card", cid)] for cid in cids]
@@ -97,12 +136,14 @@ async def _build(session: AsyncSession, plan: UserPlan) -> None:
                 unit.append(task)
             if unit:
                 units.append(unit)
+                candidates = {pair for task in unit for pair in memberships[(task.kind, task.target_id)]}
+                unit_buckets.append(min(candidates, key=lambda pair: section_order[pair]) if candidates else None)
     await session.flush()
     for key, task in tasks.items():
         for subject, part in memberships[key]:
             session.add(PlanTaskSection(task_id=task.id, subject=subject, part=part))
     await _sync(session, uid, list(tasks.values()), mapping)
-    _assign(plan, units)
+    _assign(plan, units, unit_buckets=unit_buckets)
     session.add(PlanSnapshot(user_id=uid))
     await session.flush()
 
@@ -236,10 +277,24 @@ async def complete_questions(session: AsyncSession, uid: int, qids: list[int]) -
 
 
 async def restart(session: AsyncSession, plan: UserPlan) -> None:
-    tasks, _ = await read(session, plan.user_id)
+    tasks, links = await read(session, plan.user_id)
     # Only unfinished work moves; no completed task is recreated.
     groups = await ordered_groups(session, [t.target_id for t in tasks if t.kind == "question"])
     by_id = {t.target_id: t for t in tasks if t.kind == "question"}
     units = [[t] for t in tasks if t.kind == "card"]
     units += [[by_id[qid] for qid in group if qid in by_id] for group in groups]
-    _assign(plan, units)
+    sections = list((await session.scalars(select(UserPlanItem).where(
+        UserPlanItem.user_id == plan.user_id,
+    ).order_by(UserPlanItem.ord, UserPlanItem.id))).all())
+    section_order = {(section.subject, section.part): index for index, section in enumerate(sections)}
+    memberships = defaultdict(set)
+    by_task_id = {task.id: task for task in tasks}
+    for link in links:
+        task = by_task_id.get(link.task_id)
+        if task is not None:
+            memberships[(task.kind, task.target_id)].add((link.subject, link.part))
+    unit_buckets = []
+    for unit in units:
+        candidates = {pair for task in unit for pair in memberships[(task.kind, task.target_id)]}
+        unit_buckets.append(min(candidates, key=lambda pair: section_order[pair]) if candidates else None)
+    _assign(plan, units, unit_buckets=unit_buckets)

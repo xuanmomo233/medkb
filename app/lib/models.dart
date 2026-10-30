@@ -1058,6 +1058,56 @@ class PlanItem {
       );
 }
 
+class PlanTodaySection {
+  final String key;
+  final String subject;
+  final String part;
+  final String label;
+  final int cards;
+  final int questions;
+  const PlanTodaySection({
+    required this.key,
+    required this.subject,
+    required this.part,
+    required this.label,
+    required this.cards,
+    required this.questions,
+  });
+  factory PlanTodaySection.fromJson(Map<String, dynamic> j) => PlanTodaySection(
+        key: _s(j['key']),
+        subject: _s(j['subject']),
+        part: _s(j['part']),
+        label: _s(j['label']),
+        cards: _i(j['cards']),
+        questions: _i(j['questions']),
+      );
+}
+
+class PlanDaySummary {
+  final int no;
+  final String date;
+  final int cards;
+  final int questions;
+  final int overdueCards;
+  final int overdueQuestions;
+  const PlanDaySummary({
+    required this.no,
+    required this.date,
+    required this.cards,
+    required this.questions,
+    required this.overdueCards,
+    required this.overdueQuestions,
+  });
+  factory PlanDaySummary.fromJson(Map<String, dynamic> j) => PlanDaySummary(
+        no: _i(j['no']),
+        date: _s(j['date']),
+        cards: _i(j['cards']),
+        questions: _i(j['questions']),
+        overdueCards: _i(j['overdue_cards']),
+        overdueQuestions: _i(j['overdue_questions']),
+      );
+}
+
 class PlanToday {
   final bool configured;
   final String start;
@@ -1071,6 +1121,8 @@ class PlanToday {
   final int pendingQuestions;
   final int pendingCards;
   final List<int> scheduledDays;
+  final List<PlanTodaySection> todaySections;
+  final List<PlanDaySummary> daySummaries;
   final List<PlanItem> todayItems;
   final List<PlanItem> items;
   const PlanToday({
@@ -1086,6 +1138,8 @@ class PlanToday {
     this.pendingQuestions = 0,
     this.pendingCards = 0,
     this.scheduledDays = const <int>[],
+    this.todaySections = const <PlanTodaySection>[],
+    this.daySummaries = const <PlanDaySummary>[],
     required this.todayItems,
     required this.items,
   });
@@ -1102,10 +1156,62 @@ class PlanToday {
         pendingQuestions: _i(j['pending_questions']),
         pendingCards: _i(j['pending_cards']),
         scheduledDays: _li(j['scheduled_days']),
+        todaySections: asMapList(j['today_sections'])
+            .map(PlanTodaySection.fromJson)
+            .toList(),
+        daySummaries: asMapList(j['day_summaries'])
+            .map(PlanDaySummary.fromJson)
+            .toList(),
         todayItems: asMapList(j['today_items']).map(PlanItem.fromJson).toList(),
         items: asMapList(j['items']).map(PlanItem.fromJson).toList(),
       );
+
+  PlanDaySummary? summaryForRelativeDay(int relativeDay) {
+    for (final PlanDaySummary summary in daySummaries) {
+      if (summary.no == relativeDay) return summary;
+    }
+    return null;
+  }
+
+  PlanDaySummary? get todaySummary => summaryForRelativeDay(1);
+
+  int get overdueCards => todaySummary?.overdueCards ?? 0;
+  int get overdueQuestions => todaySummary?.overdueQuestions ?? 0;
+  int get overdueCount => overdueCards + overdueQuestions;
+  int get dueTodayCount =>
+      _nonNegative(todayCards - overdueCards) +
+      _nonNegative(todayQuestions - overdueQuestions);
+  int get todayCount => todayCards + todayQuestions;
+  int planDayForRelativeDay(int relativeDay) => dayNo + relativeDay - 1;
+
+  String dateForRelativeDay(int relativeDay) {
+    if (relativeDay < 1) return '';
+    final String? summaryDate = summaryForRelativeDay(relativeDay)?.date;
+    if (summaryDate != null && summaryDate.isNotEmpty) return summaryDate;
+    return _addIsoDays(currentDate, relativeDay - 1);
+  }
+
+  String get currentDate {
+    final String? summaryDate = todaySummary?.date;
+    if (summaryDate != null && summaryDate.isNotEmpty) return summaryDate;
+    return _addIsoDays(start, dayNo > 0 ? dayNo - 1 : 0);
+  }
 }
+
+String _addIsoDays(String source, int offset) {
+  final List<String> parts = source.split('-');
+  if (parts.length != 3) return '';
+  final int? year = int.tryParse(parts[0]);
+  final int? month = int.tryParse(parts[1]);
+  final int? day = int.tryParse(parts[2]);
+  if (year == null || month == null || day == null) return '';
+  final DateTime date = DateTime.utc(year, month, day).add(Duration(days: offset));
+  return '${date.year.toString().padLeft(4, '0')}-'
+      '${date.month.toString().padLeft(2, '0')}-'
+      '${date.day.toString().padLeft(2, '0')}';
+}
+
+int _nonNegative(int value) => value > 0 ? value : 0;
 
 class PlanOptionPart {
   final String part;
@@ -1198,6 +1304,7 @@ class WeakSpot {
 
 class ScheduleItem {
   final int id;
+  final List<int> sourceIds;
   final String itemType;
   final int itemId;
 
@@ -1207,6 +1314,7 @@ class ScheduleItem {
   final bool done;
   const ScheduleItem({
     required this.id,
+    this.sourceIds = const <int>[],
     required this.itemType,
     required this.itemId,
     required this.reason,
@@ -1215,12 +1323,15 @@ class ScheduleItem {
   });
   factory ScheduleItem.fromJson(Map<String, dynamic> j) => ScheduleItem(
         id: _i(j['id']),
+        sourceIds: _li(j['source_ids']),
         itemType: _s(j['item_type']),
         itemId: _i(j['item_id']),
         reason: _s(j['reason']),
         title: _s(j['title']),
         done: _b(j['done']),
       );
+
+  bool matchesId(int previousId) => id == previousId || sourceIds.contains(previousId);
 }
 
 class ScheduleToday {

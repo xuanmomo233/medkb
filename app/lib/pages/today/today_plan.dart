@@ -2,7 +2,15 @@ import 'package:flutter/material.dart';
 import '../../api.dart';
 import '../../endpoints.dart';
 import '../../models.dart'
-    show PlanDayCard, PlanDayDetail, PlanItem, PlanOption, PlanQuestionGroup, PlanToday;
+    show
+        PlanDayCard,
+        PlanDayDetail,
+        PlanDaySummary,
+        PlanItem,
+        PlanOption,
+        PlanQuestionGroup,
+        PlanToday,
+        PlanTodaySection;
 import '../../nav.dart';
 import '../../widgets/widgets.dart';
 import '../notes/note_time.dart' show confirmDialog;
@@ -49,8 +57,7 @@ class _PlanBodyState extends State<PlanBody> {
   }
 
   Future<void> _edit() async {
-    final bool saved =
-        await PlanSetupSheet.show(context) ?? false;
+    final bool saved = await PlanSetupSheet.show(context) ?? false;
     if (saved && mounted) widget.onRestarted();
   }
 
@@ -77,6 +84,7 @@ class _PlanBodyState extends State<PlanBody> {
     final List<int> days = p.scheduledDays;
     final int todayCards = p.todayCards;
     final int todayQ = p.todayQuestions;
+    final List<PlanTodaySection> todaySections = p.todaySections;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -90,21 +98,31 @@ class _PlanBodyState extends State<PlanBody> {
             ),
           )
         else ...<Widget>[
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
             children: <Widget>[
               Text('第 ', style: TextStyle(color: cs.onSurfaceVariant)),
               BigNumber('${p.dayNo}'),
-              Text(' / ${p.totalDays} 天 · 剩 ${p.daysLeft} 天 · 还有 ${p.remaining} 章',
+              Text(
+                  ' / ${p.totalDays} 天 · 当前日期 ${p.currentDate} · 剩 ${p.daysLeft} 天 · 还有 ${p.remaining} 章',
                   style: TextStyle(color: cs.onSurfaceVariant)),
             ],
           ),
           const SizedBox(height: 12),
-          if (p.todayItems.isEmpty)
-            Text('今天没有安排，剩余内容已排进后面的天数',
+          Text(
+              '顺延 ${p.overdueCount} 项 · 今天到期 ${p.dueTodayCount} 项 · 今日执行总数 ${p.todayCount} 项',
+              style: TextStyle(color: cs.onSurfaceVariant)),
+          const SizedBox(height: 6),
+          Text('今日待做 · 每项任务只计一次', style: TextStyle(color: cs.onSurfaceVariant)),
+          const SizedBox(height: 6),
+          if (todaySections.isEmpty)
+            Text('今天没有待完成任务，剩余内容已排进后面的天数',
                 style: TextStyle(color: cs.onSurfaceVariant))
           else
-            ...p.todayItems.map(_itemRow),
+            ExpansionTile(
+                tilePadding: EdgeInsets.zero,
+                title: Text('今日 ${todayCards} 卡 · $todayQ 题'),
+                children: todaySections.map(_todaySectionRow).toList()),
           const SizedBox(height: 12),
           Row(
             children: <Widget>[
@@ -136,21 +154,54 @@ class _PlanBodyState extends State<PlanBody> {
                   icon: const Icon(Icons.tune, size: 16),
                   label: const Text('修改计划')),
               const Spacer(),
-              TextButton(onPressed: _busy ? null : _restart, child: const Text('重新开始')),
+              TextButton(
+                  onPressed: _busy ? null : _restart,
+                  child: const Text('重新开始')),
             ],
           ),
         ],
         if (days.isNotEmpty) ...<Widget>[
           const Divider(height: 1),
-          ...days.map((int d) => _dayRow(context, p, d)),
+          ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              title: const Text('查看每日安排'),
+              children: days.map((int d) => _dayRow(context, p, d)).toList()),
         ],
+        if (p.items.isNotEmpty)
+          ExpansionTile(
+            tilePadding: EdgeInsets.zero,
+            childrenPadding: const EdgeInsets.only(top: 4),
+            title: Text('全章累计进度（含后续日期；章节可共享题目，不等于当天任务量）',
+                style: TextStyle(color: cs.onSurfaceVariant, fontSize: 13)),
+            children: p.items.map(_itemRow).toList(),
+          ),
       ],
+    );
+  }
+
+  Widget _todaySectionRow(PlanTodaySection section) {
+    final ColorScheme cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(
+        children: <Widget>[
+          Expanded(
+            child: Text(section.label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(fontWeight: FontWeight.w600)),
+          ),
+          Text('${section.cards}卡 · ${section.questions}题',
+              style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+        ],
+      ),
     );
   }
 
   Widget _itemRow(PlanItem it) {
     final ColorScheme cs = Theme.of(context).colorScheme;
-    final double pct = _ratio(it.cardDone + it.questionDone, it.cards + it.questions);
+    final double pct =
+        _ratio(it.cardDone + it.questionDone, it.cards + it.questions);
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Column(
@@ -164,7 +215,8 @@ class _PlanBodyState extends State<PlanBody> {
                     overflow: TextOverflow.ellipsis,
                     style: const TextStyle(fontWeight: FontWeight.w600)),
               ),
-              Text('${it.cardDone}/${it.cards}卡 · ${it.questionDone}/${it.questions}题',
+              Text(
+                  '${it.cardDone}/${it.cards}卡 · ${it.questionDone}/${it.questions}题',
                   style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
             ],
           ),
@@ -178,7 +230,16 @@ class _PlanBodyState extends State<PlanBody> {
   Widget _dayRow(BuildContext context, PlanToday p, int day) {
     final ColorScheme cs = Theme.of(context).colorScheme;
     final bool open = _open == day;
-    final String title = day == 1 ? '今日待完成' : '待完成任务';
+    final int planDay = p.planDayForRelativeDay(day);
+    final String date = p.dateForRelativeDay(day);
+    final PlanDaySummary? summary = p.summaryForRelativeDay(day);
+    final String relative = switch (day) {
+      1 => '今天',
+      2 => '明天',
+      3 => '后天',
+      _ => '后续',
+    };
+    final String title = day <= 3 ? '$relative · $date' : date;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: <Widget>[
@@ -190,18 +251,32 @@ class _PlanBodyState extends State<PlanBody> {
               children: <Widget>[
                 SizedBox(
                   width: 40,
-                  child: Text(day == 1 ? '今' : 'D$day',
+                  child: Text('D$planDay',
                       style: TextStyle(
                           fontWeight: FontWeight.w800,
                           color: day == 1 ? cs.primary : cs.onSurfaceVariant)),
                 ),
                 Expanded(
-                  child: Text(title,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                          fontWeight:
-                              day == 1 ? FontWeight.w700 : FontWeight.w400)),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: <Widget>[
+                      Text(title,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              fontWeight: day == 1
+                                  ? FontWeight.w700
+                                  : FontWeight.w400)),
+                      if (summary != null)
+                        Text(
+                            '${summary.cards}卡 · ${summary.questions}题'
+                            '${summary.overdueCards + summary.overdueQuestions > 0 ? '（含顺延 ${summary.overdueCards}卡 · ${summary.overdueQuestions}题）' : ''}',
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                                fontSize: 11, color: cs.onSurfaceVariant)),
+                    ],
+                  ),
                 ),
                 Icon(open ? Icons.expand_less : Icons.expand_more,
                     color: cs.onSurfaceVariant),
@@ -245,8 +320,8 @@ class _PlanSetupSheetState extends State<PlanSetupSheet> {
           left: 16,
           right: 16),
       child: ConstrainedBox(
-        constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.8),
+        constraints:
+            BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: <Widget>[
@@ -263,7 +338,8 @@ class _PlanSetupSheetState extends State<PlanSetupSheet> {
               child: AsyncView<List<PlanOption>>(
                 loader: Endpoints.planOptions,
                 showCacheBanner: false,
-                builder: (BuildContext ctx, List<PlanOption> opts, RefreshFn r) {
+                builder:
+                    (BuildContext ctx, List<PlanOption> opts, RefreshFn r) {
                   return ListView(
                     children: opts.map((PlanOption g) {
                       return Padding(
@@ -306,20 +382,23 @@ class _PlanSetupSheetState extends State<PlanSetupSheet> {
               children: <Widget>[
                 Text('完成天数', style: TextStyle(color: cs.onSurfaceVariant)),
                 IconButton(
-                    onPressed: _days > 1
-                        ? () => setState(() => _days -= 1)
-                        : null,
+                    onPressed:
+                        _days > 1 ? () => setState(() => _days -= 1) : null,
                     icon: const Icon(Icons.remove_circle_outline, size: 20)),
                 Text('$_days 天',
                     style: const TextStyle(fontWeight: FontWeight.w700)),
                 IconButton(
-                    onPressed: _days < 120
-                        ? () => setState(() => _days += 1)
-                        : null,
+                    onPressed:
+                        _days < 120 ? () => setState(() => _days += 1) : null,
                     icon: const Icon(Icons.add_circle_outline, size: 20)),
-                const Spacer(),
-                Text('已选 ${_picked.length} 章',
-                    style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
+              ],
+            ),
+            Row(
+              children: <Widget>[
+                Expanded(
+                    child: Text('已选 ${_picked.length} 章',
+                        style: TextStyle(
+                            fontSize: 12, color: cs.onSurfaceVariant))),
                 const SizedBox(width: 8),
                 FilledButton(
                   onPressed: _picked.isEmpty || _busy ? null : _save,
@@ -336,15 +415,13 @@ class _PlanSetupSheetState extends State<PlanSetupSheet> {
   Future<void> _save() async {
     setState(() => _busy = true);
     try {
-      final List<Map<String, String>> items = _picked
-          .map((String k) {
-            final int i = k.indexOf('|');
-            return <String, String>{
-              'subject': k.substring(0, i),
-              'part': k.substring(i + 1),
-            };
-          })
-          .toList();
+      final List<Map<String, String>> items = _picked.map((String k) {
+        final int i = k.indexOf('|');
+        return <String, String>{
+          'subject': k.substring(0, i),
+          'part': k.substring(i + 1),
+        };
+      }).toList();
       await Endpoints.planSaveConfig(_days, items);
       if (!mounted) return;
       toast(context, '学习计划已保存，从今天开始');
@@ -395,8 +472,8 @@ class _PlanDayDetailView extends StatelessWidget {
                       .map((PlanDayCard c) => ActionChip(
                             label: Text(c.term),
                             visualDensity: VisualDensity.compact,
-                            onPressed: () => onGo(openCardRun(
-                                context, CardRunArgs(ids: <int>[c.id], planDay: no))),
+                            onPressed: () => onGo(openCardRun(context,
+                                CardRunArgs(ids: <int>[c.id], planDay: no))),
                           ))
                       .toList(),
                 ),
@@ -407,7 +484,9 @@ class _PlanDayDetailView extends StatelessWidget {
                     style: TextStyle(fontSize: 12, color: cs.onSurfaceVariant)),
                 ...d.questionGroups.map((PlanQuestionGroup g) => InkWell(
                       onTap: () => onGo(openQuizRun(
-                          context, QuizRunArgs(ids: g.ids, planDay: no, title: g.chapter))),
+                          context,
+                          QuizRunArgs(
+                              ids: g.ids, planDay: no, title: g.chapter))),
                       child: ConstrainedBox(
                         constraints: const BoxConstraints(minHeight: 44),
                         child: Row(

@@ -38,11 +38,42 @@ jobs:
 
       - name: read pubspec version
         id: ver
-        run: echo "name=$(grep '^version:' pubspec.yaml | awk '{print $2}' | cut -d+ -f1)" >> $GITHUB_OUTPUT
+        run: |
+          version=$(grep '^version:' pubspec.yaml | awk '{print $2}')
+          echo "name=${version%%+*}" >> "$GITHUB_OUTPUT"
+          echo "build=${version##*+}" >> "$GITHUB_OUTPUT"
+
+      - name: read current public APK
+        id: current
+        run: |
+          curl -fsSL https://luck.021209.xyz/api/version -o "$RUNNER_TEMP/current-apk-version.json"
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          from pathlib import Path
+          version = json.loads((Path(os.environ["RUNNER_TEMP"]) / "current-apk-version.json").read_text())
+          print(f"build={int(version['build'])}")
+          print(f"sha256={version['apk_sha256']}")
+          PY
+
+      # 同时超过源码版本、线上下载包和当前工作流运行号，保证首次及后续发布均可升级。
+      - name: select monotonic build number
+        id: build
+        run: |
+          source_build='${{ steps.ver.outputs.build }}'
+          workflow_floor=$(( ${{ github.run_number }} + 2 ))
+          public_floor=$(( ${{ steps.current.outputs.build }} + 1 ))
+          if (( workflow_floor > source_build )); then source_build=$workflow_floor; fi
+          if (( public_floor > source_build )); then source_build=$public_floor; fi
+          if (( source_build <= ${{ steps.current.outputs.build }} )); then
+            echo "::error::新 APK 构建号未高于当前线上版本"
+            exit 1
+          fi
+          echo "number=$source_build" >> "$GITHUB_OUTPUT"
 
       # 注入构建号作为 APP 内版本号（用于更新检查）
       - name: inject build number
-        run: sed -i "s/appBuild = [0-9]*/appBuild = ${{ github.run_number }}/" lib/api.dart
+        run: sed -i "s/appBuild = [0-9]*/appBuild = ${{ steps.build.outputs.number }}/" lib/api.dart
 
       # 仓库不含二进制 wrapper jar / 脚本，构建前补齐；SHA256 固定防上游被篡改
       - name: fetch gradle wrapper
@@ -74,7 +105,7 @@ jobs:
           MEDKB_STORE_PASSWORD: ${{ secrets.MEDKB_STORE_PASSWORD }}
           MEDKB_KEY_ALIAS: ${{ secrets.MEDKB_KEY_ALIAS }}
           MEDKB_KEY_PASSWORD: ${{ secrets.MEDKB_KEY_PASSWORD }}
-        run: flutter build apk --release --build-number ${{ github.run_number }}
+        run: flutter build apk --release --build-number ${{ steps.build.outputs.number }}
 
       # 校验产物签名：必须同时包含 v1(META-INF/*.RSA) 与 v2/v3 签名块，否则华为等机型无法安装
       - name: verify apk signature
@@ -91,10 +122,25 @@ jobs:
               raise SystemExit('APK 签名不完整（缺 v1 或 v2/v3），拒绝发布')
           EOF
 
+      - name: verify upgrade signer against current download
+        env:
+          CURRENT_BUILD: ${{ steps.current.outputs.build }}
+          CURRENT_SHA256: ${{ steps.current.outputs.sha256 }}
+        run: |
+          curl -fsSL "https://luck.021209.xyz/app.apk?v=$CURRENT_BUILD" -o "$RUNNER_TEMP/current.apk"
+          echo "$CURRENT_SHA256  $RUNNER_TEMP/current.apk" | sha256sum --check
+          old_cert=$(keytool -printcert -jarfile "$RUNNER_TEMP/current.apk" | awk -F': ' '/SHA256:/{gsub(":", "", $2); print toupper($2); exit}')
+          new_cert=$(keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | awk -F': ' '/SHA256:/{gsub(":", "", $2); print toupper($2); exit}')
+          if [[ -z "$old_cert" || "$old_cert" != "$new_cert" ]]; then
+            echo "::error::新 APK 签名证书与当前正式下载包不一致，拒绝发布"
+            exit 1
+          fi
+          echo "当前与候选 APK 的签名证书一致：$old_cert"
+
       - name: release apk
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: build-${{ github.run_number }}
+          tag_name: build-${{ steps.build.outputs.number }}
           target_commitish: ${{ github.sha }}
-          name: MedKB v${{ steps.ver.outputs.name }} · build ${{ github.run_number }}
+          name: MedKB v${{ steps.ver.outputs.name }} · build ${{ steps.build.outputs.number }}
           files: app/build/app/outputs/flutter-apk/app-release.apk

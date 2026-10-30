@@ -1,0 +1,9 @@
+.hint { margin: 0 0 16px; color: var(--text-2); font-size: 13px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 8px; }
+.cell { position: relative; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); }
+.cell strong { font-size: 18px; }
+.cell span { font-size: 11px; color: var(--text-2); }
+.cell:hover { border-color: var(--brand); }
+.done { background: var(--brand-soft); color: var(--brand); }
+.current { outline: 2px solid var(--brand); outline-offset: 2px; }
+.mark { position: absolute; right: 5px; top: 5px; }

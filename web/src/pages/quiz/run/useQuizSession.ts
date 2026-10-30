@@ -12,13 +12,14 @@ export interface Ans { picked: string; judged: boolean; correct: boolean | null 
 export type MarkKind = 'star' | 'wrong' | 'master' | 'plan'
 interface Patch { state?: ProgressState; starred?: boolean }
 interface TestSave { sig: string; picks: Record<number, string>; deadline: number | null; idx: number }
+interface ScheduleSave { sig: string; ans: Record<number, Ans> }
 
 const labelsFor = (q: Question) => optionLabels(q.options_html.length, q.option_labels)
 export const isMulti = (q: Question) => (answerLabels(q.answer, labelsFor(q))?.length ?? 0) > 1
 export const hasOptions = (q: Question) => q.options_html.length > 0 && answerLabels(q.answer, labelsFor(q)) !== null
 const testSignature = (qs: Question[]) => hashStr(JSON.stringify(qs.map((q) => [q.id, q.options_html, q.option_labels ?? [], q.answer])))
 
-export function useQuizSession(search: string, p: RunParams) {
+export function useQuizSession(search: string, p: RunParams, scheduleScope?: string | null, onAdvance?: () => void, exactIds = false) {
   const nav = useNavigate()
   const queryClient = useQueryClient()
   const toast = useToast()
@@ -26,7 +27,8 @@ export function useQuizSession(search: string, p: RunParams) {
   const hash = hashStr(search)
   const testKey = `quiz.test.${hash}`
   const posKey = `quiz.pos.${hash}`
-  const trackPos = mode !== 'test' && !query.random && !query.shuffle && query.plan_day === undefined && !query.fresh && !p.startId
+  const trackPos = !scheduleScope && mode !== 'test' && !query.random && !query.shuffle && query.plan_day === undefined && !query.fresh && !p.startId
+  const draftKey = scheduleScope && mode !== 'test' ? `quiz.schedule:${scheduleScope}:${mode}:${query.ids?.join(',')}` : null
 
   const [questions, setQuestions] = useState<Question[]>([])
   const [status, setStatus] = useState<'loading' | 'error' | 'ready'>('loading')
@@ -47,11 +49,17 @@ export function useQuizSession(search: string, p: RunParams) {
   const fullReq = useRef(new Set<number>())
   const quickTimer = useRef<number>(0)
   const submitted = useRef(false)
+  const loadedDraftKey = useRef<string | null>(null)
 
   useEffect(() => {
+    if (scheduleScope === null) return
     let off = false
-    api.questions({ ...query, lite: true }).then((list) => {
+    api.questions({ ...query, lite: true }).then((loaded) => {
       if (off) return
+      const byId = new Map(loaded.map((question) => [question.id, question]))
+      const list = exactIds && query.ids
+        ? [...new Set(query.ids)].flatMap((id) => { const question = byId.get(id); return question ? [question] : [] })
+        : loaded
       const next: Record<number, Ans> = {}
       let i = Math.max(0, list.findIndex((question) => question.id === p.startId))
       const sig = testSignature(list)
@@ -65,16 +73,37 @@ export function useQuizSession(search: string, p: RunParams) {
         i = ok ? Math.min(saved.idx, list.length - 1) : 0
         setDeadline(ok ? saved.deadline : mins ? Date.now() + mins * 60000 : null)
       } else {
+        const savedDraft = draftKey ? readJson<ScheduleSave>(sessionStorage, draftKey) : null
+        if (savedDraft?.sig === sig) {
+          for (const question of list) {
+            const a = savedDraft.ans?.[question.id]
+            if (a && typeof a.picked === 'string' && a.picked && typeof a.judged === 'boolean'
+              && a.picked.split('').every((letter) => labelsFor(question).includes(letter))
+              && (!a.judged || typeof a.correct === 'boolean')) {
+              next[question.id] = { picked: a.picked, judged: a.judged, correct: a.judged ? a.correct : null }
+            }
+          }
+        }
         const pos = trackPos ? Number(localStorage.getItem(posKey)) : 0
         if (pos > 0 && pos < list.length) setResumeAt(pos)
       }
+      loadedDraftKey.current = draftKey
       setQuestions(list)
       setAns(next)
       setIdx(i)
       setStatus('ready')
     }, (e: unknown) => { if (!off) { setError(e); setStatus('error') } })
     return () => { off = true }
-  }, [query, mode, mins, testKey, posKey, trackPos, reloadKey, p.startId])
+  }, [query, mode, mins, testKey, posKey, trackPos, reloadKey, p.startId, scheduleScope, draftKey, exactIds])
+
+  useEffect(() => {
+    if (!draftKey || loadedDraftKey.current !== draftKey || status !== 'ready' || !questions.length) return
+    try {
+      sessionStorage.setItem(draftKey, JSON.stringify({ sig: testSignature(questions), ans } satisfies ScheduleSave))
+    } catch { /* 存储不可用时仍可继续当前题目。 */ }
+  }, [draftKey, status, questions, ans])
+
+  useEffect(() => () => window.clearTimeout(quickTimer.current), [])
 
   const q: Question | undefined = useMemo(() => {
     const base = questions[idx]
@@ -151,9 +180,12 @@ export function useQuizSession(search: string, p: RunParams) {
       .then((r) => { setStats((m) => ({ ...m, [question.id]: r.stat })); void invalidateStudy(queryClient) }, () => toast('作答记录保存失败', true))
     if (mode === 'quick' && correct) {
       const at = idx
-      quickTimer.current = window.setTimeout(() => setIdx((i) => (i === at ? Math.min(i + 1, questions.length - 1) : i)), 600)
+      quickTimer.current = window.setTimeout(() => {
+        if (scheduleScope) onAdvance?.()
+        else setIdx((i) => (i === at ? Math.min(i + 1, questions.length - 1) : i))
+      }, 600)
     }
-  }, [mode, idx, questions.length, toast, queryClient])
+  }, [mode, idx, questions.length, toast, queryClient, scheduleScope, onAdvance])
 
   const pick = useCallback((letter: string) => {
     if (!q || !hasOptions(q) || !labelsFor(q).includes(letter) || mode === 'recite' || cur?.judged) return

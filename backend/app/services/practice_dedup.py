@@ -27,10 +27,13 @@ def normalized(value):
 
 def stem_text(value):
     value = width_normalized(value).strip()
+    # Some imported exam questions use a leading source marker like "009--X.".
+    # It is numbering metadata, not part of the question text.
+    source_marker = r"^\s*(?:\d{1,4}\s*--\s*)?X\s*[.．、:：]\s*(?!\d)"
     exam = r"^(?:[【\[(]\s*(?:19|20)\d{2}\s*[nN]\s*\d{1,3}\s*[aAbBxX]?\s*[】\])]\s*|(?:19|20)\d{2}\s*[nN]\s*\d{1,3}\s*[aAbBxX]?\s*[.、:]\s*)"
-    number = r"^\d{1,3}\s*[.、](?!\d)\s*"
+    number = r"^\d{1,4}\s*[.．、:：)](?!\d)\s*"
     for _ in range(3):
-        revised = re.sub(number, "", re.sub(exam, "", value))
+        revised = re.sub(number, "", re.sub(exam, "", re.sub(source_marker, "", value, flags=re.I)))
         if revised == value:
             break
         value = revised
