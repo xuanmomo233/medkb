@@ -64,6 +64,7 @@ function chapterOf(id: number): ChapterDetail | null {
     + `<tr><td>特点</td><td>${points[0]}</td><td>${points[1]}</td></tr><tr><td>备注</td><td>高频考点 <span class="tag">必背</span></td><td>近五年多次考查</td></tr></tbody></table>`
   return {
     id, title, subject, html,
+    textbook_pages: [],
     meta: { 考频: isNote ? '高频' : '中频', 标签: `${subject} · ${isNote ? '精要' : '导图'}`, 题量: String(8 + (id % 7) * 3) },
     pages: isNote || id % 2 === 0 ? [] : [id, id + 1, id + 2].map((n) => n),
   }

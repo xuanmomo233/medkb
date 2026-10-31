@@ -240,6 +240,38 @@ def md(s: str | None) -> str:
     return _text_highlights(sanitize_html(html))
 
 
+def chapter_md(source: str | None) -> str:
+    """Repair orphan list runs after a table, keeping fenced code untouched."""
+    import textwrap
+    lines = (source or '').splitlines()
+    result = []
+    fence = None
+    index = 0
+    after_table = False
+    while index < len(lines):
+        line = lines[index]
+        stripped = line.lstrip()
+        marker = re.match(r'^(`{3,}|~{3,})', stripped)
+        if marker:
+            kind = marker.group(1)[0]
+            fence = None if fence == kind else (kind if fence is None else fence)
+        if fence is None and re.match(r'^ {4,}[-*+]\s+', line) and after_table:
+            end = index
+            while end < len(lines) and (not lines[end].strip() or lines[end].startswith('    ')):
+                end += 1
+            block = lines[index:end]
+            if sum(bool(re.match(r'^ {4,}[-*+]\s+', value)) for value in block) >= 2:
+                result.extend(textwrap.dedent('\n'.join(block)).splitlines())
+                index = end
+                after_table = False
+                continue
+        result.append(line)
+        if fence is None and stripped:
+            after_table = stripped.startswith('|') and stripped.endswith('|')
+        index += 1
+    return md('\n'.join(result))
+
+
 def _split_semi(b: str) -> list[str]:
     parts, cur, bold, manual, i = [], [], False, False, 0
     while i < len(b):

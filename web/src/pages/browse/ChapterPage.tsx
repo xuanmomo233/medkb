@@ -2,7 +2,6 @@
 import { Link, useParams } from 'react-router-dom'
 import { useState } from 'react'
 import { api } from '@/api/endpoints'
-import type { ContentCitation } from '@/api/types'
 import { useAuth } from '@/app/auth'
 import { CitationEditSheet } from '@/features/notes'
 import { Badge, Card, ErrorState, HtmlView, Icon, Spinner } from '@/ui'
@@ -12,23 +11,6 @@ import { useLoad } from './useLoad'
 import s from './chapter.module.css'
 
 const fetchTree = () => api.tree()
-
-function textbookGalleries(citations: ContentCitation[] = []) {
-  const galleries = new Map<string, { title: string; pages: Set<number> }>()
-  for (const citation of citations) {
-    if (citation.status !== 'verified' || citation.page_start == null) continue
-    const end = citation.page_end ?? citation.page_start
-    if (end < citation.page_start || end - citation.page_start > 200) continue
-    const gallery = galleries.get(citation.source_key) ?? { title: citation.title, pages: new Set<number>() }
-    for (let page = citation.page_start; page <= end; page += 1) gallery.pages.add(page)
-    galleries.set(citation.source_key, gallery)
-  }
-  return [...galleries.entries()].map(([sourceKey, gallery]) => ({
-    sourceKey,
-    title: `教材原图 · ${gallery.title}`,
-    pages: [...gallery.pages].sort((a, b) => a - b),
-  }))
-}
 
 export default function ChapterPage() {
   const { user } = useAuth()
@@ -43,7 +25,9 @@ export default function ChapterPage() {
   useEffect(() => { window.scrollTo(0, 0) }, [id])
 
   const metas = data ? Object.entries(data.meta).filter(([, v]) => v) : []
-  const textbookPages = data ? textbookGalleries(data.citations) : []
+  const textbookPages = data ? data.textbook_pages.map(gallery => ({
+    sourceKey: gallery.source_key, title: `教材原图 · ${gallery.title}`, pages: gallery.pages,
+  })) : []
 
   return (
     <div className={`${s.wrap} ${isNote ? s.noteWrap : ''}`}>

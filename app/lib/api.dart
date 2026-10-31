@@ -59,7 +59,7 @@ String buildQuery(Map<String, Object?>? q) {
 class Api {
   static String base = 'https://luck.021209.xyz';
   static String token = '';
-  static const int appBuild = 1; // CI 构建时替换为 run_number
+  static const int appBuild = 138; // release tooling keeps this equal to versionCode
   static const String _kBase = 'kb_base';
   static const String _kToken = 'kb_token';
   static const String _kFont = 'kb_font';

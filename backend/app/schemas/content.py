@@ -32,6 +32,12 @@ class ContentTree(BaseModel):
     question_tree: list[QuestionSubject]
 
 
+class TextbookPageGallery(BaseModel):
+    source_key: str
+    title: str
+    pages: list[int]
+
+
 class ChapterDetail(BaseModel):
     id: int
     title: str
@@ -40,6 +46,7 @@ class ChapterDetail(BaseModel):
     meta: dict[str, str]
     pages: list[int]
     citations: list[ContentCitationOut] = Field(default_factory=list)
+    textbook_pages: list[TextbookPageGallery] = Field(default_factory=list)
 
 
 class TextbookCatalog(BaseModel):

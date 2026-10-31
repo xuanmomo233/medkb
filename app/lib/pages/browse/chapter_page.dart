@@ -169,15 +169,12 @@ class _ChapterPageState extends State<ChapterPage> {
   Widget _body(BuildContext context, _ChapterReading reading, Future<void> Function() refresh) {
     final ChapterDetail d = reading.detail;
     final Map<String, _TextbookGallery> textbook = <String, _TextbookGallery>{};
-    for (final ContentCitation citation in d.citations) {
-      final int? first = citation.pageStart;
-      final int last = citation.pageEnd ?? first ?? 0;
-      if (citation.status != 'verified' || first == null || last < first || last - first > 200) continue;
+    for (final TextbookPageGallery gallery in d.textbookPages) {
       final current = textbook.putIfAbsent(
-        citation.sourceKey,
-        () => _TextbookGallery(citation.sourceKey, citation.title, <int>[]),
+        gallery.sourceKey,
+        () => _TextbookGallery(gallery.sourceKey, gallery.title, <int>[]),
       );
-      for (int page = first; page <= last; page++) {
+      for (final int page in gallery.pages) {
         if (!current.pages.contains(page)) current.pages.add(page);
       }
     }

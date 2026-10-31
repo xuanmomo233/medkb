@@ -3,10 +3,10 @@
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.render import md
+from app.core.render import md, chapter_md
 from app.models import Card, CardProgress, Chapter, Question, QuestionProgress
 from app.services.progress import derive_state
-from app.services import provenance
+from app.services import provenance, textbook_pages
 from app.services.card_merges import visible
 
 _IMG = re.compile(r"!\[[^\]]*\]\([^)]*\)")
@@ -106,9 +106,10 @@ async def chapter_detail(session: AsyncSession, cid: int) -> dict | None:
         return None
     meta, body = split_fm(ch.content_md)
     return {
-        "id": ch.id, "title": ch.title, "subject": ch.subject, "html": md(body),
+        "id": ch.id, "title": ch.title, "subject": ch.subject, "html": chapter_md(body),
         "meta": meta, "pages": [int(x) for x in (ch.pages or [])],
         "citations": await provenance.citations_for_target(session, "chapter", ch.id),
+        "textbook_pages": await textbook_pages.galleries(session, ch.id),
     }
 
 

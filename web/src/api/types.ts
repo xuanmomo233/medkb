@@ -43,6 +43,7 @@ export interface ChapterDetail {
   meta: Record<string, string>
   pages: number[] // 导图页图：/img/page_{n}.webp
   citations?: ContentCitation[]
+  textbook_pages: { source_key: string; title: string; pages: number[] }[]
 }
 export type SearchKind = 'question' | 'card' | 'chapter'
 export interface SearchHit {

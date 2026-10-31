@@ -263,6 +263,7 @@ class ChapterDetail {
   final Map<String, String> meta;
   final List<int> pages;
   final List<ContentCitation> citations;
+  final List<TextbookPageGallery> textbookPages;
   const ChapterDetail({
     required this.id,
     required this.title,
@@ -271,6 +272,7 @@ class ChapterDetail {
     required this.meta,
     required this.pages,
     this.citations = const <ContentCitation>[],
+    this.textbookPages = const <TextbookPageGallery>[],
   });
   factory ChapterDetail.fromJson(Map<String, dynamic> j) {
     final Map<String, String> meta = <String, String>{};
@@ -285,8 +287,18 @@ class ChapterDetail {
       meta: meta,
       pages: _li(j['pages']),
       citations: asMapList(j['citations']).map(ContentCitation.fromJson).toList(),
+      textbookPages: asMapList(j['textbook_pages']).map(TextbookPageGallery.fromJson).toList(),
     );
   }
+}
+
+class TextbookPageGallery {
+  final String sourceKey;
+  final String title;
+  final List<int> pages;
+  const TextbookPageGallery(this.sourceKey, this.title, this.pages);
+  factory TextbookPageGallery.fromJson(Map<String, dynamic> j) =>
+      TextbookPageGallery(_s(j['source_key']), _s(j['title']), (j['pages'] as List? ?? []).map(_i).toList());
 }
 
 class SearchHit {

@@ -137,6 +137,7 @@ async def replace_citations(
             target_type=target_type, target_id=target_id, source_key=source_key,
             chapter=chapter, section=section, page_start=page_start, page_end=page_end,
             note=note, status=status,
+            verification_origin='attributed' if reviewed else 'unreviewed',
             verified_by=admin_id if reviewed else None,
             verified_at=now if reviewed else None,
         ))

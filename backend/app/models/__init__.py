@@ -1,4 +1,5 @@
 from app.models.base import Base
+from app.models.content_publication import ChapterTextbookPage, ContentPublication, CitationMetadataHistory
 from app.models.content import (
     Card, CardMerge, CardOriginal, CardQuestion, CardRelation, Chapter, ContentCitation,
     PlanDay, PlanDayPart, Question, TextbookSource,

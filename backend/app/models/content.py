@@ -103,6 +103,7 @@ class ContentCitation(Base, CreatedMixin):
     page_end: Mapped[int | None] = mapped_column(Integer)
     note: Mapped[str] = mapped_column(Text, default="")
     status: Mapped[str] = mapped_column(String(16), default="unverified", index=True)
+    verification_origin: Mapped[str] = mapped_column(String(32), default='native', server_default='native')
     verified_by: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), index=True)
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     updated_at: Mapped[datetime] = mapped_column(
